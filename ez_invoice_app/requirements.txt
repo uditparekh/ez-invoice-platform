@@ -1,0 +1,16 @@
+streamlit
+pandas
+pymupdf
+pypdf
+openpyxl
+requests
+flask
+pdfplumber
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+pydantic>=2.10,<3
+python-multipart>=0.0.20
+httpx>=0.28,<1
+pytest>=8,<9
+pwdlib[argon2]>=0.3,<1
+PyJWT>=2.10,<3

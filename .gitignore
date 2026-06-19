@@ -1,0 +1,46 @@
+# Operating system and editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# JavaScript / Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+.turbo/
+
+# Secrets and local environment configuration
+.env
+.env.*
+!.env.example
+**/secrets.toml
+
+# Runtime databases, uploads, and client data
+ez_invoice_app/data/*
+!ez_invoice_app/data/.gitkeep
+ez_invoice_app/qb_account_mappings.json
+ez_invoice_app/qb_client_settings.json
+ez_invoice_app/zoho_client_settings.json
+ez_invoice_app/tally_settings.json
+ez_invoice_app/tally_connector_settings.json
+ez_invoice_app/NEEL_TALLY_DEMO_SETTINGS.md
+
+# Generated client packages and historical snapshots
+*.zip
+archives/
+
+# Logs and temporary output
+*.log
+tmp/
+.tmp/

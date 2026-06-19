@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.env
+.env.*
+data/*.db
+data/*.db-*
+data/uploads/
+qb_client_settings.json
+zoho_client_settings.json
+tally_settings.json
+tally_connector_settings.json
