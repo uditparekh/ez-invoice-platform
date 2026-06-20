@@ -13,7 +13,7 @@ application is developed alongside it.
 
 ```text
 apps/
-  web/                    Next.js customer application (next milestone)
+  web/                    Next.js customer application
 ez_invoice_app/
   app.py                  Existing Streamlit pilot
   backend/                FastAPI API, authentication, and tenant isolation
@@ -36,6 +36,9 @@ scripts/                  Development and release helpers
 - TallyPrime purchase-voucher posting through a local connector
 - Zoho Books Bill posting
 - Streamlit invoice queue, history, analytics, and integration settings
+- Next.js login, organization-aware shell, invoice queue, search, filtering,
+  PDF upload, invoice selection, and line-item review
+- Same-origin web API boundary with secure HTTP-only session cookies
 
 ## Local Development
 
@@ -64,8 +67,18 @@ export EZ_API_PASSWORD="replace-with-your-local-password"
 python3 -m streamlit run ez_invoice_app/app.py --server.port 8506
 ```
 
+Start the Next.js application in another terminal:
+
+```bash
+cd apps/web
+cp .env.example .env.local
+pnpm install
+pnpm dev
+```
+
 Open:
 
+- Next.js application: `http://127.0.0.1:3000`
 - Streamlit pilot: `http://127.0.0.1:8506`
 - FastAPI documentation: `http://127.0.0.1:8000/docs`
 
@@ -73,6 +86,10 @@ Open:
 
 ```bash
 python3 -m pytest -q
+cd apps/web
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
 ## Versioning

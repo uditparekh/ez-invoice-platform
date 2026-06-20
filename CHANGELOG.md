@@ -2,6 +2,23 @@
 
 All notable platform changes will be recorded here.
 
+## [Unreleased]
+
+### Added
+
+- Next.js 16 customer application under `apps/web`
+- Secure same-origin web API boundary with HTTP-only access and refresh cookies
+- Login, logout, protected routes, and automatic FastAPI token rotation
+- Organization-aware responsive application shell
+- Functional invoice queue, status filtering, search, PDF upload, detail view,
+  validation display, and line-item table
+- Light and dark operational themes with mobile navigation
+
+### Quality
+
+- Strict TypeScript, ESLint, production build, desktop/mobile browser review,
+  multi-invoice selection checks, and existing Python test coverage
+
 ## [0.2.0] - 2026-06-19
 
 ### Added
