@@ -11,7 +11,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "border-accent bg-accent text-white hover:border-accent-hover hover:bg-accent-hover dark:text-[#111310]",
+    "border-accent bg-accent text-white shadow-sm shadow-accent/15 hover:border-accent-hover hover:bg-accent-hover",
   secondary:
     "border-line-strong bg-surface text-ink hover:border-accent hover:bg-accent-soft",
   ghost:
@@ -30,7 +30,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-[7px] border font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 rounded-xl border font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         size === "sm" ? "h-9 px-3 text-xs" : "h-11 px-4 text-sm",
         variants[variant],
         className,

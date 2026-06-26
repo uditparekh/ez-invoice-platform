@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .models import (
+    ClientProfile,
+    ClientProfileCreate,
+    ClientProfilePatch,
     Invitation,
     Invoice,
     InvoiceCreate,
@@ -23,6 +26,7 @@ from .models import (
     OrganizationCreate,
     OrganizationRole,
     PostingResult,
+    PostingStatus,
     PostingTarget,
     User,
 )
@@ -45,6 +49,10 @@ def _loads(value: Optional[str], default: Any) -> Any:
         return json.loads(value)
     except json.JSONDecodeError:
         return default
+
+
+def _enum_value(value: Any) -> str:
+    return value.value if hasattr(value, "value") else str(value)
 
 
 @dataclass(frozen=True)
@@ -216,19 +224,49 @@ class InvoiceRepository:
                     FOREIGN KEY (organization_id) REFERENCES organizations(id)
                 );
 
+                CREATE TABLE IF NOT EXISTS client_profiles (
+                    id TEXT PRIMARY KEY,
+                    organization_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    accounting_system TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    is_default INTEGER NOT NULL,
+                    settings_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_client_profiles_org_name
+                ON client_profiles(organization_id, name COLLATE NOCASE);
+
+                CREATE INDEX IF NOT EXISTS idx_client_profiles_org_system
+                ON client_profiles(organization_id, accounting_system, is_default);
+
                 CREATE TABLE IF NOT EXISTS posting_attempts (
                     id TEXT PRIMARY KEY,
+                    organization_id TEXT NOT NULL DEFAULT '',
                     invoice_id TEXT NOT NULL,
                     target TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'failed',
                     success INTEGER NOT NULL,
                     dry_run INTEGER NOT NULL,
+                    client_profile_id TEXT,
+                    actor_id TEXT NOT NULL DEFAULT '',
                     message TEXT NOT NULL,
                     external_id TEXT,
                     issues_json TEXT NOT NULL,
+                    request_json TEXT NOT NULL DEFAULT '{}',
+                    response_json TEXT NOT NULL DEFAULT '{}',
                     raw_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT '',
+                    FOREIGN KEY (organization_id) REFERENCES organizations(id),
                     FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
                 );
+
+                CREATE INDEX IF NOT EXISTS idx_posting_attempts_invoice_created
+                ON posting_attempts(invoice_id, created_at DESC);
 
                 CREATE TABLE IF NOT EXISTS audit_events (
                     id TEXT PRIMARY KEY,
@@ -242,6 +280,56 @@ class InvoiceRepository:
                 );
                 """
             )
+            self._migrate_posting_attempts(connection)
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_posting_attempts_org_created
+                ON posting_attempts(organization_id, created_at DESC)
+                """
+            )
+
+    def _migrate_posting_attempts(self, connection: sqlite3.Connection) -> None:
+        columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(posting_attempts)").fetchall()
+        }
+        required_columns = {
+            "organization_id": "organization_id TEXT NOT NULL DEFAULT ''",
+            "status": "status TEXT NOT NULL DEFAULT 'failed'",
+            "client_profile_id": "client_profile_id TEXT",
+            "actor_id": "actor_id TEXT NOT NULL DEFAULT ''",
+            "request_json": "request_json TEXT NOT NULL DEFAULT '{}'",
+            "response_json": "response_json TEXT NOT NULL DEFAULT '{}'",
+            "updated_at": "updated_at TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in required_columns.items():
+            if column not in columns:
+                connection.execute(
+                    f"ALTER TABLE posting_attempts ADD COLUMN {definition}"
+                )
+        connection.execute(
+            """
+            UPDATE posting_attempts
+            SET organization_id = COALESCE(
+                    NULLIF(organization_id, ''),
+                    (SELECT organization_id FROM invoices WHERE invoices.id = posting_attempts.invoice_id),
+                    ''
+                ),
+                status = CASE WHEN success = 1 THEN 'succeeded' ELSE 'failed' END,
+                response_json = CASE
+                    WHEN response_json = '' OR response_json = '{}' THEN raw_json
+                    ELSE response_json
+                END,
+                updated_at = CASE
+                    WHEN updated_at = '' THEN created_at
+                    ELSE updated_at
+                END
+            WHERE organization_id = ''
+               OR updated_at = ''
+               OR response_json = ''
+               OR status NOT IN ('started', 'succeeded', 'failed')
+            """
+        )
 
     def count_users(self) -> int:
         with self._connect() as connection:
@@ -550,6 +638,243 @@ class InvoiceRepository:
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )
 
+    def create_client_profile(
+        self,
+        organization_id: str,
+        data: ClientProfileCreate,
+        actor_id: str = "api-user",
+    ) -> ClientProfile:
+        now = utc_now()
+        profile = ClientProfile(
+            id=str(uuid.uuid4()),
+            organization_id=organization_id,
+            created_at=now,
+            updated_at=now,
+            **data.model_dump(),
+        )
+        accounting_system = _enum_value(profile.accounting_system)
+        with self._connect() as connection:
+            if profile.is_default:
+                connection.execute(
+                    """
+                    UPDATE client_profiles
+                    SET is_default = 0, updated_at = ?
+                    WHERE organization_id = ? AND accounting_system = ?
+                    """,
+                    (now.isoformat(), organization_id, accounting_system),
+                )
+            connection.execute(
+                """
+                INSERT INTO client_profiles (
+                    id, organization_id, name, accounting_system, description,
+                    is_default, settings_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    profile.id,
+                    profile.organization_id,
+                    profile.name,
+                    accounting_system,
+                    profile.description,
+                    int(profile.is_default),
+                    _json(profile.settings),
+                    profile.created_at.isoformat(),
+                    profile.updated_at.isoformat(),
+                ),
+            )
+            self._insert_audit(
+                connection,
+                organization_id,
+                None,
+                "client_profile.created",
+                {
+                    "actor_id": actor_id,
+                    "profile_id": profile.id,
+                    "name": profile.name,
+                    "accounting_system": accounting_system,
+                    "is_default": profile.is_default,
+                },
+            )
+        created = self.get_client_profile(profile.id)
+        if not created:
+            raise RuntimeError("Client profile creation failed.")
+        return created
+
+    def list_client_profiles(
+        self,
+        organization_id: str,
+        accounting_system: Optional[str] = None,
+    ) -> List[ClientProfile]:
+        clauses = ["organization_id = ?"]
+        values: List[Any] = [organization_id]
+        if accounting_system:
+            clauses.append("accounting_system = ?")
+            values.append(accounting_system)
+        where = " AND ".join(clauses)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM client_profiles
+                WHERE {where}
+                ORDER BY is_default DESC, accounting_system, name COLLATE NOCASE
+                """,
+                values,
+            ).fetchall()
+        return [self._client_profile_from_row(row) for row in rows]
+
+    def get_client_profile(self, profile_id: str) -> Optional[ClientProfile]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM client_profiles WHERE id = ?",
+                (profile_id,),
+            ).fetchone()
+        return self._client_profile_from_row(row) if row else None
+
+    def update_client_profile(
+        self,
+        profile_id: str,
+        patch: ClientProfilePatch,
+        actor_id: str = "api-user",
+    ) -> Optional[ClientProfile]:
+        current = self.get_client_profile(profile_id)
+        if not current:
+            return None
+
+        updates = patch.model_dump(exclude_unset=True)
+        if not updates:
+            return current
+
+        merged = current.model_dump()
+        merged.update(updates)
+        merged["updated_at"] = utc_now()
+        updated = ClientProfile.model_validate(merged)
+        accounting_system = _enum_value(updated.accounting_system)
+
+        with self._connect() as connection:
+            if updated.is_default:
+                connection.execute(
+                    """
+                    UPDATE client_profiles
+                    SET is_default = 0, updated_at = ?
+                    WHERE organization_id = ? AND accounting_system = ? AND id != ?
+                    """,
+                    (
+                        updated.updated_at.isoformat(),
+                        updated.organization_id,
+                        accounting_system,
+                        profile_id,
+                    ),
+                )
+            connection.execute(
+                """
+                UPDATE client_profiles
+                SET name = ?, accounting_system = ?, description = ?,
+                    is_default = ?, settings_json = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    updated.name,
+                    accounting_system,
+                    updated.description,
+                    int(updated.is_default),
+                    _json(updated.settings),
+                    updated.updated_at.isoformat(),
+                    profile_id,
+                ),
+            )
+            self._insert_audit(
+                connection,
+                updated.organization_id,
+                None,
+                "client_profile.updated",
+                {
+                    "actor_id": actor_id,
+                    "profile_id": profile_id,
+                    "fields": list(updates),
+                },
+            )
+        return self.get_client_profile(profile_id)
+
+    def set_default_client_profile(
+        self,
+        profile_id: str,
+        actor_id: str = "api-user",
+    ) -> Optional[ClientProfile]:
+        profile = self.get_client_profile(profile_id)
+        if not profile:
+            return None
+
+        now = utc_now()
+        accounting_system = _enum_value(profile.accounting_system)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE client_profiles
+                SET is_default = 0, updated_at = ?
+                WHERE organization_id = ? AND accounting_system = ?
+                """,
+                (now.isoformat(), profile.organization_id, accounting_system),
+            )
+            connection.execute(
+                """
+                UPDATE client_profiles
+                SET is_default = 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (now.isoformat(), profile_id),
+            )
+            self._insert_audit(
+                connection,
+                profile.organization_id,
+                None,
+                "client_profile.default_set",
+                {
+                    "actor_id": actor_id,
+                    "profile_id": profile_id,
+                    "accounting_system": accounting_system,
+                },
+            )
+        return self.get_client_profile(profile_id)
+
+    def delete_client_profile(
+        self,
+        profile_id: str,
+        actor_id: str = "api-user",
+    ) -> bool:
+        profile = self.get_client_profile(profile_id)
+        if not profile:
+            return False
+
+        with self._connect() as connection:
+            connection.execute("DELETE FROM client_profiles WHERE id = ?", (profile_id,))
+            self._insert_audit(
+                connection,
+                profile.organization_id,
+                None,
+                "client_profile.deleted",
+                {
+                    "actor_id": actor_id,
+                    "profile_id": profile_id,
+                    "name": profile.name,
+                    "accounting_system": _enum_value(profile.accounting_system),
+                },
+            )
+        return True
+
+    def _client_profile_from_row(self, row: sqlite3.Row) -> ClientProfile:
+        return ClientProfile(
+            id=row["id"],
+            organization_id=row["organization_id"],
+            name=row["name"],
+            accounting_system=row["accounting_system"],
+            description=row["description"],
+            is_default=bool(row["is_default"]),
+            settings=_loads(row["settings_json"], {}),
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+        )
+
     def _user_from_row(self, row: sqlite3.Row) -> User:
         return User(
             id=row["id"],
@@ -820,41 +1145,67 @@ class InvoiceRepository:
         external_id: Optional[str] = None,
         issues: Optional[List[Dict[str, Any]]] = None,
         raw: Optional[Dict[str, Any]] = None,
+        actor_id: str = "api-user",
+        client_profile_id: Optional[str] = None,
+        request_payload: Optional[Dict[str, Any]] = None,
+        response_payload: Optional[Dict[str, Any]] = None,
     ) -> PostingResult:
         current = self.get_invoice(invoice_id)
         if not current:
             raise ValueError("Invoice does not exist.")
+        status = PostingStatus.SUCCEEDED if success else PostingStatus.FAILED
+        now = utc_now()
         posting = PostingResult(
             id=str(uuid.uuid4()),
+            organization_id=current.organization_id,
             invoice_id=invoice_id,
             target=target,
+            status=status,
             success=success,
             dry_run=dry_run,
+            client_profile_id=client_profile_id,
+            actor_id=actor_id,
             message=message,
             external_id=external_id,
             issues=issues or [],
+            request_payload=request_payload or {
+                "target": _enum_value(target),
+                "dry_run": dry_run,
+                "client_profile_id": client_profile_id,
+            },
+            response_payload=response_payload or raw or {},
             raw=raw or {},
-            created_at=utc_now(),
+            created_at=now,
+            updated_at=now,
         )
         with self._connect() as connection:
             connection.execute(
                 """
                 INSERT INTO posting_attempts (
-                    id, invoice_id, target, success, dry_run, message,
-                    external_id, issues_json, raw_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, organization_id, invoice_id, target, status, success,
+                    dry_run, client_profile_id, actor_id, message, external_id,
+                    issues_json, request_json, response_json, raw_json,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     posting.id,
+                    posting.organization_id,
                     posting.invoice_id,
-                    posting.target,
+                    _enum_value(posting.target),
+                    _enum_value(posting.status),
                     int(posting.success),
                     int(posting.dry_run),
+                    posting.client_profile_id,
+                    posting.actor_id,
                     posting.message,
                     posting.external_id,
                     _json(posting.issues),
+                    _json(posting.request_payload),
+                    _json(posting.response_payload),
                     _json(posting.raw),
                     posting.created_at.isoformat(),
+                    posting.updated_at.isoformat(),
                 ),
             )
             self._insert_audit(
@@ -871,6 +1222,141 @@ class InvoiceRepository:
             )
         return posting
 
+    def start_posting(
+        self,
+        invoice_id: str,
+        target: PostingTarget,
+        dry_run: bool,
+        actor_id: str,
+        client_profile_id: Optional[str] = None,
+        request_payload: Optional[Dict[str, Any]] = None,
+    ) -> PostingResult:
+        current = self.get_invoice(invoice_id)
+        if not current:
+            raise ValueError("Invoice does not exist.")
+        now = utc_now()
+        posting = PostingResult(
+            id=str(uuid.uuid4()),
+            organization_id=current.organization_id,
+            invoice_id=invoice_id,
+            target=target,
+            status=PostingStatus.STARTED,
+            success=False,
+            dry_run=dry_run,
+            client_profile_id=client_profile_id,
+            actor_id=actor_id,
+            message="Posting started.",
+            external_id=None,
+            issues=[],
+            request_payload=request_payload or {
+                "target": _enum_value(target),
+                "dry_run": dry_run,
+                "client_profile_id": client_profile_id,
+            },
+            response_payload={},
+            raw={},
+            created_at=now,
+            updated_at=now,
+        )
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO posting_attempts (
+                    id, organization_id, invoice_id, target, status, success,
+                    dry_run, client_profile_id, actor_id, message, external_id,
+                    issues_json, request_json, response_json, raw_json,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    posting.id,
+                    posting.organization_id,
+                    posting.invoice_id,
+                    _enum_value(posting.target),
+                    _enum_value(posting.status),
+                    int(posting.success),
+                    int(posting.dry_run),
+                    posting.client_profile_id,
+                    posting.actor_id,
+                    posting.message,
+                    posting.external_id,
+                    _json(posting.issues),
+                    _json(posting.request_payload),
+                    _json(posting.response_payload),
+                    _json(posting.raw),
+                    posting.created_at.isoformat(),
+                    posting.updated_at.isoformat(),
+                ),
+            )
+            self._insert_audit(
+                connection,
+                current.organization_id,
+                invoice_id,
+                "posting.started",
+                {
+                    "posting_id": posting.id,
+                    "target": _enum_value(target),
+                    "dry_run": dry_run,
+                    "client_profile_id": client_profile_id,
+                    "actor_id": actor_id,
+                },
+            )
+        return posting
+
+    def complete_posting(
+        self,
+        posting_id: str,
+        success: bool,
+        message: str,
+        external_id: Optional[str] = None,
+        issues: Optional[List[Dict[str, Any]]] = None,
+        raw: Optional[Dict[str, Any]] = None,
+        response_payload: Optional[Dict[str, Any]] = None,
+    ) -> PostingResult:
+        current = self.get_posting(posting_id)
+        if not current:
+            raise ValueError("Posting attempt does not exist.")
+        status = PostingStatus.SUCCEEDED if success else PostingStatus.FAILED
+        now = utc_now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE posting_attempts
+                SET status = ?, success = ?, message = ?, external_id = ?,
+                    issues_json = ?, response_json = ?, raw_json = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    _enum_value(status),
+                    int(success),
+                    message,
+                    external_id,
+                    _json(issues or []),
+                    _json(response_payload or raw or {}),
+                    _json(raw or {}),
+                    now.isoformat(),
+                    posting_id,
+                ),
+            )
+            self._insert_audit(
+                connection,
+                current.organization_id,
+                current.invoice_id,
+                "posting.completed" if success else "posting.failed",
+                {
+                    "posting_id": posting_id,
+                    "target": _enum_value(current.target),
+                    "dry_run": current.dry_run,
+                    "client_profile_id": current.client_profile_id,
+                    "message": message,
+                },
+            )
+        updated = self.get_posting(posting_id)
+        if not updated:
+            raise RuntimeError("Posting completion failed.")
+        return updated
+
     def get_posting(self, posting_id: str) -> Optional[PostingResult]:
         with self._connect() as connection:
             row = connection.execute(
@@ -878,17 +1364,47 @@ class InvoiceRepository:
             ).fetchone()
         if not row:
             return None
+        return self._posting_from_row(row)
+
+    def list_postings_for_invoice(
+        self,
+        invoice_id: str,
+        limit: int = 20,
+    ) -> List[PostingResult]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM posting_attempts
+                WHERE invoice_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (invoice_id, limit),
+            ).fetchall()
+        return [self._posting_from_row(row) for row in rows]
+
+    def _posting_from_row(self, row: sqlite3.Row) -> PostingResult:
+        created_at = datetime.fromisoformat(row["created_at"])
+        updated_raw = row["updated_at"] or row["created_at"]
         return PostingResult(
             id=row["id"],
+            organization_id=row["organization_id"],
             invoice_id=row["invoice_id"],
             target=row["target"],
+            status=row["status"],
             success=bool(row["success"]),
             dry_run=bool(row["dry_run"]),
+            client_profile_id=row["client_profile_id"],
+            actor_id=row["actor_id"],
             message=row["message"],
             external_id=row["external_id"],
             issues=_loads(row["issues_json"], []),
+            request_payload=_loads(row["request_json"], {}),
+            response_payload=_loads(row["response_json"], {}),
             raw=_loads(row["raw_json"], {}),
-            created_at=datetime.fromisoformat(row["created_at"]),
+            created_at=created_at,
+            updated_at=datetime.fromisoformat(updated_raw),
         )
 
     def _invoice_values(self, invoice: Invoice) -> tuple:

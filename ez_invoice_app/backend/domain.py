@@ -133,7 +133,7 @@ def legacy_payload_to_invoice(
         purchase_order=str(
             _first(header, ["PO NO./CONTRACT NO.", "PO NO.", "purchase_order"], "")
         ).strip(),
-        currency=str(_first(payment, ["CURRENCY", "currency"], "INR")).strip().upper(),
+        currency=str(_first(payment, ["CURRENCY", "currency"], "USD")).strip().upper(),
         subtotal=subtotal,
         tax_total=tax_total,
         total=total,

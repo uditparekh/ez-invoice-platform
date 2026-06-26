@@ -4,18 +4,27 @@ import {
   BarChart3,
   Building2,
   CircleAlert,
+  Database,
+  Diamond,
   FileClock,
+  FileCog,
+  FileSpreadsheet,
   FileText,
+  Landmark,
   LogOut,
+  Map,
   Menu,
-  Plug,
+  Network,
   Settings2,
   ShieldCheck,
+  Table2,
+  Users,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { BrandMark } from "@/components/brand-mark";
@@ -23,17 +32,45 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const navigation = [
-  { href: "/app/invoices", label: "Invoices", icon: FileText },
-  { href: "/app/history", label: "History", icon: FileClock },
-  { href: "/app/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/app/exceptions", label: "Exceptions", icon: CircleAlert },
-];
-
-const workspaceNavigation = [
-  { href: "/app/integrations", label: "Integrations", icon: Plug },
-  { href: "/app/rules", label: "Rules", icon: ShieldCheck },
-  { href: "/app/settings", label: "Settings", icon: Settings2 },
+const navGroups = [
+  {
+    label: "Workflow",
+    items: [
+      { href: "/app/invoices", label: "Invoices", icon: FileText },
+      { href: "/app/history", label: "History", icon: FileClock },
+      { href: "/app/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/app/exceptions", label: "Exceptions", icon: CircleAlert },
+    ],
+  },
+  {
+    label: "Send to ERP",
+    items: [
+      {
+        href: "/app/accounting/quickbooks",
+        label: "QuickBooks",
+        icon: Network,
+      },
+      { href: "/app/accounting/tally", label: "Tally", icon: Table2 },
+      {
+        href: "/app/accounting/zoho-books",
+        label: "Zoho Books",
+        icon: FileSpreadsheet,
+      },
+      { href: "/app/accounting/coupa", label: "Coupa", icon: Database },
+      { href: "/app/accounting/netsuite", label: "NetSuite", icon: Landmark },
+      { href: "/app/accounting/sap", label: "SAP", icon: FileCog },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { href: "/app/gl-mapping", label: "GL Mapping", icon: Diamond },
+      { href: "/app/rules", label: "Rules", icon: ShieldCheck },
+      { href: "/app/vendors", label: "Vendors", icon: Users },
+      { href: "/app/roadmap", label: "Roadmap", icon: Map },
+      { href: "/app/settings", label: "Workspace", icon: Settings2 },
+    ],
+  },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -57,37 +94,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <BrandMark />
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-6">
-        <p className="px-3 text-[10px] font-extrabold uppercase text-ink-muted">
-          Workflow
-        </p>
-        <nav className="mt-3 space-y-1">
-          {navigation.map((item) => (
-            <NavLink
-              key={item.href}
-              {...item}
-              active={pathname === item.href}
-              onNavigate={() => setMobileOpen(false)}
-            />
-          ))}
-        </nav>
-        <p className="mt-8 px-3 text-[10px] font-extrabold uppercase text-ink-muted">
-          Workspace
-        </p>
-        <nav className="mt-3 space-y-1">
-          {workspaceNavigation.map((item) => (
-            <NavLink
-              key={item.href}
-              {...item}
-              active={pathname === item.href}
-              onNavigate={() => setMobileOpen(false)}
-            />
-          ))}
-        </nav>
+        {navGroups.map((group, groupIndex) => (
+          <div key={group.label} className={groupIndex ? "mt-8" : ""}>
+            <p className="px-3 text-[10px] font-extrabold uppercase text-ink-muted">
+              {group.label}
+            </p>
+            <nav className="mt-3 space-y-1">
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.href}
+                  {...item}
+                  active={isActivePath(pathname, item.href)}
+                  onNavigate={() => setMobileOpen(false)}
+                />
+              ))}
+            </nav>
+          </div>
+        ))}
       </div>
       <div className="border-t border-line p-3">
-        <div className="flex items-center gap-3 rounded-[7px] px-3 py-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-strong text-xs font-bold text-ink">
-            {(user?.full_name || user?.email || "EZ")
+        <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-subtle px-3 py-2.5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-black text-accent-ink">
+            {(user?.full_name || user?.email || "SE")
               .split(/\s|@/)
               .slice(0, 2)
               .map((part) => part[0]?.toUpperCase())
@@ -118,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-canvas">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[248px] flex-col border-r border-line bg-surface lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] flex-col border-r border-line bg-surface lg:flex">
         {nav}
       </aside>
 
@@ -144,7 +172,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="lg:pl-[248px]">
+      <div className="lg:pl-[260px]">
         <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-surface/95 px-4 backdrop-blur sm:px-6 lg:px-8">
           <Button
             variant="ghost"
@@ -156,7 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu size={18} />
           </Button>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink-secondary">
-            <Building2 size={16} className="shrink-0 text-accent" />
+            <Building2 size={16} className="shrink-0 text-cyan" />
             {user && user.memberships.length > 1 ? (
               <select
                 value={membership?.organization_id}
@@ -202,7 +230,7 @@ function NavLink({
 }: {
   href: string;
   label: string;
-  icon: typeof FileText;
+  icon: LucideIcon;
   active: boolean;
   onNavigate: () => void;
 }) {
@@ -211,9 +239,9 @@ function NavLink({
       href={href}
       onClick={onNavigate}
       className={cn(
-        "flex h-11 items-center gap-3 rounded-[7px] border-l-2 px-3 text-sm font-semibold transition-colors",
+        "flex h-11 items-center gap-3 rounded-xl border-l-[3px] px-3 text-sm font-bold transition-colors",
         active
-          ? "border-accent bg-accent-soft text-accent-ink"
+          ? "border-accent bg-accent-soft text-accent-ink dark:border-cyan dark:bg-surface-strong dark:text-cyan"
           : "border-transparent text-ink-secondary hover:bg-surface-subtle hover:text-ink",
       )}
     >
@@ -221,4 +249,8 @@ function NavLink({
       {label}
     </Link>
   );
+}
+
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
 }

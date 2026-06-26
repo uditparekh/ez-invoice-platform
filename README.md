@@ -1,9 +1,9 @@
-# EZ-Invoice Platform
+# SiftEntry Platform
 
-EZ-Invoice is a universal inbound invoice automation platform that extracts,
-reviews, validates, approves, and posts supplier invoices to accounting
-systems. The current pilot supports QuickBooks Online, TallyPrime, and Zoho
-Books.
+SiftEntry is an invoice-to-ledger automation platform for modern finance teams.
+It extracts, reviews, validates, approves, and posts supplier invoices to
+accounting systems. The current pilot supports QuickBooks Online, TallyPrime,
+and Zoho Books.
 
 This repository is the single source of truth for the platform. The proven
 Streamlit pilot remains available while the customer-facing Next.js
@@ -36,7 +36,7 @@ scripts/                  Development and release helpers
 - TallyPrime purchase-voucher posting through a local connector
 - Zoho Books Bill posting
 - Streamlit invoice queue, history, analytics, and integration settings
-- Next.js login, organization-aware shell, invoice queue, search, filtering,
+- SiftEntry Next.js login, organization-aware shell, invoice queue, search, filtering,
   PDF upload, invoice selection, and line-item review
 - Same-origin web API boundary with secure HTTP-only session cookies
 

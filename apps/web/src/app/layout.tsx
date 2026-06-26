@@ -3,11 +3,24 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "EZ-Invoice",
-    template: "%s | EZ-Invoice",
+    default: "SiftEntry",
+    template: "%s | SiftEntry",
   },
-  description:
-    "Universal invoice intake, review, approval, and accounting automation.",
+  description: "Invoices in. Entries ready.",
+  icons: {
+    icon: [
+      {
+        url: "/brand/siftentry-favicon-32.png",
+        sizes: "32x32",
+        type: "image/png",
+      },
+      {
+        url: "/brand/siftentry-favicon-64.png",
+        sizes: "64x64",
+        type: "image/png",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({

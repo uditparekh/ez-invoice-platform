@@ -1,6 +1,6 @@
-# EZ-Invoice Web
+# SiftEntry Web
 
-The customer-facing EZ-Invoice application is a Next.js App Router project
+The customer-facing SiftEntry application is a Next.js App Router project
 written in strict TypeScript. It runs alongside the proven Streamlit pilot and
 uses FastAPI as the permanent domain and accounting-integration boundary.
 

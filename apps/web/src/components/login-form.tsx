@@ -32,7 +32,7 @@ export function LoginForm() {
       router.replace("/app/invoices");
       router.refresh();
     } catch {
-      setError("The EZ-Invoice API is unavailable. Start FastAPI and try again.");
+      setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -44,7 +44,7 @@ export function LoginForm() {
         <span className="mb-2 block text-xs font-bold text-ink-secondary">
           Work email
         </span>
-        <span className="flex h-12 items-center gap-3 rounded-[7px] border border-line-strong bg-surface px-3.5 focus-within:border-accent">
+        <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
           <Mail size={17} className="shrink-0 text-ink-muted" />
           <input
             name="email"
@@ -60,7 +60,7 @@ export function LoginForm() {
         <span className="mb-2 block text-xs font-bold text-ink-secondary">
           Password
         </span>
-        <span className="flex h-12 items-center gap-3 rounded-[7px] border border-line-strong bg-surface px-3.5 focus-within:border-accent">
+        <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
           <LockKeyhole size={17} className="shrink-0 text-ink-muted" />
           <input
             name="password"
@@ -74,7 +74,7 @@ export function LoginForm() {
       {error && (
         <p
           role="alert"
-          className="rounded-[7px] border border-danger/25 bg-danger-soft px-3.5 py-3 text-sm font-medium text-danger"
+          className="rounded-xl border border-danger/25 bg-danger-soft px-3.5 py-3 text-sm font-semibold text-danger"
         >
           {error}
         </p>

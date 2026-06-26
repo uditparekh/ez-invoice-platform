@@ -9,7 +9,7 @@ Next.js frontend.
 ```text
 Streamlit pilot
     |
-Authenticated FastAPI organization, upload, validation, queue, and audit APIs
+Authenticated FastAPI organization, client profile, upload, validation, queue, and audit APIs
     |
 SQLite repository + local PDF storage
     |
@@ -23,13 +23,14 @@ deployment and debugging simple while establishing clear module ownership.
 
 ## Backend Modules
 
-- `backend/models.py`: API and domain models.
+- `backend/models.py`: API and domain models, including organization-scoped
+  client profiles for accounting-system setup.
 - `backend/domain.py`: conversion between legacy parser payloads and the
   universal invoice model.
 - `backend/parser_service.py`: PDF text extraction and parser routing without
   Streamlit session state.
-- `backend/repository.py`: organizations, invoices, lines, corrections,
-  mappings, posting attempts, and audit events.
+- `backend/repository.py`: organizations, client profiles, invoices, lines,
+  corrections, mappings, posting attempts, and audit events.
 - `backend/adapters.py`: uniform wrappers over QuickBooks, Tally, and Zoho.
 - `backend/main.py`: HTTP endpoints and workflow rules.
 
@@ -60,12 +61,31 @@ The API URL defaults to `http://127.0.0.1:8000`.
 ## Core Workflow
 
 1. Create an organization.
-2. Upload or import an invoice.
-3. Review and patch extracted fields.
-4. Validate the invoice.
-5. Approve it.
-6. Post to QuickBooks, Tally, or Zoho Books.
-7. Read the posting result and audit trail.
+2. Create or select a client profile for the target accounting system.
+3. Upload or import an invoice.
+4. Review and patch extracted fields.
+5. Validate the invoice.
+6. Approve it.
+7. Post to QuickBooks, Tally, or Zoho Books.
+8. Read the posting result and audit trail.
+
+## Client Profiles
+
+Client profiles store the accounting-system setup that should not be hardcoded
+inside parsers or posting adapters. Each organization can maintain separate
+profiles for Tally, QuickBooks, Zoho Books, and future systems. A profile can
+capture company names, voucher modes, purchase/tax/TCS/round-off ledgers,
+stock item mappings, parser preference, connection metadata, and a default flag
+per accounting system.
+
+The first API slice supports:
+
+- `GET /api/v1/organizations/{organization_id}/client-profiles`
+- `POST /api/v1/organizations/{organization_id}/client-profiles`
+- `GET /api/v1/organizations/{organization_id}/client-profiles/{profile_id}`
+- `PATCH /api/v1/organizations/{organization_id}/client-profiles/{profile_id}`
+- `POST /api/v1/organizations/{organization_id}/client-profiles/{profile_id}/set-default`
+- `DELETE /api/v1/organizations/{organization_id}/client-profiles/{profile_id}`
 
 ## Important Transitional Constraint
 
@@ -82,9 +102,12 @@ moved to the cloud API.
 Authentication, rotating refresh sessions, memberships, invitations, and
 role-based tenant isolation are now implemented. The next milestones are:
 
-1. React/Next.js login, organization switcher, invoice queue, and review console.
-2. PostgreSQL migration and Alembic migrations.
-3. Encrypted organization-scoped integration credential storage.
-4. Background extraction and posting jobs.
-5. Signed object-storage URLs for PDFs.
-6. Side-by-side PDF review endpoints and extraction evidence.
+1. Use saved client profiles inside posting adapters and the Streamlit/Next.js
+   posting flow.
+2. React/Next.js login, organization switcher, invoice queue, client profile
+   settings, and review console.
+3. PostgreSQL migration and Alembic migrations.
+4. Encrypted organization-scoped integration credential storage.
+5. Background extraction and posting jobs.
+6. Signed object-storage URLs for PDFs.
+7. Side-by-side PDF review endpoints and extraction evidence.

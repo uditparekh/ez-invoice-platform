@@ -102,7 +102,7 @@ class EzInvoiceApiClient:
         full_name: str,
         organization_name: str,
         legal_names: Iterable[str],
-        default_currency: str = "INR",
+        default_currency: str = "USD",
     ) -> Dict[str, Any]:
         tokens = self._request(
             "POST",
@@ -127,7 +127,7 @@ class EzInvoiceApiClient:
         full_name: str,
         organization_name: str,
         legal_names: Iterable[str],
-        default_currency: str = "INR",
+        default_currency: str = "USD",
     ) -> Dict[str, Any]:
         try:
             return self.login(email, password)
@@ -182,7 +182,7 @@ class EzInvoiceApiClient:
         self,
         name: str,
         legal_names: Optional[Iterable[str]] = None,
-        default_currency: str = "INR",
+        default_currency: str = "USD",
         organization_id: str = "",
     ) -> Dict[str, Any]:
         organizations = self.list_organizations()
@@ -212,8 +212,61 @@ class EzInvoiceApiClient:
             json={
                 "name": name.strip() or "Client Workspace",
                 "legal_names": [value.strip() for value in legal_names or [] if value.strip()],
-                "default_currency": (default_currency or "INR").strip().upper(),
+                "default_currency": (default_currency or "USD").strip().upper(),
             },
+        )
+
+    def list_client_profiles(
+        self,
+        organization_id: str,
+        accounting_system: str = "",
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {}
+        if accounting_system:
+            params["accounting_system"] = accounting_system
+        return self._request(
+            "GET",
+            f"/api/v1/organizations/{organization_id}/client-profiles",
+            params=params,
+        )
+
+    def create_client_profile(
+        self,
+        organization_id: str,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/api/v1/organizations/{organization_id}/client-profiles",
+            json=payload,
+        )
+
+    def update_client_profile(
+        self,
+        organization_id: str,
+        profile_id: str,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._request(
+            "PATCH",
+            f"/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
+            json=payload,
+        )
+
+    def set_default_client_profile(
+        self,
+        organization_id: str,
+        profile_id: str,
+    ) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/set-default",
+        )
+
+    def delete_client_profile(self, organization_id: str, profile_id: str) -> None:
+        self._request(
+            "DELETE",
+            f"/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
         )
 
     def upload_invoice(
@@ -320,7 +373,7 @@ def invoice_to_legacy_payload(invoice: Dict[str, Any]) -> Dict[str, Any]:
     header["INVOICE AMOUNT"] = invoice.get("total", 0)
     header["AMOUNT TO BE EFT DRAFTED"] = invoice.get("total", 0)
 
-    payment["CURRENCY"] = invoice.get("currency", "INR")
+    payment["CURRENCY"] = invoice.get("currency", "USD")
     payment["AMOUNT"] = invoice.get("total", 0)
     legacy["SELLER"] = _legacy_party(invoice.get("supplier") or {})
     legacy["BILL TO"] = _legacy_party(invoice.get("customer") or {})

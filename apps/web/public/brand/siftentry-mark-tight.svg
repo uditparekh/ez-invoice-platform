@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="76 76 360 360" role="img" aria-labelledby="title desc">
+  <title id="title">SiftEntry app mark</title>
+  <desc id="desc">Tight SiftEntry app mark: indigo rounded square, white forward chevron, cyan posted-entry line.</desc>
+  <defs>
+    <linearGradient id="bg" x1="76" y1="76" x2="436" y2="436" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#4F46E5"/>
+    </linearGradient>
+  </defs>
+  <rect x="76" y="76" width="360" height="360" rx="92" fill="url(#bg)"/>
+  <path d="M212.4 194.1 L275.7 256 L212.4 317.9" fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M202.6 333.3 H309.4" fill="none" stroke="#67E8F9" stroke-width="24" stroke-linecap="round"/>
+</svg>

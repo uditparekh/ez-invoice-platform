@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -14,9 +15,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from .adapters import default_adapters
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
 from .models import (
+    AccountingSystem,
     AuthBootstrapRequest,
     AuthenticatedUser,
     AuthTokens,
+    ClientProfile,
+    ClientProfileCreate,
+    ClientProfilePatch,
     DeleteInvoicesResult,
     HealthResponse,
     Invitation,
@@ -35,10 +40,12 @@ from .models import (
     PostingResult,
     PostingResultCreate,
     PostingTarget,
+    ProfileRecommendationResult,
     RefreshRequest,
     ValidationResult,
 )
 from .parser_service import parse_pdf_invoice
+from .profile_recommendation import recommend_client_profiles
 from .repository import InvoiceRepository
 from .security import (
     AuthenticationError,
@@ -52,7 +59,7 @@ from .storage import LocalDocumentStorage
 from .validation import validate_invoice
 
 
-API_VERSION = "0.2.0"
+API_VERSION = "0.3.0"
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 
 READ_ROLES = set(OrganizationRole)
@@ -309,6 +316,151 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> List[Organization]:
         return _repo(request).list_organizations_for_user(current_user.id)
 
+    @app.get(
+        "/api/v1/organizations/{organization_id}/client-profiles",
+        response_model=List[ClientProfile],
+        tags=["client-profiles"],
+    )
+    def list_client_profiles(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+        accounting_system: Optional[AccountingSystem] = Query(default=None),
+    ) -> List[ClientProfile]:
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        return _repo(request).list_client_profiles(
+            organization_id,
+            accounting_system.value if accounting_system else None,
+        )
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/client-profiles",
+        response_model=ClientProfile,
+        status_code=status.HTTP_201_CREATED,
+        tags=["client-profiles"],
+    )
+    def create_client_profile(
+        request: Request,
+        organization_id: str,
+        body: ClientProfileCreate,
+        current_user: CurrentUser,
+    ) -> ClientProfile:
+        _require_membership(request, current_user, organization_id, EDIT_ROLES)
+        _get_organization(request, organization_id)
+        try:
+            return _repo(request).create_client_profile(
+                organization_id,
+                body,
+                actor_id=current_user.id,
+            )
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="A client profile with this name already exists.",
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
+        response_model=ClientProfile,
+        tags=["client-profiles"],
+    )
+    def get_client_profile(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        current_user: CurrentUser,
+    ) -> ClientProfile:
+        return _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            READ_ROLES,
+        )
+
+    @app.patch(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
+        response_model=ClientProfile,
+        tags=["client-profiles"],
+    )
+    def update_client_profile(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        body: ClientProfilePatch,
+        current_user: CurrentUser,
+    ) -> ClientProfile:
+        _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            EDIT_ROLES,
+        )
+        try:
+            profile = _repo(request).update_client_profile(
+                profile_id,
+                body,
+                actor_id=current_user.id,
+            )
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="A client profile with this name already exists.",
+            ) from exc
+        if not profile:
+            raise HTTPException(status_code=404, detail="Client profile not found.")
+        return profile
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/set-default",
+        response_model=ClientProfile,
+        tags=["client-profiles"],
+    )
+    def set_default_client_profile(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        current_user: CurrentUser,
+    ) -> ClientProfile:
+        _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            EDIT_ROLES,
+        )
+        profile = _repo(request).set_default_client_profile(
+            profile_id,
+            actor_id=current_user.id,
+        )
+        if not profile:
+            raise HTTPException(status_code=404, detail="Client profile not found.")
+        return profile
+
+    @app.delete(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        tags=["client-profiles"],
+    )
+    def delete_client_profile(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        current_user: CurrentUser,
+    ) -> Response:
+        _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            MANAGE_ROLES,
+        )
+        _repo(request).delete_client_profile(profile_id, actor_id=current_user.id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     @app.post(
         "/api/v1/invoices/import",
         response_model=Invoice,
@@ -392,6 +544,26 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> Invoice:
         return _require_invoice(request, invoice_id, current_user, READ_ROLES)
+
+    @app.get(
+        "/api/v1/invoices/{invoice_id}/profile-recommendations",
+        response_model=ProfileRecommendationResult,
+        tags=["workflow"],
+    )
+    def recommend_invoice_profile(
+        request: Request,
+        invoice_id: str,
+        current_user: CurrentUser,
+        accounting_system: Optional[AccountingSystem] = Query(default=None),
+    ) -> ProfileRecommendationResult:
+        invoice = _require_invoice(request, invoice_id, current_user, READ_ROLES)
+        profiles = _repo(request).list_client_profiles(
+            invoice.organization_id,
+            accounting_system=(
+                accounting_system.value if accounting_system is not None else None
+            ),
+        )
+        return recommend_client_profiles(invoice, profiles)
 
     @app.delete(
         "/api/v1/organizations/{organization_id}/invoices",
@@ -495,25 +667,84 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         if adapter is None:
             raise HTTPException(status_code=400, detail="Unsupported accounting target.")
 
-        if not body.dry_run:
-            _repo(request).set_status(invoice_id, InvoiceStatus.POSTING)
-        connector_result = adapter.post(invoice, dry_run=body.dry_run)
-        posting = _repo(request).create_posting(
+        client_profile = _resolve_posting_profile(
+            request,
+            invoice.organization_id,
+            body.target,
+            body.client_profile_id,
+            current_user,
+            invoice,
+        )
+        request_payload = {
+            "target": body.target.value,
+            "dry_run": body.dry_run,
+            "client_profile_id": client_profile.id if client_profile else None,
+            "client_profile_name": client_profile.name if client_profile else None,
+            "invoice_number": invoice.invoice_number,
+            "source_file": invoice.source_file,
+        }
+        posting = _repo(request).start_posting(
             invoice_id=invoice_id,
             target=body.target,
-            success=connector_result.success,
             dry_run=body.dry_run,
+            actor_id=current_user.id,
+            client_profile_id=client_profile.id if client_profile else None,
+            request_payload=request_payload,
+        )
+        if not body.dry_run:
+            _repo(request).set_status(invoice_id, InvoiceStatus.POSTING)
+        try:
+            connector_result = adapter.post(
+                invoice,
+                dry_run=body.dry_run,
+                client_profile=client_profile,
+            )
+        except Exception as exc:
+            completed = _repo(request).complete_posting(
+                posting_id=posting.id,
+                success=False,
+                message=f"Connector failed unexpectedly: {exc}",
+                raw={"error": str(exc)},
+                response_payload={"error": str(exc)},
+            )
+            if not body.dry_run:
+                _repo(request).set_status(invoice_id, InvoiceStatus.FAILED)
+            return completed
+        completed = _repo(request).complete_posting(
+            posting_id=posting.id,
+            success=connector_result.success,
             message=connector_result.message,
             external_id=connector_result.external_id,
             issues=[issue.__dict__ for issue in connector_result.issues],
             raw=connector_result.raw,
+            response_payload={
+                "success": connector_result.success,
+                "message": connector_result.message,
+                "external_id": connector_result.external_id,
+                "issues": [issue.__dict__ for issue in connector_result.issues],
+                "raw": connector_result.raw,
+            },
         )
         if not body.dry_run:
             final_status = (
                 InvoiceStatus.POSTED if connector_result.success else InvoiceStatus.FAILED
             )
             _repo(request).set_status(invoice_id, final_status)
-        return posting
+        return completed
+
+    @app.get(
+        "/api/v1/invoices/{invoice_id}/postings",
+        response_model=List[PostingResult],
+        tags=["workflow"],
+    )
+    def list_invoice_postings(
+        request: Request,
+        invoice_id: str,
+        current_user: CurrentUser,
+        limit: int = Query(default=20, ge=1, le=100),
+    ) -> List[PostingResult]:
+        _require_invoice(request, invoice_id, current_user, READ_ROLES)
+        return _repo(request).list_postings_for_invoice(invoice_id, limit=limit)
 
     @app.get(
         "/api/v1/postings/{posting_id}",
@@ -549,10 +780,14 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             target=body.target,
             success=body.success,
             dry_run=body.dry_run,
+            actor_id=current_user.id,
+            client_profile_id=body.client_profile_id,
             message=body.message,
             external_id=body.external_id,
             issues=body.issues,
             raw=body.raw,
+            request_payload=body.request_payload,
+            response_payload=body.raw,
         )
         if not body.dry_run:
             final_status = InvoiceStatus.POSTED if body.success else InvoiceStatus.FAILED
@@ -610,6 +845,70 @@ def _require_invoice(
         allowed_roles,
     )
     return invoice
+
+
+def _require_client_profile(
+    request: Request,
+    organization_id: str,
+    profile_id: str,
+    current_user: AuthenticatedUser,
+    allowed_roles: set[OrganizationRole],
+) -> ClientProfile:
+    _require_membership(request, current_user, organization_id, allowed_roles)
+    profile = _repo(request).get_client_profile(profile_id)
+    if not profile or profile.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Client profile not found.")
+    return profile
+
+
+def _resolve_posting_profile(
+    request: Request,
+    organization_id: str,
+    target: PostingTarget,
+    profile_id: Optional[str],
+    current_user: AuthenticatedUser,
+    invoice: Optional[Invoice] = None,
+) -> Optional[ClientProfile]:
+    if profile_id:
+        profile = _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            READ_ROLES,
+        )
+        profile_system = (
+            profile.accounting_system.value
+            if hasattr(profile.accounting_system, "value")
+            else str(profile.accounting_system)
+        )
+        if profile_system != target.value:
+            raise HTTPException(
+                status_code=409,
+                detail="The selected client profile does not match the posting target.",
+            )
+        return profile
+
+    profiles = _repo(request).list_client_profiles(
+        organization_id,
+        accounting_system=target.value,
+    )
+    if invoice and profiles:
+        recommended = recommend_client_profiles(invoice, profiles)
+        if recommended.auto_profile_id:
+            matched_profile = next(
+                (
+                    profile
+                    for profile in profiles
+                    if profile.id == recommended.auto_profile_id
+                ),
+                None,
+            )
+            if matched_profile:
+                return matched_profile
+    return next((profile for profile in profiles if profile.is_default), None) or (
+        profiles[0] if profiles else None
+    )
 
 
 app = create_app()

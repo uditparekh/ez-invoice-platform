@@ -392,6 +392,56 @@ def _tax_total_from_text(joined_text: str) -> float:
     return round(total, 2)
 
 
+def _tax_total_from_lines(lines: List[str]) -> float:
+    total = 0.0
+    for idx, line in enumerate(lines):
+        if not re.search(r"\b(?:IGST|CGST|SGST)\b", line, re.IGNORECASE):
+            continue
+        if re.search(r"GSTIN|GST/UIN|GST\s*No", line, re.IGNORECASE):
+            continue
+        if not ("@" in line or "%" in line or re.search(r"\b(?:tax|amount|payable)\b", line, re.IGNORECASE)):
+            continue
+        if re.search(r"\b(?:Act|Rules?|Section)\b", line, re.IGNORECASE) and "@" not in line and "%" not in line:
+            continue
+
+        amount = 0.0
+        if "%" not in line:
+            values = _money_values(line)
+            if values:
+                amount = values[-1]
+        if not amount:
+            for candidate in lines[idx + 1 : idx + 4]:
+                if re.search(r"^\s*-", candidate):
+                    amount = _money(candidate)
+                    if amount:
+                        break
+                values = _money_values(candidate)
+                if values:
+                    amount = values[0]
+                    break
+        if amount:
+            total += amount
+    return round(total, 2)
+
+
+def _amount_after_label(lines: List[str], label_pattern: str) -> float:
+    for idx, line in enumerate(lines):
+        if not re.search(label_pattern, line, re.IGNORECASE):
+            continue
+        for candidate in lines[idx + 1 : idx + 4]:
+            if re.search(r"^\s*-", candidate):
+                amount = _money(candidate)
+                if amount:
+                    return amount
+            values = _money_values(candidate)
+            if values:
+                return values[0]
+            amount = _money(candidate)
+            if amount:
+                return amount
+    return 0.0
+
+
 def _tax_summary_from_tables(tables: List[List[List[Any]]]) -> Tuple[float, float]:
     for table in tables:
         for row in table or []:
@@ -690,7 +740,12 @@ def _extract_rows_from_tables(tables: List[List[List[Any]]]) -> List[Dict[str, A
     return items
 
 
-def _allocate_tax(rows: List[Dict[str, Any]], gross_total: float, taxable_total: float) -> None:
+def _allocate_tax(
+    rows: List[Dict[str, Any]],
+    gross_total: float,
+    taxable_total: float,
+    tax_total_override: float = 0.0,
+) -> None:
     if not rows:
         return
     current_taxable = sum(_money(row.get("EXTENDED AMOUNT")) for row in rows)
@@ -705,7 +760,7 @@ def _allocate_tax(rows: List[Dict[str, Any]], gross_total: float, taxable_total:
             row["UNIT PRICE"] = round(adjusted / (row.get("QUANTITY") or 1.0), 4)
 
     net_total = sum(_money(row.get("EXTENDED AMOUNT")) for row in rows)
-    tax_total = round(max(0.0, gross_total - net_total), 2)
+    tax_total = round(tax_total_override if tax_total_override else max(0.0, gross_total - net_total), 2)
     if not tax_total or not net_total:
         return
 
@@ -744,19 +799,24 @@ def parse_gst_invoice(
     gross = _gross_total(lines, joined)
     rows = _extract_rows_from_tables(tables)
     summary_taxable, summary_tax = _tax_summary_from_tables(tables)
+    explicit_gst_tax = _tax_total_from_lines(lines) or _tax_total_from_text(joined)
+    tcs_total = _amount_after_label(lines, r"\bTCS\b")
+    round_off = _amount_after_label(lines, r"Rounding\s+Off|Round\s*Off|Rounding")
     taxable = _taxable_base(joined) or summary_taxable or sum(_money(row.get("EXTENDED AMOUNT")) for row in rows)
     if not gross:
-        gross = taxable + summary_tax if summary_tax else taxable
-    _allocate_tax(rows, gross, taxable)
+        gross = taxable + (explicit_gst_tax or summary_tax) + tcs_total + round_off if (explicit_gst_tax or summary_tax or tcs_total or round_off) else taxable
+    _allocate_tax(rows, gross, taxable, tax_total_override=explicit_gst_tax or summary_tax)
 
     net_total = round(sum(_money(row.get("EXTENDED AMOUNT")) for row in rows), 2)
-    tax_total = round(max(0.0, gross - net_total), 2)
+    tax_total = round((explicit_gst_tax or summary_tax or sum(_money(row.get("TAX AMOUNT")) for row in rows)), 2)
     diagnostics = {
         "parser": "gst_einvoice_adapter",
         "table_warning": table_warning,
         "line_count": len(rows),
         "taxable_total": net_total,
         "tax_total": tax_total,
+        "tcs_total": tcs_total,
+        "round_off": round_off,
         "gross_total": gross,
     }
 
@@ -799,9 +859,14 @@ def parse_gst_invoice(
                 ],
                 "ROWS": rows,
             },
-            "INVOICE TAX SUMMARY": {"TOTAL TAX": tax_total, "TAXABLE VALUE": net_total},
-            "INR INR INR": {"TOTAL TAX": tax_total, "TAXABLE VALUE": net_total},
-            "USD USD USD": {"TOTAL TAX": tax_total, "TAXABLE VALUE": net_total},
+            "INVOICE TAX SUMMARY": {
+                "TOTAL TAX": tax_total,
+                "TAXABLE VALUE": net_total,
+                "TCS": tcs_total,
+                "ROUND OFF": round_off,
+            },
+            "INR INR INR": {"TOTAL TAX": tax_total, "TAXABLE VALUE": net_total, "TCS": tcs_total, "ROUND OFF": round_off},
+            "USD USD USD": {"TOTAL TAX": tax_total, "TAXABLE VALUE": net_total, "TCS": tcs_total, "ROUND OFF": round_off},
             "REMIT TO": {},
             "OR WIRE TO": {},
             "COMMENTS": {},

@@ -15,15 +15,21 @@ const labels: Record<InvoiceStatus, string> = {
 export function StatusBadge({ status }: { status: InvoiceStatus }) {
   const warning = status === "needs_review" || status === "posting";
   const danger = status === "failed";
+  const posted = status === "posted";
+  const ready = status === "validated" || status === "approved";
   return (
     <span
       className={cn(
-        "inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-bold",
+        "inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-extrabold",
         danger
           ? "bg-danger-soft text-danger"
           : warning
             ? "bg-gold-soft text-gold"
-            : "bg-accent-soft text-accent-ink",
+            : posted
+              ? "bg-cyan-soft text-cyan"
+              : ready
+                ? "bg-success-soft text-success"
+                : "bg-accent-soft text-accent-ink",
       )}
     >
       {labels[status]}

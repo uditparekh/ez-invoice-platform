@@ -30,9 +30,9 @@ async function fetchAuthenticatedUser() {
 }
 
 function preferredOrganizationId(user: AuthenticatedUser) {
-  const savedOrganization = window.localStorage.getItem(
-    "ez-active-organization",
-  );
+  const savedOrganization =
+    window.localStorage.getItem("siftentry-active-organization") ??
+    window.localStorage.getItem("ez-active-organization");
   return user.memberships.some(
     (membership) => membership.organization_id === savedOrganization,
   )
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applyUser, clearUser]);
 
   const selectOrganization = useCallback((organizationId: string) => {
-    window.localStorage.setItem("ez-active-organization", organizationId);
+    window.localStorage.setItem("siftentry-active-organization", organizationId);
     setActiveOrganizationId(organizationId);
   }, []);
 

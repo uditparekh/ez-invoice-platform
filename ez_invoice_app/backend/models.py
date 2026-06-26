@@ -26,6 +26,31 @@ class PostingTarget(str, Enum):
     ZOHO_BOOKS = "zoho_books"
 
 
+class PostingStatus(str, Enum):
+    STARTED = "started"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class AccountingSystem(str, Enum):
+    QUICKBOOKS = "quickbooks"
+    TALLY = "tally"
+    ZOHO_BOOKS = "zoho_books"
+    COUPA = "coupa"
+    NETSUITE = "netsuite"
+    SAP = "sap"
+    EXCEL = "excel"
+    CUSTOM = "custom"
+
+
+class ProfilePostingMode(str, Enum):
+    ACCOUNTING_VOUCHER = "accounting_voucher"
+    ITEM_INVOICE = "item_invoice"
+    SUPPLIER_BILL = "supplier_bill"
+    EXPORT_PACKAGE = "export_package"
+    CUSTOM = "custom"
+
+
 class OrganizationRole(str, Enum):
     OWNER = "owner"
     ADMIN = "admin"
@@ -37,7 +62,7 @@ class OrganizationRole(str, Enum):
 class OrganizationCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     legal_names: List[str] = Field(default_factory=list)
-    default_currency: str = Field(default="INR", min_length=3, max_length=3)
+    default_currency: str = Field(default="USD", min_length=3, max_length=3)
 
     @field_validator("name")
     @classmethod
@@ -59,6 +84,130 @@ class Organization(OrganizationCreate):
     id: str
     created_at: datetime
     updated_at: datetime
+
+
+class ClientProfileItemMapping(BaseModel):
+    source_description_contains: str = ""
+    source_hsn_sac: str = ""
+    target_item_name: str = ""
+    target_uom: str = ""
+    purchase_ledger: str = ""
+    tax_ledger: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator(
+        "source_description_contains",
+        "source_hsn_sac",
+        "target_item_name",
+        "target_uom",
+        "purchase_ledger",
+        "tax_ledger",
+    )
+    @classmethod
+    def clean_mapping_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class ClientProfileSettings(BaseModel):
+    company_name: str = ""
+    environment: str = "production"
+    connection_settings: Dict[str, Any] = Field(default_factory=dict)
+    country_code: str = "US"
+    country_name: str = "United States"
+    default_currency: str = "USD"
+    invoice_format: str = "auto"
+    tax_mode: str = "auto"
+    tax_registration_label: str = ""
+    default_parser: str = "auto"
+    direction: str = "inbound"
+    posting_mode: ProfilePostingMode = ProfilePostingMode.ACCOUNTING_VOUCHER
+    voucher_type: str = "Purchase"
+    purchase_ledger: str = ""
+    tax_ledger: str = ""
+    tcs_ledger: str = ""
+    round_off_ledger: str = ""
+    stock_item_name: str = ""
+    stock_item_hsn: str = ""
+    stock_item_uom: str = ""
+    godown_name: str = ""
+    item_mappings: List[ClientProfileItemMapping] = Field(default_factory=list)
+    tax_settings: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(use_enum_values=True, extra="allow")
+
+    @field_validator(
+        "company_name",
+        "environment",
+        "country_code",
+        "country_name",
+        "invoice_format",
+        "tax_mode",
+        "tax_registration_label",
+        "default_parser",
+        "direction",
+        "voucher_type",
+        "purchase_ledger",
+        "tax_ledger",
+        "tcs_ledger",
+        "round_off_ledger",
+        "stock_item_name",
+        "stock_item_hsn",
+        "stock_item_uom",
+        "godown_name",
+    )
+    @classmethod
+    def clean_settings_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("country_code")
+    @classmethod
+    def normalize_profile_country_code(cls, value: str) -> str:
+        return value.strip().upper() or "US"
+
+    @field_validator("default_currency")
+    @classmethod
+    def normalize_profile_currency(cls, value: str) -> str:
+        return value.strip().upper() or "USD"
+
+
+class ClientProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    accounting_system: AccountingSystem
+    description: str = Field(default="", max_length=500)
+    is_default: bool = False
+    settings: ClientProfileSettings = Field(default_factory=ClientProfileSettings)
+
+    model_config = ConfigDict(use_enum_values=True)
+
+    @field_validator("name", "description")
+    @classmethod
+    def clean_profile_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class ClientProfilePatch(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    accounting_system: Optional[AccountingSystem] = None
+    description: Optional[str] = Field(default=None, max_length=500)
+    is_default: Optional[bool] = None
+    settings: Optional[ClientProfileSettings] = None
+
+    model_config = ConfigDict(use_enum_values=True)
+
+    @field_validator("name", "description")
+    @classmethod
+    def clean_optional_profile_text(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip() if value is not None else None
+
+
+class ClientProfile(ClientProfileCreate):
+    id: str
+    organization_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class User(BaseModel):
@@ -88,7 +237,7 @@ class AuthBootstrapRequest(BaseModel):
     full_name: str = Field(default="", max_length=200)
     organization_name: str = Field(min_length=1, max_length=200)
     legal_names: List[str] = Field(default_factory=list)
-    default_currency: str = Field(default="INR", min_length=3, max_length=3)
+    default_currency: str = Field(default="USD", min_length=3, max_length=3)
 
     @field_validator("email")
     @classmethod
@@ -194,7 +343,7 @@ class InvoiceCreate(BaseModel):
     invoice_date: str = ""
     due_date: str = ""
     purchase_order: str = ""
-    currency: str = "INR"
+    currency: str = "USD"
     subtotal: float = 0
     tax_total: float = 0
     total: float = 0
@@ -210,7 +359,7 @@ class InvoiceCreate(BaseModel):
     @field_validator("currency")
     @classmethod
     def normalize_invoice_currency(cls, value: str) -> str:
-        return (value or "INR").strip().upper()
+        return (value or "USD").strip().upper()
 
 
 class Invoice(InvoiceCreate):
@@ -251,31 +400,65 @@ class ValidationResult(BaseModel):
 class PostingRequest(BaseModel):
     target: PostingTarget
     dry_run: bool = False
+    client_profile_id: Optional[str] = None
 
 
 class PostingResultCreate(BaseModel):
     target: PostingTarget
     success: bool
     dry_run: bool = False
+    client_profile_id: Optional[str] = None
     message: str
     external_id: Optional[str] = None
     issues: List[Dict[str, Any]] = Field(default_factory=list)
     raw: Dict[str, Any] = Field(default_factory=dict)
+    request_payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 class PostingResult(BaseModel):
     id: str
+    organization_id: str
     invoice_id: str
     target: PostingTarget
+    status: PostingStatus
     success: bool
     dry_run: bool = False
+    client_profile_id: Optional[str] = None
+    actor_id: str = ""
     message: str
     external_id: Optional[str] = None
     issues: List[Dict[str, Any]] = Field(default_factory=list)
+    request_payload: Dict[str, Any] = Field(default_factory=dict)
+    response_payload: Dict[str, Any] = Field(default_factory=dict)
     raw: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(use_enum_values=True)
+
+
+class DetectedInvoiceProfile(BaseModel):
+    country_code: str = "US"
+    country_name: str = "United States"
+    currency: str = "USD"
+    invoice_format: str = "auto"
+    tax_mode: str = "auto"
+    tax_registration_label: str = ""
+    confidence: float = Field(default=0, ge=0, le=1)
+    signals: List[str] = Field(default_factory=list)
+
+
+class ClientProfileRecommendation(BaseModel):
+    profile: ClientProfile
+    score: float = Field(default=0, ge=0, le=1)
+    reasons: List[str] = Field(default_factory=list)
+
+
+class ProfileRecommendationResult(BaseModel):
+    invoice_id: str
+    detected: DetectedInvoiceProfile
+    recommendations: List[ClientProfileRecommendation] = Field(default_factory=list)
+    auto_profile_id: Optional[str] = None
 
 
 class HealthResponse(BaseModel):

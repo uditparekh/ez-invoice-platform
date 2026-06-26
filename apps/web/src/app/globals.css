@@ -4,44 +4,52 @@
 
 :root {
   color-scheme: light;
-  --canvas: #f7f7f4;
+  --canvas: #f8fafc;
   --surface: #ffffff;
-  --surface-subtle: #f0f1ed;
-  --surface-strong: #e6e8e1;
-  --ink: #171a17;
-  --ink-secondary: #5d625c;
-  --ink-muted: #8b9189;
-  --line: #dfe2da;
-  --line-strong: #cdd2c7;
-  --accent: #3f674f;
-  --accent-hover: #31543f;
-  --accent-soft: #e8f0e9;
-  --accent-ink: #23412e;
-  --gold: #a76f1b;
-  --gold-soft: #f8edda;
-  --danger: #b14e45;
-  --danger-soft: #f9e7e4;
+  --surface-subtle: #f1f5f9;
+  --surface-strong: #e2e8f0;
+  --ink: #08111f;
+  --ink-secondary: #667085;
+  --ink-muted: #98a2b3;
+  --line: #e6eaf2;
+  --line-strong: #cbd5e1;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: #eef2ff;
+  --accent-ink: #3730a3;
+  --cyan: #06b6d4;
+  --cyan-soft: #cffafe;
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --gold: #d97706;
+  --gold-soft: #fef3c7;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
 }
 
 .dark {
   color-scheme: dark;
-  --canvas: #111310;
-  --surface: #181b17;
-  --surface-subtle: #1f231e;
-  --surface-strong: #282d26;
-  --ink: #f2f4ef;
-  --ink-secondary: #b4bbb1;
-  --ink-muted: #858d82;
-  --line: #30362f;
-  --line-strong: #414940;
-  --accent: #8bb094;
-  --accent-hover: #a1c2a8;
-  --accent-soft: #213126;
-  --accent-ink: #d8eadc;
-  --gold: #ddb062;
-  --gold-soft: #332918;
-  --danger: #ee8980;
-  --danger-soft: #39211f;
+  --canvas: #070b15;
+  --surface: #0b1020;
+  --surface-subtle: #111827;
+  --surface-strong: #17213a;
+  --ink: #f8fafc;
+  --ink-secondary: #8a94a8;
+  --ink-muted: #7b879d;
+  --line: #202a46;
+  --line-strong: #2b3658;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-soft: #111b35;
+  --accent-ink: #c7d2fe;
+  --cyan: #22d3ee;
+  --cyan-soft: #103642;
+  --success: #22c55e;
+  --success-soft: #0f2f1d;
+  --gold: #f59e0b;
+  --gold-soft: #37260a;
+  --danger: #f87171;
+  --danger-soft: #3b1012;
 }
 
 @theme inline {
@@ -58,6 +66,10 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-cyan: var(--cyan);
+  --color-cyan-soft: var(--cyan-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
   --color-gold: var(--gold);
   --color-gold-soft: var(--gold-soft);
   --color-danger: var(--danger);
@@ -99,8 +111,8 @@ a {
 }
 
 ::selection {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--cyan-soft);
+  color: var(--ink);
 }
 
 :focus-visible {

@@ -19,7 +19,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from accounting_routing import apply_accounting_route
 from gst_invoice_parser import looks_like_gst_invoice, parse_gst_invoice
-from tally_integration import _load_settings, _parse_tally_response, _test_connection, build_tally_xml
+from tally_integration import (
+    TALLY_SETUP_PROFILES,
+    _load_settings,
+    _parse_tally_response,
+    _profile_defaults,
+    _test_connection,
+    build_tally_xml,
+)
 from tally_connector_client import send_xml_batch_to_connector
 from universal_parser import parse_generic_invoice
 
@@ -138,7 +145,24 @@ def _post_xml(url: str, xml: str) -> Dict[str, Any]:
 
 def run(args: argparse.Namespace) -> int:
     settings = _load_settings()
-    for key in ("url", "company", "voucher_type", "purchase_ledger", "tax_ledger"):
+    if args.setup_profile:
+        settings.update(_profile_defaults(args.setup_profile))
+        settings["setup_profile"] = args.setup_profile
+    for key in (
+        "setup_profile",
+        "url",
+        "company",
+        "posting_mode",
+        "voucher_type",
+        "purchase_ledger",
+        "tax_ledger",
+        "stock_item_name",
+        "stock_item_hsn",
+        "stock_item_uom",
+        "godown_name",
+        "tcs_ledger",
+        "round_off_ledger",
+    ):
         value = getattr(args, key, None)
         if value is not None:
             settings[key] = value
@@ -254,10 +278,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--direction", choices=["auto", "inbound", "outbound"], default="auto", help="Require a detected invoice direction before posting")
     parser.add_argument("--home-company", action="append", help="Client legal name used to infer inbound/outbound direction. Repeat for aliases.")
     parser.add_argument("--url", help="Tally URL, for example http://localhost:9000")
+    parser.add_argument(
+        "--setup-profile",
+        choices=sorted(TALLY_SETUP_PROFILES.keys()),
+        help="Saved client Tally profile to apply before command-line overrides",
+    )
     parser.add_argument("--company", help="Tally company name")
+    parser.add_argument("--posting-mode", choices=["Item Invoice", "Accounting Voucher"], help="Tally posting mode")
     parser.add_argument("--voucher-type", help="Tally voucher type, default comes from saved settings or Purchase")
     parser.add_argument("--purchase-ledger", help="Purchase/expense ledger, default comes from saved settings")
     parser.add_argument("--tax-ledger", help="Optional tax ledger; omitted tax rolls into purchase ledger")
+    parser.add_argument("--stock-item-name", help="Optional Tally stock item override for item invoice mode")
+    parser.add_argument("--stock-item-hsn", help="HSN that should map to the stock item override")
+    parser.add_argument("--stock-item-uom", help="Exact Tally unit symbol for the stock item, for example KGS")
+    parser.add_argument("--godown-name", help="Optional exact Tally godown/location master name")
+    parser.add_argument("--tcs-ledger", help="Exact Tally TCS ledger name")
+    parser.add_argument("--round-off-ledger", help="Exact Tally round-off ledger name")
     return parser
 
 

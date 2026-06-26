@@ -13,6 +13,8 @@ All notable platform changes will be recorded here.
 - Functional invoice queue, status filtering, search, PDF upload, detail view,
   validation display, and line-item table
 - Light and dark operational themes with mobile navigation
+- SiftEntry customer-facing brand system with ink, indigo, cyan, slate, and
+  finance status colors
 
 ### Quality
 

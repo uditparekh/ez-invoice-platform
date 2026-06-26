@@ -31,6 +31,43 @@ except ImportError:  # pragma: no cover - Streamlit shows a user-facing warning.
 _TALLY_SETTINGS_FILE = Path(__file__).with_name("tally_settings.json")
 
 
+TALLY_SETUP_PROFILES: Dict[str, Dict[str, str]] = {
+    "generic": {
+        "label": "Generic / manual setup",
+        "company": "",
+        "voucher_type": "Purchase",
+        "posting_mode": "Accounting Voucher",
+        "purchase_ledger": "Purchase Accounts",
+        "tax_ledger": "",
+        "stock_item_name": "",
+        "stock_item_hsn": "",
+        "stock_item_uom": "",
+        "godown_name": "",
+        "tcs_ledger": "",
+        "round_off_ledger": "",
+    },
+    "neel_pta_item_invoice": {
+        "label": "NEEL ENTERPRISE - PTA item invoice",
+        "company": "NEEL ENTERPRISE",
+        "voucher_type": "Purchase",
+        "posting_mode": "Item Invoice",
+        "purchase_ledger": "PURCHASES A/C",
+        "tax_ledger": "IGST A/C",
+        "stock_item_name": "PTA SWEEP",
+        "stock_item_hsn": "29173600",
+        "stock_item_uom": "KGS",
+        "godown_name": "",
+        "tcs_ledger": "TCS",
+        "round_off_ledger": "ROUND OFF",
+    },
+}
+
+
+def _profile_defaults(profile_id: str) -> Dict[str, str]:
+    profile = TALLY_SETUP_PROFILES.get(profile_id) or TALLY_SETUP_PROFILES["generic"]
+    return {key: value for key, value in profile.items() if key != "label"}
+
+
 def _config_value(name: str, default: str = "") -> str:
     value = os.environ.get(name)
     if value:
@@ -44,11 +81,19 @@ def _config_value(name: str, default: str = "") -> str:
 
 def _load_settings() -> Dict[str, Any]:
     defaults = {
+        "setup_profile": _config_value("TALLY_SETUP_PROFILE", "generic"),
         "url": _config_value("TALLY_URL", "http://localhost:9000"),
         "company": _config_value("TALLY_COMPANY", ""),
         "voucher_type": _config_value("TALLY_VOUCHER_TYPE", "Purchase"),
+        "posting_mode": _config_value("TALLY_POSTING_MODE", "Accounting Voucher"),
         "purchase_ledger": _config_value("TALLY_PURCHASE_LEDGER", "Purchase Accounts"),
         "tax_ledger": _config_value("TALLY_TAX_LEDGER", ""),
+        "stock_item_name": _config_value("TALLY_STOCK_ITEM_NAME", ""),
+        "stock_item_hsn": _config_value("TALLY_STOCK_ITEM_HSN", ""),
+        "stock_item_uom": _config_value("TALLY_STOCK_ITEM_UOM", ""),
+        "godown_name": _config_value("TALLY_GODOWN_NAME", ""),
+        "tcs_ledger": _config_value("TALLY_TCS_LEDGER", ""),
+        "round_off_ledger": _config_value("TALLY_ROUND_OFF_LEDGER", ""),
     }
     try:
         if _TALLY_SETTINGS_FILE.exists():
@@ -81,6 +126,17 @@ def _amount(value: Any) -> float:
         return 0.0
 
 
+def _fmt_amount(value: Any) -> str:
+    return f"{_amount(value):.2f}"
+
+
+def _fmt_qty(value: Any) -> str:
+    number = _amount(value)
+    if abs(number - round(number)) < 0.0001:
+        return str(int(round(number)))
+    return f"{number:.4f}".rstrip("0").rstrip(".")
+
+
 def _to_tally_date(value: str) -> str:
     value = (value or "").strip()
     if not value:
@@ -111,7 +167,7 @@ def _invoice_parts(payload: Dict[str, Any]) -> Dict[str, Any]:
         "vendor": seller.get("NAME") or "Unknown Supplier",
         "rows": rows,
         "total": total,
-        "currency": payment.get("CURRENCY", "INR"),
+        "currency": payment.get("CURRENCY", "USD"),
     }
 
 
@@ -135,6 +191,182 @@ def _line_category_note(row: Dict[str, Any]) -> str:
         if value:
             return value
     return ""
+
+
+def _posting_mode(settings: Dict[str, Any]) -> str:
+    return str(settings.get("posting_mode") or "Accounting Voucher").strip().lower()
+
+
+def _line_stock_item(row: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    explicit = str(row.get("TALLY_STOCK_ITEM") or row.get("STOCK ITEM") or "").strip()
+    if explicit:
+        return explicit
+
+    configured_item = str(settings.get("stock_item_name") or "").strip()
+    configured_hsn = re.sub(r"\D", "", str(settings.get("stock_item_hsn") or ""))
+    row_hsn = re.sub(r"\D", "", str(row.get("HSN/SAC") or row.get("HSN") or row.get("SAC") or ""))
+    description = str(row.get("DESCRIPTION") or row.get("ITEM") or "").strip()
+
+    if configured_item and configured_hsn and row_hsn == configured_hsn:
+        return configured_item
+    if configured_item and not configured_hsn:
+        return configured_item
+    return description or configured_item or "Invoice item"
+
+
+def _line_tally_uom(row: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    uom = str(row.get("UOM") or row.get("UNIT") or "EA").strip().upper() or "EA"
+    tally_uom = str(settings.get("stock_item_uom") or "").strip().upper()
+    if tally_uom and uom in {"KG", "KGS"}:
+        return tally_uom
+    return uom
+
+
+def _line_net_amount(row: Dict[str, Any]) -> float:
+    amount = _amount(row.get("EXTENDED AMOUNT") or row.get("NET AMOUNT") or row.get("TAXABLE VALUE"))
+    if amount:
+        return amount
+    gross = _amount(row.get("AMOUNT") or row.get("TOTAL"))
+    tax = _amount(row.get("TAX AMOUNT"))
+    return round(max(0.0, gross - tax), 2) if gross else 0.0
+
+
+def _tax_total(parts: Dict[str, Any], rows: List[Dict[str, Any]]) -> float:
+    invoice = parts["invoice"]
+    tax_summary = invoice.get("INVOICE TAX SUMMARY", {}) or {}
+    total = _amount(tax_summary.get("TOTAL TAX") or tax_summary.get("TAX AMOUNT"))
+    if total:
+        return total
+    return round(sum(_amount(row.get("TAX AMOUNT")) for row in rows), 2)
+
+
+def _summary_amount(parts: Dict[str, Any], labels: List[str]) -> float:
+    invoice = parts["invoice"]
+    candidates = [
+        invoice.get("INVOICE TAX SUMMARY", {}) or {},
+        invoice.get("PARSER_DIAGNOSTICS", {}) or {},
+        invoice.get("ADJUSTMENTS", {}) or {},
+        invoice.get("TOTALS", {}) or {},
+    ]
+    wanted = {label.upper() for label in labels}
+    for source in candidates:
+        for key, value in source.items():
+            key_norm = str(key or "").upper().replace("_", " ")
+            if key_norm in wanted or any(label in key_norm for label in wanted):
+                amount = _amount(value)
+                if amount:
+                    return amount
+    return 0.0
+
+
+def _ledger_entry(
+    ledger: str,
+    amount: float,
+    deemed_positive: str,
+    is_party: bool = False,
+    bill_name: str = "",
+) -> str:
+    bill_xml = ""
+    if is_party and bill_name:
+        bill_xml = f"""
+        <BILLALLOCATIONS.LIST>
+          <NAME>{_xml(bill_name)}</NAME>
+          <BILLTYPE>New Ref</BILLTYPE>
+          <AMOUNT>{_fmt_amount(amount)}</AMOUNT>
+        </BILLALLOCATIONS.LIST>"""
+    return f"""
+      <ALLLEDGERENTRIES.LIST>
+        <LEDGERNAME>{_xml(ledger)}</LEDGERNAME>
+        <ISDEEMEDPOSITIVE>{deemed_positive}</ISDEEMEDPOSITIVE>
+        <ISPARTYLEDGER>{'Yes' if is_party else 'No'}</ISPARTYLEDGER>
+        <AMOUNT>{_fmt_amount(amount)}</AMOUNT>{bill_xml}
+      </ALLLEDGERENTRIES.LIST>"""
+
+
+def _build_inventory_entries(
+    rows: List[Dict[str, Any]],
+    settings: Dict[str, Any],
+    classifier=None,
+) -> str:
+    if classifier:
+        try:
+            rows = classifier.classify_invoice_rows(rows)
+        except Exception:
+            pass
+
+    purchase_ledger = settings.get("purchase_ledger") or "Purchase Accounts"
+    godown_name = str(settings.get("godown_name") or "").strip()
+    entries: List[str] = []
+    for row in rows:
+        stock_item = _line_stock_item(row, settings)
+        quantity = _amount(row.get("QUANTITY") or row.get("QTY") or 1) or 1.0
+        uom = _line_tally_uom(row, settings)
+        unit_price = _amount(row.get("UNIT PRICE") or row.get("RATE"))
+        net_amount = _line_net_amount(row)
+        if not net_amount and unit_price:
+            net_amount = round(quantity * unit_price, 2)
+        if not unit_price and quantity:
+            unit_price = round(net_amount / quantity, 6)
+
+        qty_text = f"{_fmt_qty(quantity)} {uom}"
+        rate_xml = f"<RATE>{_fmt_amount(unit_price)}/{_xml(uom)}</RATE>" if unit_price else ""
+        godown_xml = ""
+        if godown_name:
+            godown_xml = f"""
+        <BATCHALLOCATIONS.LIST>
+          <GODOWNNAME>{_xml(godown_name)}</GODOWNNAME>
+          <BATCHNAME>Primary Batch</BATCHNAME>
+          <AMOUNT>-{_fmt_amount(net_amount)}</AMOUNT>
+          <ACTUALQTY>{_xml(qty_text)}</ACTUALQTY>
+          <BILLEDQTY>{_xml(qty_text)}</BILLEDQTY>
+        </BATCHALLOCATIONS.LIST>"""
+
+        entries.append(
+            f"""
+      <ALLINVENTORYENTRIES.LIST>
+        <STOCKITEMNAME>{_xml(stock_item)}</STOCKITEMNAME>
+        <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+        {rate_xml}
+        <AMOUNT>-{_fmt_amount(net_amount)}</AMOUNT>
+        <ACTUALQTY>{_xml(qty_text)}</ACTUALQTY>
+        <BILLEDQTY>{_xml(qty_text)}</BILLEDQTY>{godown_xml}
+        <ACCOUNTINGALLOCATIONS.LIST>
+          <LEDGERNAME>{_xml(_line_ledger(row, purchase_ledger))}</LEDGERNAME>
+          <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+          <AMOUNT>-{_fmt_amount(net_amount)}</AMOUNT>
+        </ACCOUNTINGALLOCATIONS.LIST>
+      </ALLINVENTORYENTRIES.LIST>"""
+        )
+    return "".join(entries)
+
+
+def _build_item_invoice_adjustment_entries(
+    parts: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+    settings: Dict[str, Any],
+) -> str:
+    entries: List[str] = []
+    tax_total = _tax_total(parts, rows)
+    if tax_total:
+        tax_ledger = settings.get("tax_ledger") or settings.get("purchase_ledger") or "Purchase Accounts"
+        entries.append(_ledger_entry(tax_ledger, -tax_total, "Yes"))
+
+    tcs_total = _summary_amount(parts, ["TCS", "TCS AMOUNT", "TOTAL TCS"])
+    if tcs_total:
+        tcs_ledger = settings.get("tcs_ledger") or settings.get("purchase_ledger") or "Purchase Accounts"
+        entries.append(_ledger_entry(tcs_ledger, -tcs_total, "Yes"))
+
+    net_total = round(sum(_line_net_amount(row) for row in rows), 2)
+    current_total = round(net_total + tax_total + tcs_total, 2)
+    round_delta = round((parts["total"] or current_total) - current_total, 2)
+    explicit_round = _summary_amount(parts, ["ROUND OFF", "ROUNDOFF", "ROUNDING", "ROUNDING OFF"])
+    if explicit_round:
+        round_delta = explicit_round
+    if abs(round_delta) >= 0.01:
+        round_ledger = settings.get("round_off_ledger") or settings.get("purchase_ledger") or "Purchase Accounts"
+        entries.append(_ledger_entry(round_ledger, -round_delta, "Yes" if round_delta > 0 else "No"))
+
+    return "".join(entries)
 
 
 def _build_ledger_entries(
@@ -199,7 +431,12 @@ def _build_ledger_entries(
 
 
 def build_tally_xml(payload: Dict[str, Any], settings: Optional[Dict[str, Any]] = None, classifier=None) -> str:
-    """Build an accounting purchase voucher XML import for TallyPrime."""
+    """Build a TallyPrime XML import.
+
+    Item Invoice mode creates inventory-backed purchase invoices for clients
+    whose stock items already exist in Tally. Accounting Voucher mode remains
+    available for service/non-stock bills.
+    """
 
     settings = settings or current_settings()
     parts = _invoice_parts(payload)
@@ -213,6 +450,45 @@ def build_tally_xml(payload: Dict[str, Any], settings: Optional[Dict[str, Any]] 
     po_no = header.get("PO NO./CONTRACT NO.", "")
     if po_no and po_no != "N/A":
         narration += " | PO: " + str(po_no)
+
+    if _posting_mode(settings) in {"item invoice", "item_invoice", "inventory", "inventory invoice"} and parts["rows"]:
+        inventory_entries = _build_inventory_entries(parts["rows"], settings, classifier=classifier)
+        adjustment_entries = _build_item_invoice_adjustment_entries(parts, parts["rows"], settings)
+        computed_total = round(sum(_line_net_amount(row) for row in parts["rows"]) + _tax_total(parts, parts["rows"]), 2)
+        party_total = parts["total"] or computed_total
+        party_entry = _ledger_entry(parts["vendor"], party_total, "No", is_party=True, bill_name=invoice_no)
+        return f"""<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Import</TALLYREQUEST>
+    <TYPE>Data</TYPE>
+    <ID>Vouchers</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        {static_company}
+      </STATICVARIABLES>
+    </DESC>
+    <DATA>
+      <TALLYMESSAGE xmlns:UDF="TallyUDF">
+        <VOUCHER VCHTYPE="{_xml(voucher_type)}" ACTION="Create" OBJVIEW="Invoice Voucher View">
+          <DATE>{invoice_date}</DATE>
+          <EFFECTIVEDATE>{invoice_date}</EFFECTIVEDATE>
+          <VOUCHERTYPENAME>{_xml(voucher_type)}</VOUCHERTYPENAME>
+          <VOUCHERNUMBER>{_xml(invoice_no)}</VOUCHERNUMBER>
+          <REFERENCE>{_xml(invoice_no)}</REFERENCE>
+          <REFERENCEDATE>{invoice_date}</REFERENCEDATE>
+          <PARTYLEDGERNAME>{_xml(parts["vendor"])}</PARTYLEDGERNAME>
+          <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
+          <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
+          <ISINVOICE>Yes</ISINVOICE>
+          <NARRATION>{_xml(narration)}</NARRATION>{party_entry}{inventory_entries}{adjustment_entries}
+        </VOUCHER>
+      </TALLYMESSAGE>
+    </DATA>
+  </BODY>
+</ENVELOPE>"""
 
     ledger_entries = _build_ledger_entries(payload, settings, classifier=classifier)
     return f"""<ENVELOPE>
@@ -321,11 +597,20 @@ def tally_is_connected() -> bool:
     return bool(connector_settings.get("enabled") or (settings.get("url") and settings.get("company")))
 
 
-def send_to_tally(payload: Dict[str, Any], classifier=None, dry_run: bool = False) -> Dict[str, Any]:
+def send_to_tally(
+    payload: Dict[str, Any],
+    classifier=None,
+    dry_run: bool = False,
+    settings_override: Optional[Dict[str, Any]] = None,
+    connector_settings_override: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     if not requests:
         return {"success": False, "message": "requests not installed", "response": None}
-    settings = current_settings()
-    connector_settings = current_connector_settings()
+    settings = {**current_settings(), **(settings_override or {})}
+    connector_settings = {
+        **current_connector_settings(),
+        **(connector_settings_override or {}),
+    }
     xml = build_tally_xml(payload, settings=settings, classifier=classifier)
     invoice_no = _invoice_parts(payload)["header"].get("INVOICE NO.", "invoice")
     if connector_settings.get("enabled"):
@@ -508,27 +793,99 @@ def tally_sidebar(show_heading: bool = True) -> None:
             '<div class="connector-help">These values are written into the voucher XML sent to Tally. The company name should match the company currently open in TallyPrime.</div>',
             unsafe_allow_html=True,
         )
-        url = st.text_input("Tally URL", value=settings.get("url", "http://localhost:9000"), key="tally_url")
+        profile_options = list(TALLY_SETUP_PROFILES.keys())
+        saved_profile = str(settings.get("setup_profile") or "generic")
+        if saved_profile not in TALLY_SETUP_PROFILES:
+            saved_profile = "generic"
+        selected_profile = st.selectbox(
+            "Client setup profile",
+            profile_options,
+            index=profile_options.index(saved_profile),
+            format_func=lambda profile_id: TALLY_SETUP_PROFILES[profile_id]["label"],
+            key="tally_setup_profile",
+            help="Use a saved client profile for exact Tally company, ledger, stock item, GST, TCS, and round-off names.",
+        )
+        profile_values = _profile_defaults(selected_profile)
+        if selected_profile == saved_profile:
+            field_settings = {**profile_values, **settings}
+        else:
+            field_settings = {**settings, **profile_values, "setup_profile": selected_profile}
+
+        url = st.text_input("Tally URL", value=field_settings.get("url", "http://localhost:9000"), key=f"tally_url_{selected_profile}")
         company = st.text_input(
             "Tally company name",
-            value=settings.get("company", ""),
+            value=field_settings.get("company", ""),
             placeholder="Example: NEEL ENTERPRISE",
-            key="tally_company",
+            key=f"tally_company_{selected_profile}",
         )
-        voucher_type = st.text_input("Voucher type", value=settings.get("voucher_type", "Purchase"), key="tally_voucher_type")
+        posting_options = ["Item Invoice", "Accounting Voucher"]
+        saved_posting_mode = str(field_settings.get("posting_mode") or "Accounting Voucher")
+        posting_index = 0 if saved_posting_mode not in posting_options else posting_options.index(saved_posting_mode)
+        posting_mode = st.selectbox(
+            "Posting mode",
+            posting_options,
+            index=posting_index,
+            key=f"tally_posting_mode_{selected_profile}",
+            help="Use Item Invoice when Tally stock items already exist. Use Accounting Voucher for non-stock/service bills.",
+        )
+        voucher_type = st.text_input("Voucher type", value=field_settings.get("voucher_type", "Purchase"), key=f"tally_voucher_type_{selected_profile}")
         purchase_ledger = st.text_input(
             "Purchase/expense ledger",
-            value=settings.get("purchase_ledger", "Purchase Accounts"),
-            key="tally_purchase_ledger",
+            value=field_settings.get("purchase_ledger", "Purchase Accounts"),
+            key=f"tally_purchase_ledger_{selected_profile}",
         )
-        tax_ledger = st.text_input("Tax ledger", value=settings.get("tax_ledger", ""), key="tally_tax_ledger")
+        tax_ledger = st.text_input("GST ledger", value=field_settings.get("tax_ledger", ""), key=f"tally_tax_ledger_{selected_profile}")
+        i1, i2 = st.columns(2)
+        with i1:
+            stock_item_name = st.text_input(
+                "Stock item override",
+                value=field_settings.get("stock_item_name", ""),
+                key=f"tally_stock_item_name_{selected_profile}",
+                help="Optional. Used when an invoice line matches the configured HSN. Leave blank to use the parsed item description.",
+            )
+            tcs_ledger = st.text_input("TCS ledger", value=field_settings.get("tcs_ledger", ""), key=f"tally_tcs_ledger_{selected_profile}")
+        with i2:
+            stock_item_hsn = st.text_input(
+                "Stock item HSN",
+                value=field_settings.get("stock_item_hsn", ""),
+                key=f"tally_stock_item_hsn_{selected_profile}",
+            )
+            stock_item_uom = st.text_input(
+                "Tally stock UOM",
+                value=field_settings.get("stock_item_uom", ""),
+                key=f"tally_stock_item_uom_{selected_profile}",
+                help="Exact Tally unit symbol for the stock item. The parser may normalize KGS as KG, but Tally may require KGS.",
+            )
+            round_off_ledger = st.text_input(
+                "Round-off ledger",
+                value=field_settings.get("round_off_ledger", ""),
+                key=f"tally_round_off_ledger_{selected_profile}",
+            )
+        godown_name = st.text_input(
+            "Godown/location master name",
+            value=field_settings.get("godown_name", ""),
+            placeholder="Optional. Leave blank if the client does not use godowns.",
+            key=f"tally_godown_name_{selected_profile}",
+        )
+        if selected_profile == "neel_pta_item_invoice":
+            st.caption("Confirmed for this demo: PTA SWEEP exists, HSN 29173600, GST 18%, TCS ledger TCS, round-off ledger ROUND OFF. Godown is optional unless Tally requires a location master.")
+        elif posting_mode == "Item Invoice":
+            st.caption("Item Invoice mode needs exact Tally stock item, unit, purchase ledger, and tax/adjustment ledger names for this client.")
 
         new_settings = {
+            "setup_profile": selected_profile,
             "url": url.strip(),
             "company": company.strip(),
+            "posting_mode": posting_mode,
             "voucher_type": voucher_type.strip() or "Purchase",
             "purchase_ledger": purchase_ledger.strip() or "Purchase Accounts",
             "tax_ledger": tax_ledger.strip(),
+            "stock_item_name": stock_item_name.strip(),
+            "stock_item_hsn": stock_item_hsn.strip(),
+            "stock_item_uom": stock_item_uom.strip(),
+            "godown_name": godown_name.strip(),
+            "tcs_ledger": tcs_ledger.strip(),
+            "round_off_ledger": round_off_ledger.strip(),
         }
         c1, c2 = st.columns(2)
         with c1:

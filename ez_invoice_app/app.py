@@ -162,15 +162,15 @@ def _initialize_api_bridge() -> None:
                 "EZ_API_PASSWORD",
                 "local-development-password",
             ),
-            full_name=os.environ.get("EZ_API_FULL_NAME", "EZ-Invoice Owner").strip(),
+            full_name=os.environ.get("EZ_API_FULL_NAME", "SiftEntry Owner").strip(),
             organization_name=str(client_name),
             legal_names=legal_names,
-            default_currency=str(profile.get("default_currency") or "INR"),
+            default_currency=str(profile.get("default_currency") or "USD"),
         )
         organization = client.ensure_organization(
             name=str(client_name),
             legal_names=legal_names,
-            default_currency=str(profile.get("default_currency") or "INR"),
+            default_currency=str(profile.get("default_currency") or "USD"),
             organization_id=os.environ.get("EZ_ORGANIZATION_ID", "").strip(),
         )
     except EzInvoiceApiError as exc:
@@ -191,7 +191,7 @@ def _initialize_api_bridge() -> None:
 def _api_summary_row(fname: str, data: Dict[str, Any]) -> Dict[str, Any]:
     inv = data.get("payload", {}).get("INVOICE", {})
     header = inv.get("INVOICE HEADER", {})
-    currency = inv.get("PAYMENT", {}).get("ELECTRONIC", {}).get("CURRENCY", "INR")
+    currency = inv.get("PAYMENT", {}).get("ELECTRONIC", {}).get("CURRENCY", "USD")
     return {
         "File": fname,
         "Invoice #": header.get("INVOICE NO.", ""),
@@ -2555,7 +2555,7 @@ def render_analytics_page() -> None:
     top_pct = (float(cat_top.iloc[0]) / cat_total * 100) if len(cat_top) else 0
 
     if "Currency" not in df.columns:
-        df["Currency"] = currency_label or "INR"
+        df["Currency"] = currency_label or "USD"
     if "Invoice #" not in df.columns:
         df["Invoice #"] = [f"INV-{idx + 1}" for idx in range(len(df))]
 

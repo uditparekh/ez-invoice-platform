@@ -4,10 +4,13 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
-export function formatCurrency(value: number, currency = "INR") {
-  return new Intl.NumberFormat("en-IN", {
+export function formatCurrency(value: number, currency = "USD") {
+  const currencyCode = (currency || "USD").trim().toUpperCase();
+  const locale = currencyCode === "INR" ? "en-IN" : "en-US";
+
+  return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency: currency || "INR",
+    currency: currencyCode,
     maximumFractionDigits: 2,
   }).format(value || 0);
 }

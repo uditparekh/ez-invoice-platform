@@ -1,38 +1,83 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+type ThemeMode = "light" | "dark";
 
 export function ThemeToggle() {
+  const [theme, setThemeState] = useState<ThemeMode>("light");
+
   useEffect(() => {
-    const saved = window.localStorage.getItem("ez-theme");
+    const saved =
+      window.localStorage.getItem("siftentry-theme") ??
+      window.localStorage.getItem("ez-theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.classList.toggle(
-      "dark",
-      saved ? saved === "dark" : prefersDark,
-    );
+    const nextTheme: ThemeMode = saved
+      ? saved === "dark"
+        ? "dark"
+        : "light"
+      : prefersDark
+        ? "dark"
+        : "light";
+    setTheme(nextTheme);
   }, []);
 
-  function toggleTheme() {
-    const root = document.documentElement;
-    const nextDark = !root.classList.contains("dark");
-    root.classList.toggle("dark", nextDark);
-    window.localStorage.setItem("ez-theme", nextDark ? "dark" : "light");
+  function setTheme(nextTheme: ThemeMode) {
+    setThemeState(nextTheme);
+    document.documentElement.classList.toggle("dark", nextTheme === "dark");
+    window.localStorage.setItem("siftentry-theme", nextTheme);
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="size-9 px-0"
-      onClick={toggleTheme}
-      aria-label="Toggle color theme"
-      title="Toggle color theme"
+    <div
+      className="inline-flex h-9 shrink-0 items-center rounded-full border border-line bg-surface-subtle p-1 shadow-sm shadow-black/[0.03] dark:shadow-black/20"
+      aria-label="Color theme"
+      role="group"
     >
-      <Moon size={16} className="dark:hidden" />
-      <Sun size={16} className="hidden dark:block" />
-    </Button>
+      <ThemeButton
+        active={theme === "light"}
+        icon={<Sun size={14} />}
+        label="Light"
+        onClick={() => setTheme("light")}
+      />
+      <ThemeButton
+        active={theme === "dark"}
+        icon={<Moon size={14} />}
+        label="Dark"
+        onClick={() => setTheme("dark")}
+      />
+    </div>
+  );
+}
+
+function ThemeButton({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-extrabold transition-colors",
+        active
+          ? "bg-accent text-white shadow-sm shadow-accent/20 dark:bg-cyan dark:text-[#070B15]"
+          : "text-ink-muted hover:bg-surface hover:text-ink",
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }

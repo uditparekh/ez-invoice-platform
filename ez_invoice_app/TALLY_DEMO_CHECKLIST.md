@@ -62,11 +62,19 @@ Click:
 Then fill `Tally Voucher Settings`:
 
 ```text
+Client setup profile: choose NEEL ENTERPRISE - PTA item invoice for this demo bill
 Tally URL: http://localhost:9000
 Tally company name: exact company name open in TallyPrime
+Posting mode: Item Invoice for stock-item purchase bills; Accounting Voucher for non-stock bills
 Voucher type: Purchase
 Purchase/expense ledger: ledger that exists in TallyPrime
-Tax ledger: optional, leave blank if tax should roll into purchase ledger
+GST ledger: exact GST ledger, for example IGST A/C
+Stock item override: optional exact Tally stock item name, for example PTA SWEEP
+Stock item HSN: optional HSN that should map to the stock item override
+Tally stock UOM: exact unit symbol in Tally, for example KGS
+TCS ledger: optional exact ledger, for example TCS
+Round-off ledger: optional exact ledger, for example ROUND OFF
+Godown/location master name: optional, leave blank if Tally does not require a godown
 ```
 
 Click `Save Tally Settings`.
