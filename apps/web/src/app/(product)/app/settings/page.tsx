@@ -7,6 +7,8 @@ import { ClientProfilesPanel } from "@/components/client-profiles-panel";
 import { ContentCard } from "@/components/dashboard/content-card";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { PasswordChangeCard } from "@/components/settings/password-change-card";
+import { TeamManagementPanel } from "@/components/settings/team-management-panel";
 
 export default function SettingsPage() {
   const { user, activeOrganizationId } = useAuth();
@@ -48,7 +50,7 @@ export default function SettingsPage() {
 
         <ContentCard
           title="Workspace profile"
-          subtitle="These defaults will later drive client-specific posting, tax, and approval behavior."
+          subtitle="These defaults frame client-specific posting, tax, parser, and audit behavior."
         >
           <div className="grid gap-4 md:grid-cols-2">
             <SettingRow label="Primary organization" value={membership?.organization_name ?? "Not selected"} />
@@ -59,6 +61,10 @@ export default function SettingsPage() {
             <SettingRow label="Evidence retention" value="PDF + JSON + posting response" />
           </div>
         </ContentCard>
+
+        <TeamManagementPanel />
+
+        <PasswordChangeCard />
 
         <ClientProfilesPanel />
       </main>

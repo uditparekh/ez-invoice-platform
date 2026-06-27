@@ -220,6 +220,16 @@ class User(BaseModel):
     last_login_at: Optional[datetime] = None
 
 
+class OrganizationMember(BaseModel):
+    user_id: str
+    email: str
+    full_name: str = ""
+    role: OrganizationRole
+    is_active: bool = True
+    member_since: datetime
+    last_login_at: Optional[datetime] = None
+
+
 class Membership(BaseModel):
     organization_id: str
     organization_name: str
@@ -297,6 +307,24 @@ class InvitationAcceptRequest(BaseModel):
     token: str = Field(min_length=20, max_length=1000)
     password: str = Field(min_length=12, max_length=256)
     full_name: str = Field(default="", max_length=200)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class CorrectionLearningSignal(BaseModel):
+    id: str
+    invoice_id: str
+    invoice_number: str
+    supplier_name: str
+    field_path: str
+    old_value: Any
+    new_value: Any
+    actor_id: str
+    actor_email: str = ""
+    created_at: datetime
 
 
 class Party(BaseModel):

@@ -23,6 +23,7 @@ from .models import (
     ClientProfile,
     ClientProfileCreate,
     ClientProfilePatch,
+    CorrectionLearningSignal,
     DeleteInvoicesResult,
     HealthResponse,
     Invitation,
@@ -36,7 +37,9 @@ from .models import (
     Membership,
     Organization,
     OrganizationCreate,
+    OrganizationMember,
     OrganizationRole,
+    PasswordChangeRequest,
     PostingRequest,
     PostingRetryRequest,
     PostingResult,
@@ -214,6 +217,56 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         return current_user
 
     @app.post(
+        "/api/v1/auth/change-password",
+        status_code=status.HTTP_204_NO_CONTENT,
+        tags=["authentication"],
+    )
+    def change_password(
+        request: Request,
+        body: PasswordChangeRequest,
+        current_user: CurrentUser,
+    ) -> Response:
+        repository = _repo(request)
+        password_hash = repository.get_password_hash(current_user.id)
+        if not password_hash or not verify_password(body.current_password, password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Current password is incorrect.",
+            )
+        repository.update_password_hash(current_user.id, hash_password(body.new_password))
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/members",
+        response_model=List[OrganizationMember],
+        tags=["authentication"],
+    )
+    def list_organization_members(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+    ) -> List[OrganizationMember]:
+        _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        return _repo(request).list_organization_members(organization_id)
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/invitations",
+        response_model=List[Invitation],
+        tags=["authentication"],
+    )
+    def list_organization_invitations(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+        include_accepted: bool = Query(default=False),
+    ) -> List[Invitation]:
+        _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        return _repo(request).list_organization_invitations(
+            organization_id,
+            include_accepted=include_accepted,
+        )
+
+    @app.post(
         "/api/v1/organizations/{organization_id}/invitations",
         response_model=Invitation,
         status_code=status.HTTP_201_CREATED,
@@ -317,6 +370,23 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> List[Organization]:
         return _repo(request).list_organizations_for_user(current_user.id)
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/corrections/learning",
+        response_model=List[CorrectionLearningSignal],
+        tags=["organizations"],
+    )
+    def list_correction_learning(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> List[CorrectionLearningSignal]:
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        return _repo(request).list_correction_learning_signals(
+            organization_id,
+            limit=limit,
+        )
 
     @app.get(
         "/api/v1/organizations/{organization_id}/client-profiles",

@@ -14,13 +14,22 @@ from typing import Any, Dict, List, Optional
 from xml.etree import ElementTree as ET
 
 import streamlit as st
-from tally_connector_client import (
-    connector_health,
-    connector_test_tally,
-    load_connector_settings,
-    save_connector_settings,
-    send_xml_batch_to_connector,
-)
+try:
+    from .tally_connector_client import (
+        connector_health,
+        connector_test_tally,
+        load_connector_settings,
+        save_connector_settings,
+        send_xml_batch_to_connector,
+    )
+except ImportError:  # pragma: no cover - supports running the file directly.
+    from tally_connector_client import (
+        connector_health,
+        connector_test_tally,
+        load_connector_settings,
+        save_connector_settings,
+        send_xml_batch_to_connector,
+    )
 
 try:
     import requests
@@ -579,6 +588,208 @@ def _connector_failure_details(result: Dict[str, Any]) -> str:
     return "; ".join(details)
 
 
+def _tally_issue(
+    code: str,
+    message: str,
+    field: str = "",
+    blocking: bool = True,
+) -> Dict[str, Any]:
+    return {
+        "code": code,
+        "message": message,
+        "field": field,
+        "blocking": blocking,
+    }
+
+
+def _friendly_tally_message(message: str) -> str:
+    text = str(message or "").strip()
+    ledger_match = re.search(r"Ledger ['\"]?([^'\"!]+)['\"]? does not exist", text, re.I)
+    if ledger_match:
+        ledger = ledger_match.group(1).strip()
+        return (
+            f"Tally rejected the voucher because ledger '{ledger}' does not exist. "
+            "Open the selected client profile and use the exact Tally ledger names "
+            "for purchase, GST, TCS, and round-off, or create the missing ledger in Tally."
+        )
+    stock_match = re.search(r"Stock Item ['\"]?([^'\"!]+)['\"]? does not exist", text, re.I)
+    if stock_match:
+        item = stock_match.group(1).strip()
+        return (
+            f"Tally rejected the item invoice because stock item '{item}' does not exist. "
+            "Map the invoice line to an existing Tally stock item in the client profile, "
+            "or create the stock item in Tally before posting."
+        )
+    godown_match = re.search(r"Godown ['\"]?([^'\"!]+)['\"]? does not exist", text, re.I)
+    if godown_match:
+        godown = godown_match.group(1).strip()
+        return (
+            f"Tally rejected the item invoice because godown '{godown}' does not exist. "
+            "Set the client profile godown to the exact Tally location, or leave it blank "
+            "if this client does not use godowns."
+        )
+    if "voucher type" in text.lower() and "does not exist" in text.lower():
+        return (
+            "Tally rejected the voucher type. Confirm the client profile voucher type "
+            "matches the exact Tally name, usually 'Purchase' for inbound bills."
+        )
+    return text or "Tally rejected this voucher."
+
+
+def _tally_error_issues(message: str) -> List[Dict[str, Any]]:
+    text = str(message or "")
+    ledger_match = re.search(r"ledger '([^']+)'", text, re.I)
+    if ledger_match:
+        ledger = ledger_match.group(1)
+        return [
+            _tally_issue(
+                "tally_ledger_missing",
+                f"Ledger '{ledger}' is missing in Tally or not mapped in this client profile.",
+                "purchase_ledger",
+            )
+        ]
+    stock_match = re.search(r"stock item '([^']+)'", text, re.I)
+    if stock_match:
+        item = stock_match.group(1)
+        return [
+            _tally_issue(
+                "tally_stock_item_missing",
+                f"Stock item '{item}' is missing in Tally or not mapped in this client profile.",
+                "stock_item_name",
+            )
+        ]
+    godown_match = re.search(r"godown '([^']+)'", text, re.I)
+    if godown_match:
+        godown = godown_match.group(1)
+        return [
+            _tally_issue(
+                "tally_godown_missing",
+                f"Godown '{godown}' is missing in Tally or not mapped in this client profile.",
+                "godown_name",
+            )
+        ]
+    return []
+
+
+def _tally_preflight_issues(
+    payload: Dict[str, Any],
+    settings: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    parts = _invoice_parts(payload)
+    rows = parts["rows"]
+    posting_mode = _posting_mode(settings)
+    is_item_invoice = posting_mode in {
+        "item invoice",
+        "item_invoice",
+        "inventory",
+        "inventory invoice",
+    }
+    issues: List[Dict[str, Any]] = []
+
+    if not str(settings.get("company") or "").strip():
+        issues.append(
+            _tally_issue(
+                "tally_company_missing",
+                "Tally company name is not set in the selected client profile.",
+                "company_name",
+            )
+        )
+    if not str(settings.get("voucher_type") or "").strip():
+        issues.append(
+            _tally_issue(
+                "tally_voucher_type_missing",
+                "Voucher type is not set in the selected client profile.",
+                "voucher_type",
+            )
+        )
+
+    tax_total = _tax_total(parts, rows)
+    tcs_total = _summary_amount(parts, ["TCS", "TCS AMOUNT", "TOTAL TCS"])
+    net_total = round(sum(_line_net_amount(row) for row in rows), 2)
+    current_total = round(net_total + tax_total + tcs_total, 2)
+    round_delta = round((parts["total"] or current_total) - current_total, 2)
+    explicit_round = _summary_amount(
+        parts,
+        ["ROUND OFF", "ROUNDOFF", "ROUNDING", "ROUNDING OFF"],
+    )
+    if explicit_round:
+        round_delta = explicit_round
+
+    if is_item_invoice:
+        purchase_ledger = str(settings.get("purchase_ledger") or "").strip()
+        if not purchase_ledger:
+            issues.append(
+                _tally_issue(
+                    "tally_purchase_ledger_missing",
+                    "Item Invoice posting needs the exact Tally purchase ledger for inventory accounting allocations.",
+                    "purchase_ledger",
+                )
+            )
+        if not rows:
+            issues.append(
+                _tally_issue(
+                    "tally_item_rows_missing",
+                    "Item Invoice posting needs at least one extracted line item.",
+                    "lines",
+                )
+            )
+        for index, row in enumerate(rows, start=1):
+            stock_item = str(
+                row.get("TALLY ITEM")
+                or row.get("TARGET ITEM")
+                or row.get("STOCK ITEM")
+                or row.get("ITEM")
+                or row.get("DESCRIPTION")
+                or settings.get("stock_item_name")
+                or ""
+            ).strip()
+            if not stock_item:
+                issues.append(
+                    _tally_issue(
+                        "tally_stock_item_missing",
+                        f"Line {index} needs a stock item name that exists in Tally.",
+                        "stock_item_name",
+                    )
+                )
+            configured_hsn = str(settings.get("stock_item_hsn") or "").strip()
+            row_hsn = str(row.get("HSN/SAC") or row.get("HSN") or "").strip()
+            if configured_hsn and row_hsn and configured_hsn != row_hsn:
+                issues.append(
+                    _tally_issue(
+                        "tally_hsn_mismatch",
+                        f"Line {index} HSN/SAC is {row_hsn}, but the client profile stock item HSN/SAC is {configured_hsn}.",
+                        "stock_item_hsn",
+                        blocking=False,
+                    )
+                )
+
+    if tax_total and not str(settings.get("tax_ledger") or "").strip():
+        issues.append(
+            _tally_issue(
+                "tally_tax_ledger_missing",
+                "This invoice has tax, so the exact Tally GST/tax ledger must be set in the selected client profile.",
+                "tax_ledger",
+            )
+        )
+    if tcs_total and not str(settings.get("tcs_ledger") or "").strip():
+        issues.append(
+            _tally_issue(
+                "tally_tcs_ledger_missing",
+                "This invoice has TCS, so the exact Tally TCS ledger must be set in the selected client profile.",
+                "tcs_ledger",
+            )
+        )
+    if abs(round_delta) >= 0.01 and not str(settings.get("round_off_ledger") or "").strip():
+        issues.append(
+            _tally_issue(
+                "tally_round_off_ledger_missing",
+                "This invoice has a round-off adjustment, so the exact Tally round-off ledger must be set in the selected client profile.",
+                "round_off_ledger",
+            )
+        )
+    return issues
+
+
 def current_settings() -> Dict[str, Any]:
     if "tally_settings" not in st.session_state:
         st.session_state["tally_settings"] = _load_settings()
@@ -611,8 +822,18 @@ def send_to_tally(
         **current_connector_settings(),
         **(connector_settings_override or {}),
     }
-    xml = build_tally_xml(payload, settings=settings, classifier=classifier)
     invoice_no = _invoice_parts(payload)["header"].get("INVOICE NO.", "invoice")
+    preflight_issues = _tally_preflight_issues(payload, settings)
+    blocking_issues = [issue for issue in preflight_issues if issue.get("blocking", True)]
+    if blocking_issues:
+        return {
+            "success": False,
+            "message": "Tally profile is incomplete: "
+            + "; ".join(issue["message"] for issue in blocking_issues),
+            "issues": preflight_issues,
+            "response": {"invoice": invoice_no, "preflight": preflight_issues},
+        }
+    xml = build_tally_xml(payload, settings=settings, classifier=classifier)
     if connector_settings.get("enabled"):
         result = send_xml_batch_to_connector(
             [{"invoice_id": str(invoice_no or "invoice"), "xml": xml}],
@@ -623,9 +844,11 @@ def send_to_tally(
             action = "dry-run accepted" if dry_run else "posted"
             return {"success": True, "message": "Connector " + action + " Tally voucher: " + str(invoice_no), "response": result}
         detail = _connector_failure_details(result)
+        friendly = _friendly_tally_message(detail)
         return {
             "success": False,
-            "message": "Connector import failed: " + detail,
+            "message": "Connector import failed: " + friendly,
+            "issues": _tally_error_issues(friendly),
             "response": result,
         }
 
@@ -646,9 +869,11 @@ def send_to_tally(
         voucher = parsed.get("voucher_number") or _invoice_parts(payload)["header"].get("INVOICE NO.", "")
         return {"success": True, "message": "Tally voucher " + action + ": " + str(voucher), "response": parsed}
     detail = parsed.get("line_error") or response.text[:300]
+    friendly = _friendly_tally_message(str(detail))
     return {
         "success": False,
-        "message": "Tally import failed (" + str(response.status_code) + "): " + str(detail),
+        "message": "Tally import failed (" + str(response.status_code) + "): " + friendly,
+        "issues": _tally_error_issues(friendly),
         "response": parsed,
     }
 
@@ -668,15 +893,39 @@ def send_tally_batch(
             payload = data.get("payload", {})
             parts = _invoice_parts(payload)
             invoice_id = str(parts["header"].get("INVOICE NO.", "") or fname)
+            preflight_issues = _tally_preflight_issues(payload, settings)
+            blocking_issues = [
+                issue for issue in preflight_issues if issue.get("blocking", True)
+            ]
+            if blocking_issues:
+                results[fname] = {
+                    "success": False,
+                    "message": "Tally profile is incomplete: "
+                    + "; ".join(issue["message"] for issue in blocking_issues),
+                    "issues": preflight_issues,
+                    "response": {"invoice": invoice_id, "preflight": preflight_issues},
+                }
+                continue
             xml = build_tally_xml(payload, settings=settings, classifier=classifier)
             vouchers.append({"invoice_id": invoice_id, "xml": xml})
             name_by_invoice_id[invoice_id] = fname
+        if not vouchers:
+            return {
+                "success": False,
+                "message": "Tally profile is incomplete for all selected invoices.",
+                "results": results,
+                "response": {"preflight": True},
+            }
         batch_result = send_xml_batch_to_connector(vouchers, settings=connector_settings, dry_run=dry_run)
         for item in batch_result.get("results", []) or []:
             fname = name_by_invoice_id.get(str(item.get("invoice_id", "")), str(item.get("invoice_id", "")))
+            message = str(item.get("message", batch_result.get("message", "")))
+            if not item.get("success"):
+                message = _friendly_tally_message(message)
             results[fname] = {
                 "success": bool(item.get("success")),
-                "message": item.get("message", batch_result.get("message", "")),
+                "message": message,
+                "issues": _tally_error_issues(message),
                 "response": item,
             }
         for fname in payloads:
@@ -690,8 +939,18 @@ def send_tally_batch(
             )
         batch_message = str(batch_result.get("message", ""))
         if not batch_result.get("success"):
-            batch_message = "Connector import failed: " + _connector_failure_details(batch_result)
-        return {"success": bool(batch_result.get("success")), "message": batch_message, "results": results, "response": batch_result}
+            batch_message = "Connector import failed: " + _friendly_tally_message(
+                _connector_failure_details(batch_result)
+            )
+        final_success = all(item.get("success") for item in results.values())
+        if not final_success and batch_result.get("success"):
+            batch_message = "Some selected invoices were blocked by Tally profile preflight."
+        return {
+            "success": final_success,
+            "message": batch_message,
+            "results": results,
+            "response": batch_result,
+        }
 
     for fname, data in payloads.items():
         results[fname] = send_to_tally(data.get("payload", {}), classifier=classifier, dry_run=dry_run)

@@ -15,6 +15,7 @@ from .models import (
     ClientProfile,
     ClientProfileCreate,
     ClientProfilePatch,
+    CorrectionLearningSignal,
     Invitation,
     Invoice,
     InvoiceCreate,
@@ -24,6 +25,7 @@ from .models import (
     Membership,
     Organization,
     OrganizationCreate,
+    OrganizationMember,
     OrganizationRole,
     PostingResult,
     PostingStatus,
@@ -390,6 +392,14 @@ class InvoiceRepository:
             ).fetchone()
         return str(row["password_hash"]) if row else None
 
+    def update_password_hash(self, user_id: str, password_hash: str) -> None:
+        now = utc_now().isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+                (password_hash, now, user_id),
+            )
+
     def mark_user_login(self, user_id: str) -> None:
         now = utc_now().isoformat()
         with self._connect() as connection:
@@ -458,6 +468,38 @@ class InvoiceRepository:
                 (user_id,),
             ).fetchall()
         return [self._membership_from_row(row) for row in rows]
+
+    def list_organization_members(
+        self,
+        organization_id: str,
+    ) -> List[OrganizationMember]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    u.id AS user_id,
+                    u.email,
+                    u.full_name,
+                    u.is_active,
+                    u.last_login_at,
+                    m.role,
+                    m.created_at AS member_since
+                FROM organization_memberships m
+                JOIN users u ON u.id = m.user_id
+                WHERE m.organization_id = ?
+                ORDER BY
+                    CASE m.role
+                        WHEN 'owner' THEN 1
+                        WHEN 'admin' THEN 2
+                        WHEN 'accountant' THEN 3
+                        WHEN 'approver' THEN 4
+                        ELSE 5
+                    END,
+                    u.email COLLATE NOCASE
+                """,
+                (organization_id,),
+            ).fetchall()
+        return [self._organization_member_from_row(row) for row in rows]
 
     def list_organizations_for_user(self, user_id: str) -> List[Organization]:
         with self._connect() as connection:
@@ -569,6 +611,24 @@ class InvoiceRepository:
             ).fetchone()
         return self._invitation_from_row(row) if row else None
 
+    def list_organization_invitations(
+        self,
+        organization_id: str,
+        include_accepted: bool = False,
+    ) -> List[Invitation]:
+        accepted_filter = "" if include_accepted else "AND accepted_at IS NULL"
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM organization_invitations
+                WHERE organization_id = ?
+                {accepted_filter}
+                ORDER BY created_at DESC
+                """,
+                (organization_id,),
+            ).fetchall()
+        return [self._invitation_from_row(row) for row in rows]
+
     def accept_invitation(self, invitation_id: str) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -612,6 +672,30 @@ class InvoiceRepository:
                 "SELECT * FROM organizations ORDER BY name COLLATE NOCASE"
             ).fetchall()
         return [self._organization_from_row(row) for row in rows]
+
+    def list_correction_learning_signals(
+        self,
+        organization_id: str,
+        limit: int = 100,
+    ) -> List[CorrectionLearningSignal]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    c.*,
+                    i.invoice_number,
+                    i.supplier_json,
+                    u.email AS actor_email
+                FROM corrections c
+                JOIN invoices i ON i.id = c.invoice_id
+                LEFT JOIN users u ON u.id = c.actor_id
+                WHERE c.organization_id = ?
+                ORDER BY c.created_at DESC
+                LIMIT ?
+                """,
+                (organization_id, limit),
+            ).fetchall()
+        return [self._correction_learning_from_row(row) for row in rows]
 
     def get_organization(self, organization_id: str) -> Optional[Organization]:
         with self._connect() as connection:
@@ -898,6 +982,24 @@ class InvoiceRepository:
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
+    def _organization_member_from_row(
+        self,
+        row: sqlite3.Row,
+    ) -> OrganizationMember:
+        return OrganizationMember(
+            user_id=row["user_id"],
+            email=row["email"],
+            full_name=row["full_name"],
+            role=row["role"],
+            is_active=bool(row["is_active"]),
+            member_since=datetime.fromisoformat(row["member_since"]),
+            last_login_at=(
+                datetime.fromisoformat(row["last_login_at"])
+                if row["last_login_at"]
+                else None
+            ),
+        )
+
     def _auth_session_from_row(self, row: sqlite3.Row) -> AuthSessionRecord:
         return AuthSessionRecord(
             id=row["id"],
@@ -921,6 +1023,25 @@ class InvoiceRepository:
             accepted_at=(
                 datetime.fromisoformat(row["accepted_at"]) if row["accepted_at"] else None
             ),
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def _correction_learning_from_row(
+        self,
+        row: sqlite3.Row,
+    ) -> CorrectionLearningSignal:
+        supplier = _loads(row["supplier_json"], {})
+        supplier_name = supplier.get("name") if isinstance(supplier, dict) else ""
+        return CorrectionLearningSignal(
+            id=row["id"],
+            invoice_id=row["invoice_id"],
+            invoice_number=row["invoice_number"] or "Untitled invoice",
+            supplier_name=supplier_name or "Unknown supplier",
+            field_path=row["field_path"],
+            old_value=_loads(row["old_value_json"], None),
+            new_value=_loads(row["new_value_json"], None),
+            actor_id=row["actor_id"],
+            actor_email=row["actor_email"] or "",
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 

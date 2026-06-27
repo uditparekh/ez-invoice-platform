@@ -47,6 +47,7 @@ export function InvoiceDetailPanel({
     <div className="min-w-0 bg-canvas">
       {invoice ? (
         <InvoiceDetail
+          key={invoice.id}
           invoice={invoice}
           targetSystem={targetSystem}
           clientProfile={clientProfile}
@@ -111,11 +112,6 @@ function InvoiceDetail({
   );
   const [savingReview, setSavingReview] = useState(false);
   const [reviewNotice, setReviewNotice] = useState("");
-
-  useEffect(() => {
-    setReviewDraft(reviewDraftFromInvoice(invoice));
-    setReviewNotice("");
-  }, [invoice]);
 
   useEffect(() => {
     const controller = new AbortController();

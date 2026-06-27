@@ -41,6 +41,8 @@ scripts/                  Development and release helpers
   correction, and line-item review
 - Client profile management with import/export, profile-owned posting, posting
   logs, and retry history
+- Team invite UI, member visibility, password change, and correction-learning
+  visibility for parser/vendor improvements
 - Same-origin web API boundary with secure HTTP-only session cookies
 
 ## Local Development
@@ -103,4 +105,6 @@ artifacts and are intentionally excluded from source control.
 See [CHANGELOG.md](CHANGELOG.md) and
 [docs/decisions](docs/decisions) for development history and architectural
 decisions. See [docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md) for the current
-demo and client handoff flow.
+demo and client handoff flow, and
+[docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) for the
+production infrastructure path.

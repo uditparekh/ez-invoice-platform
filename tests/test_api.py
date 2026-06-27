@@ -95,6 +95,49 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
         assert me.json()["email"] == "owner@example.com"
         assert me.json()["memberships"][0]["role"] == "owner"
 
+        members = client.get(
+            f"/api/v1/organizations/{org_id}/members",
+            headers=headers,
+        )
+        assert members.status_code == 200
+        assert members.json()[0]["email"] == "owner@example.com"
+        assert members.json()[0]["role"] == "owner"
+
+        bad_password_change = client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": "wrong-password",
+                "new_password": "new-password-is-long",
+            },
+            headers=headers,
+        )
+        assert bad_password_change.status_code == 401
+        password_change = client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": "correct-horse-battery-staple",
+                "new_password": "new-password-is-long",
+            },
+            headers=headers,
+        )
+        assert password_change.status_code == 204
+        old_login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "owner@example.com",
+                "password": "correct-horse-battery-staple",
+            },
+        )
+        assert old_login.status_code == 401
+        new_login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "owner@example.com",
+                "password": "new-password-is-long",
+            },
+        )
+        assert new_login.status_code == 200
+
         invoice = import_sample_invoice(client, tokens, org_id)
         invoice_id = invoice["id"]
 
@@ -116,6 +159,14 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
         assert corrected.json()["currency"] == "USD"
         assert corrected.json()["supplier"]["name"] == "Corrected Supplier LLC"
         assert corrected.json()["status"] == InvoiceStatus.EXTRACTED.value
+
+        learning = client.get(
+            f"/api/v1/organizations/{org_id}/corrections/learning",
+            headers=headers,
+        )
+        assert learning.status_code == 200
+        learned_fields = {item["field_path"] for item in learning.json()}
+        assert {"invoice_number", "currency", "supplier"} <= learned_fields
 
         validated = client.post(
             f"/api/v1/invoices/{invoice_id}/validate",
@@ -339,6 +390,13 @@ def test_tenant_isolation_and_role_permissions(tmp_path: Path):
         invitation_token = invitation.json()["invitation_token"]
         assert invitation_token
 
+        pending_invitations = client.get(
+            f"/api/v1/organizations/{organization_b}/invitations",
+            headers=owner_headers,
+        )
+        assert pending_invitations.status_code == 200
+        assert pending_invitations.json()[0]["email"] == "viewer@example.com"
+
         viewer_tokens_response = client.post(
             "/api/v1/auth/invitations/accept",
             json={
@@ -350,6 +408,20 @@ def test_tenant_isolation_and_role_permissions(tmp_path: Path):
         assert viewer_tokens_response.status_code == 200
         viewer_tokens = viewer_tokens_response.json()
         viewer_headers = authorization(viewer_tokens)
+
+        organization_b_members = client.get(
+            f"/api/v1/organizations/{organization_b}/members",
+            headers=owner_headers,
+        )
+        assert organization_b_members.status_code == 200
+        assert {member["email"] for member in organization_b_members.json()} == {
+            "owner@example.com",
+            "viewer@example.com",
+        }
+        assert client.get(
+            f"/api/v1/organizations/{organization_b}/members",
+            headers=viewer_headers,
+        ).status_code == 403
 
         allowed_list = client.get(
             "/api/v1/invoices",

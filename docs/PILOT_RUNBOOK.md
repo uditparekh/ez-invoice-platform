@@ -84,9 +84,11 @@ the target system and builds the accounting payload from that profile.
 - Authenticated Next.js UI backed by FastAPI.
 - Organization-scoped invoice upload and queue.
 - Client profile create/edit/default/delete/import/export.
+- Team invite management, member visibility, and password change.
 - Profile recommendation based on invoice country, currency, tax format, and
   accounting target.
 - Side-by-side invoice review with PDF preview and editable extracted fields.
+- Correction learning signals from saved field edits.
 - Validation, approval, posting, posting logs, and retry.
 - QuickBooks, Tally, and Zoho posting foundations.
 - Streamlit demo preserved for existing client demos.
@@ -95,7 +97,7 @@ the target system and builds the accounting payload from that profile.
 
 - PostgreSQL with migrations and backups.
 - Encrypted secret storage for OAuth tokens and connector tokens.
-- Password reset, user invites UI, role management UI, and audit export.
+- Password reset email delivery, role editing, member deactivation, and audit export.
 - Rate limiting, login throttling, and production session policies.
 - Hosted document storage with signed URLs.
 - Queue workers for OCR/parsing/posting jobs.

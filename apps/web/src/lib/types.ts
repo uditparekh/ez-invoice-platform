@@ -43,6 +43,27 @@ export interface Membership {
   created_at: string;
 }
 
+export interface OrganizationMember {
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: OrganizationRole;
+  is_active: boolean;
+  member_since: string;
+  last_login_at: string | null;
+}
+
+export interface Invitation {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: OrganizationRole;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+  invitation_token?: string | null;
+}
+
 export interface AuthenticatedUser {
   id: string;
   email: string;
@@ -178,6 +199,19 @@ export interface ClientProfile {
   settings: ClientProfileSettings;
   created_at: string;
   updated_at: string;
+}
+
+export interface CorrectionLearningSignal {
+  id: string;
+  invoice_id: string;
+  invoice_number: string;
+  supplier_name: string;
+  field_path: string;
+  old_value: unknown;
+  new_value: unknown;
+  actor_id: string;
+  actor_email: string;
+  created_at: string;
 }
 
 export interface ClientProfilePayload {
