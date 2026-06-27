@@ -19,7 +19,59 @@ local TallyPrime.
 7. The connector returns the Tally result to SiftEntry for logs, retries, and
    invoice status.
 
-## Client Setup
+## Recommended Client Setup: One-Click Installer
+
+For normal pilots, send the client:
+
+```text
+SiftEntry-Tally-Connector-Setup-0.2.0.exe
+```
+
+The client should run the installer, keep `Start connector when I sign in`
+checked, and open `SiftEntry Tally Connector` from the Start Menu.
+
+Then fill in:
+
+- SiftEntry URL: your deployed SiftEntry app URL
+- Workspace ID: the workspace ID shown in the SiftEntry client profile
+- Connector token: the token shown in the SiftEntry client profile
+- Tally URL: usually `http://localhost:9000`
+- Poll seconds: `15`
+- Claim limit: `5`
+
+Click:
+
+1. `Save settings`
+2. `Test Tally`
+3. `Poll once`
+4. `Start connector`
+
+The installer does not require Python on the client's computer.
+
+## Build The Installer
+
+The installer is built from:
+
+```text
+packaging/windows/tally-connector
+```
+
+Build it on a Windows machine with Python 3.11+ and Inno Setup 6:
+
+```bat
+packaging\windows\tally-connector\build_installer_windows.bat
+```
+
+The generated file will be:
+
+```text
+packaging\windows\tally-connector\output\SiftEntry-Tally-Connector-Setup-0.2.0.exe
+```
+
+GitHub Actions can also build the installer using the
+`Build Tally Connector Windows Installer` workflow.
+
+## Manual Developer Setup
 
 Install Python 3 on the Windows computer where TallyPrime is installed. During
 installation, select:

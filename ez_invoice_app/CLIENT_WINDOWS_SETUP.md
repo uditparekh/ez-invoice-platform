@@ -64,7 +64,17 @@ py -m streamlit run app.py --server.port 8507 --server.address 127.0.0.1
 
 Use this only on the computer where TallyPrime is installed and open.
 
-For the cleaner SiftEntry cloud workflow, use the status window:
+For the cleaner SiftEntry cloud workflow, use the one-click Windows installer
+when available:
+
+```text
+SiftEntry-Tally-Connector-Setup-0.2.0.exe
+```
+
+The installer creates a Start Menu shortcut and can start the connector when
+the Windows user signs in. It does not require Python on the client's computer.
+
+For developer/manual testing from this folder, use the status window:
 
 ```bat
 RUN_TALLY_CONNECTOR_STATUS_WINDOWS.bat

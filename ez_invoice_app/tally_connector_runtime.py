@@ -16,11 +16,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from xml.etree import ElementTree as ET
 
-try:  # Package import when used by tests/FastAPI.
-    from .tally_integration import _parse_tally_response, _test_connection
-except ImportError:  # Script import when run from inside ez_invoice_app.
-    from tally_integration import _parse_tally_response, _test_connection
-
 try:
     import requests
 except ImportError:  # pragma: no cover
@@ -110,6 +105,41 @@ def auth_headers(token: str, content_type: str = "application/json") -> Dict[str
     return headers
 
 
+def parse_tally_response(text: str) -> Dict[str, Any]:
+    result = {
+        "created": 0,
+        "altered": 0,
+        "errors": 0,
+        "line_error": "",
+        "voucher_number": "",
+        "raw": text,
+    }
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        result["line_error"] = text[:500]
+        result["errors"] = 1
+        return result
+    for tag, key in [
+        ("CREATED", "created"),
+        ("ALTERED", "altered"),
+        ("ERRORS", "errors"),
+        ("VCHNUMBER", "voucher_number"),
+        ("LINEERROR", "line_error"),
+    ]:
+        node = root.find(".//" + tag)
+        if node is None or node.text is None:
+            continue
+        if key in ("created", "altered", "errors"):
+            try:
+                result[key] = int(float(node.text.strip()))
+            except ValueError:
+                result[key] = 0
+        else:
+            result[key] = node.text.strip()
+    return result
+
+
 def post_xml_to_tally(tally_url: str, invoice_id: str, xml: str, dry_run: bool = False) -> Dict[str, Any]:
     if not xml.strip():
         return {"invoice_id": invoice_id, "success": False, "message": "Missing XML"}
@@ -130,7 +160,7 @@ def post_xml_to_tally(tally_url: str, invoice_id: str, xml: str, dry_run: bool =
         )
     except Exception as exc:
         return {"invoice_id": invoice_id, "success": False, "message": "Tally post failed: " + str(exc)}
-    parsed = _parse_tally_response(response.text)
+    parsed = parse_tally_response(response.text)
     ok = response.status_code == 200 and parsed.get("errors") == 0 and (
         parsed.get("created") or parsed.get("altered")
     )
@@ -149,7 +179,22 @@ def post_xml_to_tally(tally_url: str, invoice_id: str, xml: str, dry_run: bool =
 
 
 def test_tally_connection(tally_url: str) -> Dict[str, Any]:
-    return _test_connection(tally_url)
+    if not requests:
+        return {"success": False, "message": "requests not installed"}
+    try:
+        response = requests.get(tally_url, timeout=6)
+        text = response.text.strip()
+        if response.status_code == 200 and text:
+            return {"success": True, "message": "Tally responded on " + tally_url + ": " + text[:120]}
+        if response.status_code == 200:
+            return {"success": True, "message": "Tally responded on " + tally_url}
+    except Exception:
+        return {
+            "success": False,
+            "message": "Tally port check failed. Open TallyPrime, load the company, and confirm port 9000 is enabled.",
+        }
+    return {"success": False, "message": "HTTP " + str(response.status_code) + ": " + response.text[:160]}
+
 
 
 def cloud_url(base_url: str, path: str) -> str:

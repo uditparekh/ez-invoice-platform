@@ -4,6 +4,24 @@ from ez_invoice_app import tally_connector_runtime as runtime
 from ez_invoice_app.tally_connector_runtime import ConnectorConfig
 
 
+def test_parse_tally_response_extracts_success_counts():
+    parsed = runtime.parse_tally_response(
+        """
+        <RESPONSE>
+          <CREATED>1</CREATED>
+          <ALTERED>0</ALTERED>
+          <ERRORS>0</ERRORS>
+          <VCHNUMBER>42</VCHNUMBER>
+        </RESPONSE>
+        """
+    )
+
+    assert parsed["created"] == 1
+    assert parsed["altered"] == 0
+    assert parsed["errors"] == 0
+    assert parsed["voucher_number"] == "42"
+
+
 def test_post_xml_to_tally_rejects_invalid_xml():
     result = runtime.post_xml_to_tally(
         "http://localhost:9000",

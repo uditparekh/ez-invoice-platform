@@ -41,6 +41,9 @@ ez_invoice_app/NEEL_TALLY_DEMO_SETTINGS.md
 # Generated client packages and historical snapshots
 *.zip
 archives/
+packaging/windows/tally-connector/build/
+packaging/windows/tally-connector/dist/
+packaging/windows/tally-connector/output/
 
 # Logs and temporary output
 *.log
