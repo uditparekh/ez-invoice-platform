@@ -13,123 +13,27 @@ import socket
 import time
 from datetime import datetime
 from typing import Any, Dict, List
-from xml.etree import ElementTree as ET
 
 from flask import Flask, jsonify, request
 
-from tally_integration import _parse_tally_response, _test_connection
-
 try:
-    import requests
-except ImportError:  # pragma: no cover
-    requests = None
-
-
-APP_VERSION = "0.1.0"
-
-
-def auth_headers(token: str, content_type: str = "application/json") -> Dict[str, str]:
-    headers = {"Content-Type": content_type}
-    if token:
-        headers["Authorization"] = "Bearer " + token
-        headers["X-SiftEntry-Connector-Token"] = token
-    return headers
-
-
-def post_xml_to_tally(tally_url: str, invoice_id: str, xml: str, dry_run: bool = False) -> Dict[str, Any]:
-    if not xml.strip():
-        return {"invoice_id": invoice_id, "success": False, "message": "Missing XML"}
-    try:
-        ET.fromstring(xml)
-    except ET.ParseError as exc:
-        return {"invoice_id": invoice_id, "success": False, "message": "Invalid XML: " + str(exc)}
-    if dry_run:
-        return {"invoice_id": invoice_id, "success": True, "message": "Dry run accepted"}
-    if not requests:
-        return {"invoice_id": invoice_id, "success": False, "message": "requests is not installed"}
-    try:
-        response = requests.post(
-            tally_url,
-            data=xml.encode("utf-8"),
-            headers={"Content-Type": "application/xml"},
-            timeout=30,
-        )
-    except Exception as exc:
-        return {"invoice_id": invoice_id, "success": False, "message": "Tally post failed: " + str(exc)}
-    parsed = _parse_tally_response(response.text)
-    ok = response.status_code == 200 and parsed.get("errors") == 0 and (
-        parsed.get("created") or parsed.get("altered")
+    from .tally_connector_runtime import (
+        APP_VERSION,
+        ConnectorConfig,
+        poll_once,
+        post_xml_to_tally,
+        test_tally_connection,
+        write_status,
     )
-    return {
-        "invoice_id": invoice_id,
-        "success": bool(ok),
-        "message": "Posted to Tally" if ok else (parsed.get("line_error") or response.text[:300]),
-        "status_code": response.status_code,
-        "response": parsed,
-        "external_id": str(parsed.get("voucher_number") or parsed.get("master_id") or "") or None,
-        "raw": {
-            "status_code": response.status_code,
-            "response": parsed,
-        },
-    }
-
-
-def cloud_url(base_url: str, path: str) -> str:
-    return base_url.rstrip("/") + "/" + path.lstrip("/")
-
-
-def claim_cloud_jobs(
-    base_url: str,
-    workspace_id: str,
-    token: str,
-    limit: int,
-    dry_run: bool,
-) -> Dict[str, Any]:
-    if not requests:
-        return {"success": False, "message": "requests is not installed", "jobs": []}
-    try:
-        response = requests.post(
-            cloud_url(base_url, "/api/v1/connectors/tally/jobs/claim"),
-            json={"workspace_id": workspace_id, "limit": limit, "dry_run": dry_run},
-            headers=auth_headers(token),
-            timeout=30,
-        )
-    except Exception as exc:
-        return {"success": False, "message": "Cloud claim failed: " + str(exc), "jobs": []}
-    try:
-        data = response.json()
-    except Exception:
-        data = {"message": response.text[:500]}
-    data.setdefault("success", response.status_code < 400)
-    data.setdefault("jobs", [])
-    data["status_code"] = response.status_code
-    return data
-
-
-def submit_cloud_results(
-    base_url: str,
-    workspace_id: str,
-    token: str,
-    results: List[Dict[str, Any]],
-) -> Dict[str, Any]:
-    if not requests:
-        return {"success": False, "message": "requests is not installed"}
-    try:
-        response = requests.post(
-            cloud_url(base_url, "/api/v1/connectors/tally/jobs/results"),
-            json={"workspace_id": workspace_id, "results": results},
-            headers=auth_headers(token),
-            timeout=30,
-        )
-    except Exception as exc:
-        return {"success": False, "message": "Cloud result submit failed: " + str(exc)}
-    try:
-        data = response.json()
-    except Exception:
-        data = {"message": response.text[:500]}
-    data.setdefault("success", response.status_code < 400)
-    data["status_code"] = response.status_code
-    return data
+except ImportError:
+    from tally_connector_runtime import (
+        APP_VERSION,
+        ConnectorConfig,
+        poll_once,
+        post_xml_to_tally,
+        test_tally_connection,
+        write_status,
+    )
 
 
 def run_cloud_polling(args: argparse.Namespace) -> None:
@@ -142,42 +46,31 @@ def run_cloud_polling(args: argparse.Namespace) -> None:
         args.workspace_id,
     )
     print("Posting to TallyPrime at", args.tally_url)
+    config = ConnectorConfig(
+        cloud_url=args.cloud_url,
+        workspace_id=args.workspace_id,
+        token=args.token,
+        tally_url=args.tally_url,
+        poll_interval=args.poll_interval,
+        claim_limit=args.claim_limit,
+        dry_run=args.cloud_dry_run,
+    )
     while True:
-        claimed = claim_cloud_jobs(
-            args.cloud_url,
-            args.workspace_id,
-            args.token,
-            limit=args.claim_limit,
-            dry_run=args.cloud_dry_run,
-        )
-        jobs = claimed.get("jobs") or []
-        if not claimed.get("success"):
-            print(datetime.now().isoformat(timespec="seconds"), "claim failed:", claimed.get("message", claimed))
-        elif jobs:
-            print(datetime.now().isoformat(timespec="seconds"), "claimed", len(jobs), "job(s)")
-        results: List[Dict[str, Any]] = []
-        for job in jobs:
-            tally_url = str(job.get("tally_url") or args.tally_url)
-            result = post_xml_to_tally(
-                tally_url,
-                invoice_id=str(job.get("invoice_id") or ""),
-                xml=str(job.get("xml") or ""),
-                dry_run=bool(job.get("dry_run")),
+        status = poll_once(config)
+        write_status(status)
+        if not status.get("success"):
+            print(datetime.now().isoformat(timespec="seconds"), "poll failed:", status.get("message", status))
+        elif status.get("claimed"):
+            print(
+                datetime.now().isoformat(timespec="seconds"),
+                "posted",
+                status.get("submitted", 0),
+                "of",
+                status.get("claimed", 0),
+                "job(s)",
             )
-            result["posting_id"] = str(job.get("posting_id") or "")
-            results.append(result)
-            print(" ", job.get("invoice_number") or job.get("invoice_id"), "-", result.get("message"))
-        if results:
-            submitted = submit_cloud_results(
-                args.cloud_url,
-                args.workspace_id,
-                args.token,
-                results,
-            )
-            if not submitted.get("success"):
-                print(datetime.now().isoformat(timespec="seconds"), "result submit failed:", submitted.get("message", submitted))
-            else:
-                print(datetime.now().isoformat(timespec="seconds"), "submitted", submitted.get("accepted", len(results)), "result(s)")
+        else:
+            print(datetime.now().isoformat(timespec="seconds"), status.get("message", "Idle"))
         if args.run_once:
             break
         time.sleep(args.poll_interval)
@@ -224,7 +117,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         auth_error = require_auth()
         if auth_error:
             return auth_error
-        return jsonify(_test_connection(tally_url))
+        return jsonify(test_tally_connection(tally_url))
 
     @app.post("/connector/vouchers")
     def vouchers():

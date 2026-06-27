@@ -64,6 +64,17 @@ py -m streamlit run app.py --server.port 8507 --server.address 127.0.0.1
 
 Use this only on the computer where TallyPrime is installed and open.
 
+For the cleaner SiftEntry cloud workflow, use the status window:
+
+```bat
+RUN_TALLY_CONNECTOR_STATUS_WINDOWS.bat
+```
+
+That window saves the SiftEntry URL, workspace ID, connector token, and Tally
+URL, then shows whether SiftEntry and TallyPrime are connected.
+
+The command-line connector below is still available for local prototype demos.
+
 1. Open TallyPrime.
 2. Open the correct company.
 3. Enable HTTP/XML access on port 9000.

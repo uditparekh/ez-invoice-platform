@@ -1,0 +1,9 @@
+{
+  "cloud_url": "https://app.siftentry.com",
+  "workspace_id": "client-workspace-id",
+  "token": "paste-connector-token-here",
+  "tally_url": "http://localhost:9000",
+  "poll_interval": 15,
+  "claim_limit": 5,
+  "dry_run": false
+}
