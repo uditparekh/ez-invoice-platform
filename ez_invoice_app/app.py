@@ -2786,14 +2786,14 @@ def _render_tally_client_workspace(profile: Dict[str, Any]) -> None:
         client_name = st.text_input(
             "Client / company name",
             value=profile.get("client_name", ""),
-            placeholder="Example: NEEL ENTERPRISE",
+            placeholder="Example: Client legal company",
             key="client_profile_name",
         )
     with c2:
         tally_company = st.text_input(
             "Tally company open now",
             value=profile.get("tally_company", ""),
-            placeholder="Example: NEEL ENTERPRISE",
+            placeholder="Exact company name open in TallyPrime",
             key="client_tally_company",
         )
     with c3:
@@ -2801,7 +2801,7 @@ def _render_tally_client_workspace(profile: Dict[str, Any]) -> None:
     home_names = st.text_area(
         "Client legal names and aliases",
         value=profile.get("home_company_names", ""),
-        placeholder="NEEL ENTERPRISE\nNEEL ENTERPRISES",
+        placeholder="Client Legal Name Pvt Ltd\nClient Trading Alias",
         height=92,
         key="client_home_names",
     )

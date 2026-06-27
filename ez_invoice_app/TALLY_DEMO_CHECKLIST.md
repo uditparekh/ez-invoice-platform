@@ -49,8 +49,8 @@ Use these connector values:
 
 ```text
 Connector URL: http://127.0.0.1:8765
-Workspace ID: client-test
-Connector token: client-test-token
+Workspace ID: local-workspace
+Connector token: replace-with-a-local-token
 ```
 
 Click:
@@ -62,14 +62,14 @@ Click:
 Then fill `Tally Voucher Settings`:
 
 ```text
-Client setup profile: choose NEEL ENTERPRISE - PTA item invoice for this demo bill
+Client setup profile: choose Generic / manual setup or India GST item invoice template
 Tally URL: http://localhost:9000
 Tally company name: exact company name open in TallyPrime
 Posting mode: Item Invoice for stock-item purchase bills; Accounting Voucher for non-stock bills
 Voucher type: Purchase
 Purchase/expense ledger: ledger that exists in TallyPrime
-GST ledger: exact GST ledger, for example IGST A/C
-Stock item override: optional exact Tally stock item name, for example PTA SWEEP
+GST ledger: exact GST ledger from the client company
+Stock item override: optional exact Tally stock item name
 Stock item HSN: optional HSN that should map to the stock item override
 Tally stock UOM: exact unit symbol in Tally, for example KGS
 TCS ledger: optional exact ledger, for example TCS

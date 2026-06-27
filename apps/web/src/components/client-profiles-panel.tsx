@@ -194,7 +194,7 @@ function defaultConnectionSettings(
     return {
       connector_enabled: true,
       connector_url: "http://127.0.0.1:8765",
-      workspace_id: "client-test",
+      workspace_id: "local-workspace",
       connector_token: "",
       tally_url: "http://localhost:9000",
     };
@@ -248,16 +248,16 @@ function blankProfile(
   };
 }
 
-function neelPtaProfile(): ClientProfilePayload {
+function indiaGstItemInvoiceTemplate(): ClientProfilePayload {
   return {
-    name: "NEEL ENTERPRISE - PTA item invoice",
+    name: "India GST item invoice",
     accounting_system: "tally",
     description:
-      "Confirmed Tally profile for PTA SWEEP item invoice with IGST, TCS, and round-off ledgers.",
-    is_default: true,
+      "Starter profile for Tally Item Invoice posting with GST, optional TCS, and round-off ledgers.",
+    is_default: false,
     settings: {
       ...defaultSettings(),
-      company_name: "NEEL ENTERPRISE",
+      company_name: "",
       country_code: "IN",
       country_name: "India",
       default_currency: "INR",
@@ -268,22 +268,22 @@ function neelPtaProfile(): ClientProfilePayload {
       direction: "inbound",
       posting_mode: "item_invoice",
       voucher_type: "Purchase",
-      purchase_ledger: "PURCHASES A/C",
-      tax_ledger: "IGST A/C",
-      tcs_ledger: "TCS",
-      round_off_ledger: "ROUND OFF",
-      stock_item_name: "PTA SWEEP",
-      stock_item_hsn: "29173600",
-      stock_item_uom: "KGS",
+      purchase_ledger: "",
+      tax_ledger: "",
+      tcs_ledger: "",
+      round_off_ledger: "",
+      stock_item_name: "",
+      stock_item_hsn: "",
+      stock_item_uom: "",
       item_mappings: [
         {
           ...emptyMapping,
-          source_description_contains: "PTA",
-          source_hsn_sac: "29173600",
-          target_item_name: "PTA SWEEP",
-          target_uom: "KGS",
-          purchase_ledger: "PURCHASES A/C",
-          tax_ledger: "IGST A/C",
+          source_description_contains: "",
+          source_hsn_sac: "",
+          target_item_name: "",
+          target_uom: "",
+          purchase_ledger: "",
+          tax_ledger: "",
         },
       ],
       tax_settings: {
@@ -440,10 +440,10 @@ export function ClientProfilesPanel({
     setNotice("");
   }
 
-  function useNeelTemplate() {
+  function useIndiaGstItemTemplate() {
     setSelectedId(null);
-    setDraft(neelPtaProfile());
-    setNotice("Neel PTA template loaded. Review and save it to this workspace.");
+    setDraft(indiaGstItemInvoiceTemplate());
+    setNotice("India GST item-invoice template loaded. Add the client's exact Tally names before saving.");
   }
 
   async function saveProfile() {
@@ -520,9 +520,9 @@ export function ClientProfilesPanel({
             New
           </Button>
           {(!accountingSystem || accountingSystem === "tally") && (
-            <Button size="sm" variant="secondary" onClick={useNeelTemplate}>
+            <Button size="sm" variant="secondary" onClick={useIndiaGstItemTemplate}>
               <CopyPlus size={14} />
-              Neel template
+              GST item template
             </Button>
           )}
         </div>
@@ -571,7 +571,7 @@ export function ClientProfilesPanel({
             ))
           ) : (
             <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-6 text-sm font-semibold text-ink-secondary">
-              No profiles yet. Start with a blank profile or load the Neel
+              No profiles yet. Start with a blank profile or load a GST item
               template.
             </div>
           )}
@@ -784,25 +784,25 @@ export function ClientProfilesPanel({
                 label="Purchase ledger"
                 value={draft.settings.purchase_ledger}
                 onChange={(value) => updateSettings("purchase_ledger", value)}
-                placeholder="PURCHASES A/C"
+                placeholder="Exact purchase ledger"
               />
               <TextField
                 label="Tax ledger"
                 value={draft.settings.tax_ledger}
                 onChange={(value) => updateSettings("tax_ledger", value)}
-                placeholder="IGST A/C"
+                placeholder="Exact GST/VAT/tax ledger"
               />
               <TextField
                 label="TCS ledger"
                 value={draft.settings.tcs_ledger}
                 onChange={(value) => updateSettings("tcs_ledger", value)}
-                placeholder="TCS"
+                placeholder="Optional exact ledger"
               />
               <TextField
                 label="Round-off ledger"
                 value={draft.settings.round_off_ledger}
                 onChange={(value) => updateSettings("round_off_ledger", value)}
-                placeholder="ROUND OFF"
+                placeholder="Optional exact ledger"
               />
             </FormGrid>
 
@@ -815,19 +815,19 @@ export function ClientProfilesPanel({
                 label="Stock item"
                 value={draft.settings.stock_item_name}
                 onChange={(value) => updateSettings("stock_item_name", value)}
-                placeholder="PTA SWEEP"
+                placeholder="Exact stock item"
               />
               <TextField
                 label="HSN/SAC"
                 value={draft.settings.stock_item_hsn}
                 onChange={(value) => updateSettings("stock_item_hsn", value)}
-                placeholder="29173600"
+                placeholder="HSN/SAC code"
               />
               <TextField
                 label="UOM"
                 value={draft.settings.stock_item_uom}
                 onChange={(value) => updateSettings("stock_item_uom", value)}
-                placeholder="KGS"
+                placeholder="Exact unit"
               />
               <TextField
                 label="Godown/location"
@@ -848,37 +848,37 @@ export function ClientProfilesPanel({
                 onChange={(value) =>
                   updatePrimaryMapping("source_description_contains", value)
                 }
-                placeholder="PTA"
+                placeholder="Keyword from invoice line"
               />
               <TextField
                 label="Source HSN/SAC"
                 value={mapping.source_hsn_sac}
                 onChange={(value) => updatePrimaryMapping("source_hsn_sac", value)}
-                placeholder="29173600"
+                placeholder="HSN/SAC code"
               />
               <TextField
                 label="Target item"
                 value={mapping.target_item_name}
                 onChange={(value) => updatePrimaryMapping("target_item_name", value)}
-                placeholder="PTA SWEEP"
+                placeholder="Exact stock item"
               />
               <TextField
                 label="Target UOM"
                 value={mapping.target_uom}
                 onChange={(value) => updatePrimaryMapping("target_uom", value)}
-                placeholder="KGS"
+                placeholder="Exact unit"
               />
               <TextField
                 label="Mapping purchase ledger"
                 value={mapping.purchase_ledger}
                 onChange={(value) => updatePrimaryMapping("purchase_ledger", value)}
-                placeholder="PURCHASES A/C"
+                placeholder="Exact purchase ledger"
               />
               <TextField
                 label="Mapping tax ledger"
                 value={mapping.tax_ledger}
                 onChange={(value) => updatePrimaryMapping("tax_ledger", value)}
-                placeholder="IGST A/C"
+                placeholder="Exact tax ledger"
               />
             </FormGrid>
 
@@ -945,9 +945,9 @@ function renderConnectionFields(
           />
           <TextField
             label="Workspace ID"
-            value={connectionText(settings, "workspace_id", "client-test")}
+            value={connectionText(settings, "workspace_id", "local-workspace")}
             onChange={(value) => onChange("workspace_id", value)}
-            placeholder="client-test"
+            placeholder="local-workspace"
           />
           <TextField
             label="Connector token"

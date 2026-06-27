@@ -195,8 +195,8 @@ Start the connector on the same Windows computer where TallyPrime is open:
 
 ```bat
 cd /d "PATH_TO_THIS_FOLDER"
-set EZ_TALLY_CONNECTOR_TOKEN=client-test-token
-py tally_connector_agent.py --workspace-id client-test --tally-url http://localhost:9000
+set EZ_TALLY_CONNECTOR_TOKEN=replace-with-a-local-token
+py tally_connector_agent.py --workspace-id local-workspace --tally-url http://localhost:9000
 ```
 
 Or double-click `RUN_TALLY_CONNECTOR_WINDOWS.bat`.
@@ -205,8 +205,8 @@ In EZ-Invoice, open **Tally** and use:
 
 ```text
 Connector URL: http://127.0.0.1:8765
-Workspace ID: client-test
-Connector token: client-test-token
+Workspace ID: local-workspace
+Connector token: replace-with-a-local-token
 ```
 
 Click **Save Connector**, **Test Connector**, then **Test Tally via Connector**.

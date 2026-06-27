@@ -274,7 +274,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--connector-dry-run", action="store_true", help="Validate vouchers with the connector without posting into Tally")
     parser.add_argument("--connector-url", default="http://127.0.0.1:8765", help="Local connector URL")
     parser.add_argument("--connector-token", default="", help="Local connector bearer token")
-    parser.add_argument("--workspace-id", default="client-test", help="EZ-Invoice client workspace id")
+    parser.add_argument("--workspace-id", default="local-workspace", help="EZ-Invoice client workspace id")
     parser.add_argument("--direction", choices=["auto", "inbound", "outbound"], default="auto", help="Require a detected invoice direction before posting")
     parser.add_argument("--home-company", action="append", help="Client legal name used to infer inbound/outbound direction. Repeat for aliases.")
     parser.add_argument("--url", help="Tally URL, for example http://localhost:9000")

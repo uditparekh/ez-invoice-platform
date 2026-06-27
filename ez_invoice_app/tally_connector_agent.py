@@ -142,7 +142,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default=os.environ.get("EZ_TALLY_CONNECTOR_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("EZ_TALLY_CONNECTOR_PORT", "8765")))
     parser.add_argument("--tally-url", default=os.environ.get("TALLY_URL", "http://localhost:9000"))
-    parser.add_argument("--workspace-id", default=os.environ.get("EZ_WORKSPACE_ID", "client-test"))
+    parser.add_argument("--workspace-id", default=os.environ.get("EZ_WORKSPACE_ID", "local-workspace"))
     parser.add_argument("--token", default=os.environ.get("EZ_TALLY_CONNECTOR_TOKEN", ""))
     return parser
 

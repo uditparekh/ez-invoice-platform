@@ -46,19 +46,19 @@ TALLY_SETUP_PROFILES: Dict[str, Dict[str, str]] = {
         "tcs_ledger": "",
         "round_off_ledger": "",
     },
-    "neel_pta_item_invoice": {
-        "label": "NEEL ENTERPRISE - PTA item invoice",
-        "company": "NEEL ENTERPRISE",
+    "india_gst_item_invoice": {
+        "label": "India GST item invoice template",
+        "company": "",
         "voucher_type": "Purchase",
         "posting_mode": "Item Invoice",
-        "purchase_ledger": "PURCHASES A/C",
-        "tax_ledger": "IGST A/C",
-        "stock_item_name": "PTA SWEEP",
-        "stock_item_hsn": "29173600",
-        "stock_item_uom": "KGS",
+        "purchase_ledger": "",
+        "tax_ledger": "",
+        "stock_item_name": "",
+        "stock_item_hsn": "",
+        "stock_item_uom": "",
         "godown_name": "",
-        "tcs_ledger": "TCS",
-        "round_off_ledger": "ROUND OFF",
+        "tcs_ledger": "",
+        "round_off_ledger": "",
     },
 }
 
@@ -747,7 +747,7 @@ def tally_sidebar(show_heading: bool = True) -> None:
         )
         workspace_id = st.text_input(
             "Workspace ID used by the connector",
-            value=connector_settings.get("workspace_id", "client-test"),
+            value=connector_settings.get("workspace_id", "local-workspace"),
             key="tally_connector_workspace",
         )
         connector_token = st.text_input(
@@ -759,7 +759,7 @@ def tally_sidebar(show_heading: bool = True) -> None:
         new_connector_settings = {
             "enabled": bool(use_connector),
             "url": connector_url.strip(),
-            "workspace_id": workspace_id.strip() or "client-test",
+            "workspace_id": workspace_id.strip() or "local-workspace",
             "token": connector_token.strip(),
         }
         c1, c2, c3 = st.columns(3)
@@ -815,7 +815,7 @@ def tally_sidebar(show_heading: bool = True) -> None:
         company = st.text_input(
             "Tally company name",
             value=field_settings.get("company", ""),
-            placeholder="Example: NEEL ENTERPRISE",
+            placeholder="Exact company name open in TallyPrime",
             key=f"tally_company_{selected_profile}",
         )
         posting_options = ["Item Invoice", "Accounting Voucher"]
@@ -867,8 +867,8 @@ def tally_sidebar(show_heading: bool = True) -> None:
             placeholder="Optional. Leave blank if the client does not use godowns.",
             key=f"tally_godown_name_{selected_profile}",
         )
-        if selected_profile == "neel_pta_item_invoice":
-            st.caption("Confirmed for this demo: PTA SWEEP exists, HSN 29173600, GST 18%, TCS ledger TCS, round-off ledger ROUND OFF. Godown is optional unless Tally requires a location master.")
+        if selected_profile == "india_gst_item_invoice":
+            st.caption("Starter template only: fill the client's exact Tally company, purchase ledger, GST ledger, stock item, HSN/SAC, unit, and optional adjustment ledgers before posting.")
         elif posting_mode == "Item Invoice":
             st.caption("Item Invoice mode needs exact Tally stock item, unit, purchase ledger, and tax/adjustment ledger names for this client.")
 

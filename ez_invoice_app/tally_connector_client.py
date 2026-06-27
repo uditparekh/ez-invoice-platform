@@ -24,8 +24,8 @@ def load_connector_settings() -> Dict[str, Any]:
     settings = {
         "enabled": True,
         "url": _env_value("EZ_TALLY_CONNECTOR_URL", "http://127.0.0.1:8765"),
-        "token": _env_value("EZ_TALLY_CONNECTOR_TOKEN", "client-test-token"),
-        "workspace_id": _env_value("EZ_WORKSPACE_ID", "client-test"),
+        "token": _env_value("EZ_TALLY_CONNECTOR_TOKEN", ""),
+        "workspace_id": _env_value("EZ_WORKSPACE_ID", "local-workspace"),
     }
     try:
         if CONNECTOR_SETTINGS_FILE.exists():
