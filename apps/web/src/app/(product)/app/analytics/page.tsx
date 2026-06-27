@@ -31,8 +31,9 @@ export default function AnalyticsPage() {
   const lineRows = groupLineItems(invoices);
   const currency = invoices[0]?.currency || "USD";
   const firstCategory = categoryRows[0];
-  const categoryPercent = firstCategory && total
-    ? Math.round((firstCategory.total / total) * 100)
+  const categoryTotal = categoryRows.reduce((sum, row) => sum + row.total, 0);
+  const categoryPercent = firstCategory && categoryTotal
+    ? Math.min(100, Math.max(0, Math.round((firstCategory.total / categoryTotal) * 100)))
     : 0;
 
   return (
@@ -93,15 +94,15 @@ export default function AnalyticsPage() {
                     />
                   </ContentCard>
                   <ContentCard title="Spend by category" subtitle="Distribution from extracted line categories.">
-                    <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)] md:items-center">
+                    <div className="grid gap-5 md:grid-cols-[200px_minmax(0,1fr)] md:items-center">
                       <div
-                        className="mx-auto grid size-48 place-items-center rounded-full"
+                        className="mx-auto grid size-44 place-items-center rounded-full"
                         style={{
                           background: `conic-gradient(var(--accent) ${categoryPercent}%, var(--surface-strong) 0)`,
                         }}
                       >
                         <div className="grid size-24 place-items-center rounded-full bg-surface text-center">
-                          <span className="text-2xl font-black text-ink">
+                          <span className="text-xl font-black text-ink">
                             {categoryPercent}%
                           </span>
                         </div>

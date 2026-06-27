@@ -294,16 +294,16 @@ function InvoiceDetail({
   }
 
   return (
-    <article className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6 lg:px-8">
+    <article className="mx-auto w-full max-w-[1240px] px-4 py-7 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-5 pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
             Invoice
           </p>
-          <h2 className="mt-4 break-words text-4xl font-black text-ink">
+          <h2 className="mt-4 break-words text-3xl font-black leading-tight text-ink sm:text-4xl">
             {invoice.invoice_number || "Number pending"}
           </h2>
-          <p className="mt-3 break-words text-base font-bold text-ink-secondary">
+          <p className="mt-3 max-w-[760px] break-words text-base font-bold leading-6 text-ink-secondary">
             {invoice.supplier.name || "Supplier pending"}
           </p>
         </div>
@@ -356,13 +356,13 @@ function InvoiceDetail({
         onSave={() => void saveInvoiceCorrections()}
       />
 
-      <div className="mt-6 grid gap-3 border-t border-line pt-6 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-6 grid gap-3 border-t border-line pt-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         <button
           type="button"
           disabled={!canValidate || validating}
           onClick={() => void validateInvoice()}
           className={cn(
-            "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition-colors",
+            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-black transition-colors",
             canValidate
               ? "border-line-strong bg-surface text-ink hover:border-accent hover:bg-accent-soft"
               : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -380,7 +380,7 @@ function InvoiceDetail({
           disabled={!canApprove || approving}
           onClick={() => void approveInvoice()}
           className={cn(
-            "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition-colors",
+            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-black transition-colors",
             canApprove
               ? "border-accent/40 bg-accent-soft text-accent-ink hover:border-accent hover:bg-accent/15"
               : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -397,14 +397,14 @@ function InvoiceDetail({
         <button
           type="button"
           onClick={() => downloadInvoiceJson(invoice, "parsed")}
-          className="h-11 rounded-xl border border-line-strong bg-surface px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+          className="h-11 min-w-0 whitespace-nowrap rounded-xl border border-line-strong bg-surface px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
         >
           Parsed JSON
         </button>
         <button
           type="button"
           onClick={() => downloadInvoiceJson(invoice, "accounting")}
-          className="h-11 rounded-xl border border-line-strong bg-surface px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+          className="h-11 min-w-0 whitespace-nowrap rounded-xl border border-line-strong bg-surface px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
         >
           Accounting JSON
         </button>
@@ -413,7 +413,7 @@ function InvoiceDetail({
           disabled={!canPost || posting}
           onClick={() => void postInvoice()}
           className={cn(
-            "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition-colors",
+            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-black transition-colors",
             canPost
               ? "border-accent bg-accent text-white hover:bg-accent-strong"
               : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -429,7 +429,9 @@ function InvoiceDetail({
           ) : (
             <SendHorizontal size={16} />
           )}
-          {posting ? "Posting" : `Post to ${targetSystem}`}
+          <span className="truncate">
+            {posting ? "Posting" : `Post to ${targetSystem}`}
+          </span>
         </button>
       </div>
 
@@ -470,17 +472,17 @@ function InvoiceDetail({
         </div>
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-xl border border-line bg-surface">
+      <div className="mt-6 overflow-hidden rounded-xl border border-line bg-surface">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-left">
+          <table className="w-full min-w-[820px] table-fixed border-collapse text-left">
             <thead className="bg-surface-subtle">
               <tr className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3 text-right">Quantity</th>
-                <th className="px-4 py-3">UOM</th>
-                <th className="px-4 py-3 text-right">Unit price</th>
-                <th className="px-4 py-3 text-right">Amount</th>
-                <th className="px-4 py-3">Category</th>
+                <th className="w-[34%] px-4 py-3">Description</th>
+                <th className="w-[12%] px-4 py-3 text-right">Quantity</th>
+                <th className="w-[8%] px-4 py-3">UOM</th>
+                <th className="w-[16%] px-4 py-3 text-right">Unit price</th>
+                <th className="w-[16%] px-4 py-3 text-right">Amount</th>
+                <th className="w-[14%] px-4 py-3">Category</th>
               </tr>
             </thead>
             <tbody>
@@ -490,7 +492,7 @@ function InvoiceDetail({
                     key={line.id ?? line.line_number}
                     className="border-t border-line text-sm text-ink"
                   >
-                    <td className="max-w-[360px] px-4 py-4 font-bold">
+                    <td className="px-4 py-4 font-bold leading-5">
                       {line.description || "Description pending"}
                     </td>
                     <td className="px-4 py-4 text-right font-mono">
@@ -988,15 +990,17 @@ function Fact({
   mono?: boolean;
 }) {
   return (
-    <div className="min-h-24 rounded-xl border border-line bg-surface px-4 py-3.5">
+    <div className="min-h-[92px] overflow-hidden rounded-xl border border-line bg-surface px-4 py-3.5">
       <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
         {label}
       </p>
       <p
         className={cn(
-          "mt-3 break-words text-base font-black text-ink",
+          "mt-3 text-base font-black leading-6 text-ink [overflow-wrap:anywhere]",
+          value.length > 28 && "text-sm leading-5",
           mono && "font-mono",
         )}
+        title={value}
       >
         {value}
       </p>

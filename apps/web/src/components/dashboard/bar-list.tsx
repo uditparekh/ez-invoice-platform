@@ -9,21 +9,22 @@ export function BarList({
   currency?: string;
   emptyLabel: string;
 }) {
-  const max = Math.max(...rows.map((row) => row.total), 1);
+  const cleanRows = rows.filter((row) => Number.isFinite(row.total) && row.total > 0);
+  const max = Math.max(...cleanRows.map((row) => row.total), 1);
 
-  if (!rows.length) {
+  if (!cleanRows.length) {
     return <p className="text-sm font-semibold text-ink-muted">{emptyLabel}</p>;
   }
 
   return (
     <div className="space-y-4">
-      {rows.slice(0, 6).map((row) => (
+      {cleanRows.slice(0, 6).map((row) => (
         <div key={row.label}>
-          <div className="flex items-center justify-between gap-4">
-            <p className="truncate text-sm font-bold text-ink-secondary">
+          <div className="flex min-w-0 items-center justify-between gap-4">
+            <p className="min-w-0 flex-1 truncate text-sm font-bold text-ink-secondary">
               {row.label}
             </p>
-            <p className="shrink-0 font-mono text-sm font-black text-ink">
+            <p className="max-w-[46%] shrink-0 truncate text-right font-mono text-sm font-black text-ink">
               {formatCurrency(row.total, currency)}
             </p>
           </div>
