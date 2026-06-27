@@ -422,6 +422,106 @@ def test_profile_owned_posting_and_retry_history(tmp_path: Path):
         ]
 
 
+def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        profile_response = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "Neel Tally Connector",
+                "accounting_system": "tally",
+                "is_default": True,
+                "settings": {
+                    "company_name": "NEEL ENTERPRISE",
+                    "country_code": "IN",
+                    "country_name": "India",
+                    "default_currency": "INR",
+                    "posting_mode": "item_invoice",
+                    "voucher_type": "Purchase",
+                    "purchase_ledger": "PURCHASES A/C",
+                    "tax_ledger": "IGST A/C",
+                    "stock_item_name": "PTA SWEEP",
+                    "stock_item_hsn": "29173600",
+                    "stock_item_uom": "KGS",
+                    "tcs_ledger": "TCS",
+                    "round_off_ledger": "ROUND OFF",
+                    "connection_settings": {
+                        "connector_enabled": True,
+                        "workspace_id": "neel-prod",
+                        "connector_token": "connector-secret",
+                        "tally_url": "http://localhost:9000",
+                    },
+                },
+            },
+            headers=headers,
+        )
+        assert profile_response.status_code == 201
+        profile_id = profile_response.json()["id"]
+
+        invoice = import_sample_invoice(client, tokens, org_id)
+        invoice_id = invoice["id"]
+        assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
+        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+
+        unauthorized = client.post(
+            "/api/v1/connectors/tally/jobs/claim",
+            json={"workspace_id": "neel-prod"},
+        )
+        assert unauthorized.status_code == 401
+
+        claimed = client.post(
+            "/api/v1/connectors/tally/jobs/claim",
+            json={"workspace_id": "neel-prod", "limit": 5},
+            headers={"Authorization": "Bearer connector-secret"},
+        )
+        assert claimed.status_code == 200
+        claim_payload = claimed.json()
+        assert claim_payload["success"] is True
+        assert len(claim_payload["jobs"]) == 1
+        job = claim_payload["jobs"][0]
+        assert job["client_profile_id"] == profile_id
+        assert job["company_name"] == "NEEL ENTERPRISE"
+        assert "PTA SWEEP" in job["xml"] or "PURCHASES A/C" in job["xml"]
+
+        duplicate_claim = client.post(
+            "/api/v1/connectors/tally/jobs/claim",
+            json={"workspace_id": "neel-prod", "limit": 5},
+            headers={"Authorization": "Bearer connector-secret"},
+        )
+        assert duplicate_claim.status_code == 200
+        assert duplicate_claim.json()["jobs"] == []
+
+        completed = client.post(
+            "/api/v1/connectors/tally/jobs/results",
+            json={
+                "workspace_id": "neel-prod",
+                "results": [
+                    {
+                        "posting_id": job["posting_id"],
+                        "invoice_id": invoice_id,
+                        "success": True,
+                        "message": "Posted to Tally",
+                        "external_id": "tally-voucher-1",
+                        "raw": {"created": 1},
+                    }
+                ],
+            },
+            headers={"X-SiftEntry-Connector-Token": "connector-secret"},
+        )
+        assert completed.status_code == 200
+        result_payload = completed.json()
+        assert result_payload["accepted"] == 1
+        assert result_payload["postings"][0]["success"] is True
+        assert result_payload["postings"][0]["external_id"] == "tally-voucher-1"
+
+        posted_invoice = client.get(f"/api/v1/invoices/{invoice_id}", headers=headers)
+        assert posted_invoice.status_code == 200
+        assert posted_invoice.json()["status"] == InvoiceStatus.POSTED.value
+
+
 def test_tenant_isolation_and_role_permissions(tmp_path: Path):
     with make_client(tmp_path) as client:
         owner_tokens = bootstrap(client)

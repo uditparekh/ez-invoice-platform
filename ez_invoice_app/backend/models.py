@@ -489,6 +489,70 @@ class PostingResult(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
 
+class TallyConnectorClaimRequest(BaseModel):
+    workspace_id: str = Field(min_length=1, max_length=160)
+    limit: int = Field(default=5, ge=1, le=25)
+    dry_run: bool = False
+
+    @field_validator("workspace_id")
+    @classmethod
+    def clean_workspace_id(cls, value: str) -> str:
+        return value.strip()
+
+
+class TallyConnectorJob(BaseModel):
+    posting_id: str
+    invoice_id: str
+    invoice_number: str
+    source_file: str
+    dry_run: bool
+    client_profile_id: str
+    workspace_id: str
+    company_name: str
+    tally_url: str
+    xml: str
+    posting_plan: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TallyConnectorClaimResponse(BaseModel):
+    success: bool = True
+    workspace_id: str
+    jobs: List[TallyConnectorJob] = Field(default_factory=list)
+
+
+class TallyConnectorResultItem(BaseModel):
+    posting_id: str = Field(min_length=1)
+    invoice_id: str = Field(min_length=1)
+    success: bool
+    message: str = Field(default="", max_length=2000)
+    external_id: Optional[str] = None
+    raw: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("posting_id", "invoice_id", "message")
+    @classmethod
+    def clean_result_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class TallyConnectorResultRequest(BaseModel):
+    workspace_id: str = Field(min_length=1, max_length=160)
+    results: List[TallyConnectorResultItem] = Field(default_factory=list)
+
+    @field_validator("workspace_id")
+    @classmethod
+    def clean_result_workspace_id(cls, value: str) -> str:
+        return value.strip()
+
+
+class TallyConnectorResultResponse(BaseModel):
+    success: bool
+    workspace_id: str
+    accepted: int = 0
+    rejected: int = 0
+    postings: List[PostingResult] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
+
+
 class DetectedInvoiceProfile(BaseModel):
     country_code: str = "US"
     country_name: str = "United States"

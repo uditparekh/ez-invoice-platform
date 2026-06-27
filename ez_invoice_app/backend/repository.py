@@ -892,6 +892,22 @@ class InvoiceRepository:
             ).fetchall()
         return [self._client_profile_from_row(row) for row in rows]
 
+    def list_client_profiles_by_system(
+        self,
+        accounting_system: str,
+    ) -> List[ClientProfile]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM client_profiles
+                WHERE accounting_system = ?
+                ORDER BY organization_id, is_default DESC, name COLLATE NOCASE
+                """,
+                (accounting_system,),
+            ).fetchall()
+        return [self._client_profile_from_row(row) for row in rows]
+
     def get_client_profile(self, profile_id: str) -> Optional[ClientProfile]:
         with self._connect() as connection:
             row = connection.execute(
@@ -1197,6 +1213,47 @@ class InvoiceRepository:
             rows = connection.execute(
                 f"SELECT * FROM invoices{where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
                 values,
+            ).fetchall()
+            return [self._invoice_from_row(connection, row) for row in rows]
+
+    def list_connector_ready_invoices(
+        self,
+        organization_id: str,
+        client_profile_id: str,
+        target: PostingTarget,
+        limit: int = 5,
+    ) -> List[Invoice]:
+        ready_statuses = (
+            InvoiceStatus.APPROVED.value,
+            InvoiceStatus.VALIDATED.value,
+        )
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT invoice_rows.*
+                FROM invoices AS invoice_rows
+                WHERE invoice_rows.organization_id = ?
+                  AND invoice_rows.status IN (?, ?)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM posting_attempts AS posting_rows
+                      WHERE posting_rows.invoice_id = invoice_rows.id
+                        AND posting_rows.client_profile_id = ?
+                        AND posting_rows.target = ?
+                        AND posting_rows.status IN ('started', 'succeeded')
+                        AND posting_rows.dry_run = 0
+                  )
+                ORDER BY invoice_rows.updated_at ASC, invoice_rows.created_at ASC
+                LIMIT ?
+                """,
+                (
+                    organization_id,
+                    ready_statuses[0],
+                    ready_statuses[1],
+                    client_profile_id,
+                    _enum_value(target),
+                    limit,
+                ),
             ).fetchall()
             return [self._invoice_from_row(connection, row) for row in rows]
 

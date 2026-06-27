@@ -5,16 +5,17 @@ from __future__ import annotations
 import secrets
 import sqlite3
 import uuid
+import hmac
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .adapters import default_adapters
+from .adapters import _profiled_legacy_payload, _tally_settings_from_profile, default_adapters
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
 from .email import EmailDeliveryError, EmailService
 from .models import (
@@ -52,6 +53,11 @@ from .models import (
     PostingTarget,
     ProfileRecommendationResult,
     RefreshRequest,
+    TallyConnectorClaimRequest,
+    TallyConnectorClaimResponse,
+    TallyConnectorJob,
+    TallyConnectorResultRequest,
+    TallyConnectorResultResponse,
     ValidationResult,
 )
 from .parser_service import parse_pdf_invoice
@@ -68,6 +74,7 @@ from .security import (
 from .settings import ApiSettings
 from .storage import LocalDocumentStorage
 from .validation import validate_invoice
+from ..tally_integration import build_tally_xml
 
 
 API_VERSION = "0.3.0"
@@ -981,6 +988,126 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             _repo(request).set_status(invoice_id, final_status)
         return posting
 
+    @app.post(
+        "/api/v1/connectors/tally/jobs/claim",
+        response_model=TallyConnectorClaimResponse,
+        tags=["connectors"],
+    )
+    def claim_tally_connector_jobs(
+        request: Request,
+        body: TallyConnectorClaimRequest,
+        authorization: Optional[str] = Header(default=None),
+        x_siftentry_connector_token: Optional[str] = Header(default=None),
+    ) -> TallyConnectorClaimResponse:
+        profile = _require_tally_connector_profile(
+            request,
+            body.workspace_id,
+            authorization,
+            x_siftentry_connector_token,
+        )
+        invoices = _repo(request).list_connector_ready_invoices(
+            organization_id=profile.organization_id,
+            client_profile_id=profile.id,
+            target=PostingTarget.TALLY,
+            limit=body.limit,
+        )
+        jobs: List[TallyConnectorJob] = []
+        for invoice in invoices:
+            request_payload = _posting_request_payload(
+                invoice=invoice,
+                target=PostingTarget.TALLY,
+                dry_run=body.dry_run,
+                client_profile=profile,
+                retry_of=None,
+            )
+            posting = _repo(request).start_posting(
+                invoice_id=invoice.id,
+                target=PostingTarget.TALLY,
+                dry_run=body.dry_run,
+                actor_id=f"tally-connector:{body.workspace_id}",
+                client_profile_id=profile.id,
+                request_payload=request_payload,
+            )
+            if not body.dry_run:
+                _repo(request).set_status(invoice.id, InvoiceStatus.POSTING)
+            jobs.append(
+                _tally_connector_job(
+                    invoice=invoice,
+                    posting=posting,
+                    profile=profile,
+                    workspace_id=body.workspace_id,
+                    posting_plan=request_payload.get("posting_plan", {}),
+                )
+            )
+        return TallyConnectorClaimResponse(
+            workspace_id=body.workspace_id,
+            jobs=jobs,
+        )
+
+    @app.post(
+        "/api/v1/connectors/tally/jobs/results",
+        response_model=TallyConnectorResultResponse,
+        tags=["connectors"],
+    )
+    def submit_tally_connector_results(
+        request: Request,
+        body: TallyConnectorResultRequest,
+        authorization: Optional[str] = Header(default=None),
+        x_siftentry_connector_token: Optional[str] = Header(default=None),
+    ) -> TallyConnectorResultResponse:
+        profile = _require_tally_connector_profile(
+            request,
+            body.workspace_id,
+            authorization,
+            x_siftentry_connector_token,
+        )
+        postings: List[PostingResult] = []
+        errors: List[str] = []
+        for item in body.results:
+            posting = _repo(request).get_posting(item.posting_id)
+            if not posting:
+                errors.append(f"Posting {item.posting_id} was not found.")
+                continue
+            if (
+                posting.organization_id != profile.organization_id
+                or posting.client_profile_id != profile.id
+                or PostingTarget(posting.target) != PostingTarget.TALLY
+                or posting.invoice_id != item.invoice_id
+            ):
+                errors.append(f"Posting {item.posting_id} does not belong to this connector.")
+                continue
+            response_payload = {
+                "success": item.success,
+                "message": item.message,
+                "external_id": item.external_id,
+                "raw": item.raw,
+                "posting_plan": posting.request_payload.get("posting_plan", {}),
+                "workspace_id": body.workspace_id,
+            }
+            completed = _repo(request).complete_posting(
+                posting_id=posting.id,
+                success=item.success,
+                message=item.message or ("Posted to Tally" if item.success else "Tally posting failed."),
+                external_id=item.external_id,
+                issues=[] if item.success else [{"code": "tally_connector", "message": item.message}],
+                raw=item.raw,
+                response_payload=response_payload,
+            )
+            if not posting.dry_run:
+                _repo(request).set_status(
+                    posting.invoice_id,
+                    InvoiceStatus.POSTED if item.success else InvoiceStatus.FAILED,
+                )
+            postings.append(completed)
+        return TallyConnectorResultResponse(
+            success=not errors,
+            workspace_id=body.workspace_id,
+            accepted=len(postings),
+            rejected=len(errors),
+            postings=postings,
+            errors=errors,
+        )
+
     return app
 
 
@@ -1046,6 +1173,79 @@ def _require_client_profile(
     if not profile or profile.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Client profile not found.")
     return profile
+
+
+def _require_tally_connector_profile(
+    request: Request,
+    workspace_id: str,
+    authorization: Optional[str],
+    connector_token_header: Optional[str],
+) -> ClientProfile:
+    supplied_token = _connector_token_from_headers(
+        authorization,
+        connector_token_header,
+    )
+    if not supplied_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Connector token is required.",
+        )
+    for profile in _repo(request).list_client_profiles_by_system(AccountingSystem.TALLY.value):
+        connection_settings = profile.settings.connection_settings or {}
+        saved_workspace_id = str(connection_settings.get("workspace_id") or "").strip()
+        saved_token = str(connection_settings.get("connector_token") or "").strip()
+        connector_enabled = bool(connection_settings.get("connector_enabled", True))
+        if (
+            connector_enabled
+            and saved_workspace_id == workspace_id
+            and saved_token
+            and hmac.compare_digest(saved_token, supplied_token)
+        ):
+            return profile
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Connector workspace or token was not accepted.",
+    )
+
+
+def _connector_token_from_headers(
+    authorization: Optional[str],
+    connector_token_header: Optional[str],
+) -> str:
+    if connector_token_header:
+        return connector_token_header.strip()
+    auth = (authorization or "").strip()
+    if auth.lower().startswith("bearer "):
+        return auth.split(" ", 1)[1].strip()
+    return ""
+
+
+def _tally_connector_job(
+    invoice: Invoice,
+    posting: PostingResult,
+    profile: ClientProfile,
+    workspace_id: str,
+    posting_plan: Dict[str, Any],
+) -> TallyConnectorJob:
+    settings = _tally_settings_from_profile(profile) or {}
+    xml = build_tally_xml(
+        _profiled_legacy_payload(invoice, profile),
+        settings=settings,
+        classifier=None,
+    )
+    return TallyConnectorJob(
+        posting_id=posting.id,
+        invoice_id=invoice.id,
+        invoice_number=invoice.invoice_number,
+        source_file=invoice.source_file,
+        dry_run=posting.dry_run,
+        client_profile_id=profile.id,
+        workspace_id=workspace_id,
+        company_name=str(settings.get("company") or profile.settings.company_name),
+        tally_url=str(settings.get("url") or "http://localhost:9000"),
+        xml=xml,
+        posting_plan=posting_plan,
+    )
 
 
 def _execute_posting(

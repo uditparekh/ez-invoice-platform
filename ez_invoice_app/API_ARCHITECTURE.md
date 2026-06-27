@@ -97,6 +97,32 @@ organization-scoped server storage so FastAPI workers can own posting. Tally
 can continue through the local connector while its job polling protocol is
 moved to the cloud API.
 
+## Tally Connector Production Flow
+
+TallyPrime runs on the client's Windows machine and usually exposes its XML
+HTTP interface only to the local computer. A hosted SiftEntry backend therefore
+must not try to call the client's `localhost:9000` directly. The production
+pattern is an outbound polling connector:
+
+1. The client enables TallyPrime HTTP/XML access on port `9000`.
+2. The client profile stores the exact Tally company, voucher mode, ledgers,
+   tax/TCS/round-off ledgers, stock item rules, workspace ID, and connector
+   token.
+3. The accountant reviews and approves invoices in SiftEntry cloud.
+4. The Windows connector polls
+   `POST /api/v1/connectors/tally/jobs/claim` with the workspace ID and token.
+5. SiftEntry returns approved Tally XML jobs that belong to that client
+   profile and marks them as started posting attempts.
+6. The connector posts each XML voucher to the local TallyPrime URL.
+7. The connector submits the result to
+   `POST /api/v1/connectors/tally/jobs/results`.
+8. SiftEntry updates posting logs, retry history, invoice status, and audit
+   trail.
+
+The older local connector API remains useful for same-machine demos where the
+browser, Streamlit/Next.js app, connector, and TallyPrime are all on one
+computer.
+
 ## Next Backend Milestones
 
 Authentication, rotating refresh sessions, memberships, invitations, and
