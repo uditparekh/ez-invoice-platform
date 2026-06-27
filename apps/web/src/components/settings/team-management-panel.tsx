@@ -40,6 +40,7 @@ export function TeamManagementPanel() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [lastInviteToken, setLastInviteToken] = useState("");
+  const [lastInviteUrl, setLastInviteUrl] = useState("");
 
   const currentRole = useMemo(
     () =>
@@ -84,6 +85,7 @@ export function TeamManagementPanel() {
     setError("");
     setMessage("");
     setLastInviteToken("");
+    setLastInviteUrl("");
     try {
       const response = await fetch(
         `/api/organizations/${activeOrganizationId}/invitations`,
@@ -100,7 +102,11 @@ export function TeamManagementPanel() {
         throw new Error("detail" in payload ? payload.detail : "Invite could not be sent.");
       }
       setMessage(`Invitation prepared for ${email.trim()}.`);
-      setLastInviteToken("invitation_token" in payload ? payload.invitation_token ?? "" : "");
+      const token = "invitation_token" in payload ? payload.invitation_token ?? "" : "";
+      setLastInviteToken(token);
+      setLastInviteUrl(
+        token ? `${window.location.origin}/invite?token=${encodeURIComponent(token)}` : "",
+      );
       setEmail("");
       setRole("accountant");
       await refreshTeam();
@@ -194,7 +200,13 @@ export function TeamManagementPanel() {
             {lastInviteToken && (
               <div className="rounded-xl border border-line bg-surface-subtle p-3">
                 <p className="text-[11px] font-extrabold uppercase text-ink-muted">
-                  Dev invite token
+                  Invite link
+                </p>
+                <p className="mt-2 break-all font-mono text-xs text-ink">
+                  {lastInviteUrl}
+                </p>
+                <p className="mt-3 text-[11px] font-extrabold uppercase text-ink-muted">
+                  Dev token
                 </p>
                 <p className="mt-2 break-all font-mono text-xs text-ink">
                   {lastInviteToken}

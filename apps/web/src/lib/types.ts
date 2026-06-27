@@ -83,6 +83,12 @@ export interface AuthTokens {
   user: AuthenticatedUser;
 }
 
+export interface PasswordResetResponse {
+  message: string;
+  reset_token?: string | null;
+  expires_at?: string | null;
+}
+
 export interface Party {
   name: string;
   tax_id: string;

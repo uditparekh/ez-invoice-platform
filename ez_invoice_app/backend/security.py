@@ -111,3 +111,7 @@ def refresh_token_matches(token: str, expected_hash: str) -> bool:
 
 def hash_invitation_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def hash_password_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

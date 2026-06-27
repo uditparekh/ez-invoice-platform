@@ -1,33 +1,42 @@
 "use client";
 
-import { ArrowRight, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import type { FormEvent } from "react";
+import { ArrowRight, LoaderCircle, LockKeyhole } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ApiErrorPayload } from "@/lib/types";
 
-export function LoginForm() {
+export function PasswordResetConfirmForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [token, setToken] = useState(searchParams.get("token") ?? "");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(formData: FormData) {
-    setSubmitting(true);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setError("");
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setSubmitting(true);
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch("/api/auth/password-reset/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: formData.get("email"),
-          password: formData.get("password"),
+          token,
+          new_password: password,
         }),
       });
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
-        setError(payload.detail ?? "Unable to sign in.");
+        setError(payload.detail ?? "Password could not be reset.");
         return;
       }
       router.replace("/app/invoices");
@@ -40,40 +49,52 @@ export function LoginForm() {
   }
 
   return (
-    <form action={submit} className="mt-8 space-y-5">
+    <form onSubmit={submit} className="space-y-5">
       <label className="block">
         <span className="mb-2 block text-xs font-bold text-ink-secondary">
-          Work email
-        </span>
-        <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
-          <Mail size={17} className="shrink-0 text-ink-muted" />
-          <input
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            placeholder="name@company.com"
-            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
-          />
-        </span>
-      </label>
-      <label className="block">
-        <span className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-ink-secondary">
-          <span>Password</span>
-          <Link
-            href="/forgot-password"
-            className="text-accent transition hover:text-cyan"
-          >
-            Forgot password?
-          </Link>
+          Reset token
         </span>
         <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
           <LockKeyhole size={17} className="shrink-0 text-ink-muted" />
           <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
             required
+            value={token}
+            onChange={(event) => setToken(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
+            placeholder="Paste reset token"
+          />
+        </span>
+      </label>
+      <label className="block">
+        <span className="mb-2 block text-xs font-bold text-ink-secondary">
+          New password
+        </span>
+        <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
+          <LockKeyhole size={17} className="shrink-0 text-ink-muted" />
+          <input
+            required
+            minLength={12}
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none"
+          />
+        </span>
+      </label>
+      <label className="block">
+        <span className="mb-2 block text-xs font-bold text-ink-secondary">
+          Confirm password
+        </span>
+        <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
+          <LockKeyhole size={17} className="shrink-0 text-ink-muted" />
+          <input
+            required
+            minLength={12}
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
             className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none"
           />
         </span>
@@ -97,7 +118,7 @@ export function LoginForm() {
         ) : (
           <ArrowRight size={17} />
         )}
-        {submitting ? "Signing in" : "Continue"}
+        {submitting ? "Resetting password" : "Reset password"}
       </Button>
     </form>
   );

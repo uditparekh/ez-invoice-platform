@@ -68,6 +68,16 @@ class AuthSessionRecord:
     replaced_by: Optional[str]
 
 
+@dataclass(frozen=True)
+class PasswordResetRecord:
+    id: str
+    user_id: str
+    token_hash: str
+    expires_at: datetime
+    used_at: Optional[datetime]
+    created_at: datetime
+
+
 class InvoiceRepository:
     def __init__(self, database_path: Path):
         self.database_path = Path(database_path)
@@ -133,6 +143,19 @@ class InvoiceRepository:
 
                 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
                 ON auth_sessions(user_id, expires_at DESC);
+
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    expires_at TEXT NOT NULL,
+                    used_at TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user
+                ON password_reset_tokens(user_id, expires_at DESC);
 
                 CREATE TABLE IF NOT EXISTS organization_invitations (
                     id TEXT PRIMARY KEY,
@@ -565,6 +588,68 @@ class InvoiceRepository:
                 WHERE id = ?
                 """,
                 (utc_now().isoformat(), replaced_by, session_id),
+            )
+
+    def revoke_auth_sessions_for_user(self, user_id: str) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE auth_sessions
+                SET revoked_at = COALESCE(revoked_at, ?)
+                WHERE user_id = ? AND revoked_at IS NULL
+                """,
+                (utc_now().isoformat(), user_id),
+            )
+            return int(cursor.rowcount)
+
+    def create_password_reset(
+        self,
+        user_id: str,
+        token_hash: str,
+        expires_at: datetime,
+    ) -> PasswordResetRecord:
+        reset_id = str(uuid.uuid4())
+        created_at = utc_now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO password_reset_tokens (
+                    id, user_id, token_hash, expires_at, used_at, created_at
+                ) VALUES (?, ?, ?, ?, NULL, ?)
+                """,
+                (
+                    reset_id,
+                    user_id,
+                    token_hash,
+                    expires_at.isoformat(),
+                    created_at.isoformat(),
+                ),
+            )
+        reset = self.get_password_reset_by_hash(token_hash)
+        if not reset:
+            raise RuntimeError("Password reset token creation failed.")
+        return reset
+
+    def get_password_reset_by_hash(
+        self,
+        token_hash: str,
+    ) -> Optional[PasswordResetRecord]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM password_reset_tokens WHERE token_hash = ?",
+                (token_hash,),
+            ).fetchone()
+        return self._password_reset_from_row(row) if row else None
+
+    def mark_password_reset_used(self, reset_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE password_reset_tokens
+                SET used_at = COALESCE(used_at, ?)
+                WHERE id = ?
+                """,
+                (utc_now().isoformat(), reset_id),
             )
 
     def create_invitation(
@@ -1011,6 +1096,16 @@ class InvoiceRepository:
                 datetime.fromisoformat(row["revoked_at"]) if row["revoked_at"] else None
             ),
             replaced_by=row["replaced_by"],
+        )
+
+    def _password_reset_from_row(self, row: sqlite3.Row) -> PasswordResetRecord:
+        return PasswordResetRecord(
+            id=row["id"],
+            user_id=row["user_id"],
+            token_hash=row["token_hash"],
+            expires_at=datetime.fromisoformat(row["expires_at"]),
+            used_at=datetime.fromisoformat(row["used_at"]) if row["used_at"] else None,
+            created_at=datetime.fromisoformat(row["created_at"]),
         )
 
     def _invitation_from_row(self, row: sqlite3.Row) -> Invitation:

@@ -238,6 +238,72 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
         ).json() == []
 
 
+def test_password_reset_flow(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        bootstrap(client)
+
+        unknown = client.post(
+            "/api/v1/auth/password-reset/request",
+            json={"email": "missing@example.com"},
+        )
+        assert unknown.status_code == 200
+        assert unknown.json()["reset_token"] is None
+
+        requested = client.post(
+            "/api/v1/auth/password-reset/request",
+            json={"email": "owner@example.com"},
+        )
+        assert requested.status_code == 200
+        reset_payload = requested.json()
+        assert reset_payload["reset_token"]
+        assert reset_payload["expires_at"]
+
+        invalid = client.post(
+            "/api/v1/auth/password-reset/confirm",
+            json={
+                "token": "not-a-real-reset-token-but-long-enough",
+                "new_password": "reset-password-is-long",
+            },
+        )
+        assert invalid.status_code == 400
+
+        confirmed = client.post(
+            "/api/v1/auth/password-reset/confirm",
+            json={
+                "token": reset_payload["reset_token"],
+                "new_password": "reset-password-is-long",
+            },
+        )
+        assert confirmed.status_code == 200
+        assert confirmed.json()["user"]["email"] == "owner@example.com"
+
+        reused = client.post(
+            "/api/v1/auth/password-reset/confirm",
+            json={
+                "token": reset_payload["reset_token"],
+                "new_password": "another-reset-password",
+            },
+        )
+        assert reused.status_code == 400
+
+        old_login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "owner@example.com",
+                "password": "correct-horse-battery-staple",
+            },
+        )
+        assert old_login.status_code == 401
+        new_login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "owner@example.com",
+                "password": "reset-password-is-long",
+            },
+        )
+        assert new_login.status_code == 200
+
+
 def test_profile_owned_posting_and_retry_history(tmp_path: Path):
     with make_client(tmp_path) as client:
         tokens = bootstrap(client)

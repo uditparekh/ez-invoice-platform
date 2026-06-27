@@ -1,37 +1,42 @@
 "use client";
 
-import { ArrowRight, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
+import type { FormEvent } from "react";
+import { ArrowRight, LoaderCircle, Mail } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { ApiErrorPayload } from "@/lib/types";
+import type { ApiErrorPayload, PasswordResetResponse } from "@/lib/types";
 
-export function LoginForm() {
-  const router = useRouter();
+export function PasswordResetRequestForm() {
+  const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [response, setResponse] = useState<PasswordResetResponse | null>(null);
   const [error, setError] = useState("");
 
-  async function submit(formData: FormData) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setSubmitting(true);
     setError("");
+    setResponse(null);
     try {
-      const response = await fetch("/api/auth/login", {
+      const request = await fetch("/api/auth/password-reset/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formData.get("email"),
-          password: formData.get("password"),
-        }),
+        body: JSON.stringify({ email }),
       });
-      if (!response.ok) {
-        const payload = (await response.json()) as ApiErrorPayload;
-        setError(payload.detail ?? "Unable to sign in.");
+      const payload = (await request.json()) as
+        | PasswordResetResponse
+        | ApiErrorPayload;
+      if (!request.ok) {
+        setError(
+          "detail" in payload
+            ? payload.detail ?? "Reset could not be prepared."
+            : "Reset could not be prepared.",
+        );
         return;
       }
-      router.replace("/app/invoices");
-      router.refresh();
+      setResponse(payload as PasswordResetResponse);
     } catch {
       setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
     } finally {
@@ -40,7 +45,7 @@ export function LoginForm() {
   }
 
   return (
-    <form action={submit} className="mt-8 space-y-5">
+    <form onSubmit={submit} className="space-y-5">
       <label className="block">
         <span className="mb-2 block text-xs font-bold text-ink-secondary">
           Work email
@@ -48,33 +53,13 @@ export function LoginForm() {
         <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
           <Mail size={17} className="shrink-0 text-ink-muted" />
           <input
-            name="email"
+            required
             type="email"
             autoComplete="email"
-            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             placeholder="name@company.com"
             className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
-          />
-        </span>
-      </label>
-      <label className="block">
-        <span className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-ink-secondary">
-          <span>Password</span>
-          <Link
-            href="/forgot-password"
-            className="text-accent transition hover:text-cyan"
-          >
-            Forgot password?
-          </Link>
-        </span>
-        <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
-          <LockKeyhole size={17} className="shrink-0 text-ink-muted" />
-          <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none"
           />
         </span>
       </label>
@@ -85,6 +70,19 @@ export function LoginForm() {
         >
           {error}
         </p>
+      )}
+      {response && (
+        <div className="rounded-xl border border-success/25 bg-success/10 px-3.5 py-3 text-sm font-semibold text-success">
+          <p>{response.message}</p>
+          {response.reset_token && (
+            <Link
+              className="mt-2 inline-flex break-all text-accent transition hover:text-cyan"
+              href={`/reset-password?token=${encodeURIComponent(response.reset_token)}`}
+            >
+              Open local reset link
+            </Link>
+          )}
+        </div>
       )}
       <Button
         type="submit"
@@ -97,7 +95,7 @@ export function LoginForm() {
         ) : (
           <ArrowRight size={17} />
         )}
-        {submitting ? "Signing in" : "Continue"}
+        {submitting ? "Preparing reset" : "Send reset link"}
       </Button>
     </form>
   );

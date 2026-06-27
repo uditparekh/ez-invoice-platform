@@ -40,6 +40,9 @@ from .models import (
     OrganizationMember,
     OrganizationRole,
     PasswordChangeRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    PasswordResetResponse,
     PostingRequest,
     PostingRetryRequest,
     PostingResult,
@@ -56,6 +59,7 @@ from .security import (
     AuthenticationError,
     hash_invitation_token,
     hash_password,
+    hash_password_reset_token,
     parse_refresh_session_id,
     verify_password,
 )
@@ -235,6 +239,68 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             )
         repository.update_password_hash(current_user.id, hash_password(body.new_password))
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.post(
+        "/api/v1/auth/password-reset/request",
+        response_model=PasswordResetResponse,
+        tags=["authentication"],
+    )
+    def request_password_reset(
+        request: Request,
+        body: PasswordResetRequest,
+    ) -> PasswordResetResponse:
+        repository = _repo(request)
+        settings = request.app.state.settings
+        user = repository.get_user_by_email(body.email)
+        message = "If an account exists, password reset instructions have been prepared."
+        if not user or not user.is_active:
+            return PasswordResetResponse(message=message)
+
+        token = secrets.token_urlsafe(48)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        repository.create_password_reset(
+            user_id=user.id,
+            token_hash=hash_password_reset_token(token),
+            expires_at=expires_at,
+        )
+        return PasswordResetResponse(
+            message=message,
+            reset_token=token if settings.environment != "production" else None,
+            expires_at=expires_at if settings.environment != "production" else None,
+        )
+
+    @app.post(
+        "/api/v1/auth/password-reset/confirm",
+        response_model=AuthTokens,
+        tags=["authentication"],
+    )
+    def confirm_password_reset(
+        request: Request,
+        body: PasswordResetConfirmRequest,
+    ) -> AuthTokens:
+        repository = _repo(request)
+        reset = repository.get_password_reset_by_hash(
+            hash_password_reset_token(body.token)
+        )
+        now = datetime.now(timezone.utc)
+        if not reset or reset.used_at is not None or reset.expires_at <= now:
+            raise HTTPException(
+                status_code=400,
+                detail="Password reset link is invalid or expired.",
+            )
+
+        user = repository.get_user(reset.user_id)
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Password reset link is invalid or expired.",
+            )
+
+        repository.update_password_hash(user.id, hash_password(body.new_password))
+        repository.mark_password_reset_used(reset.id)
+        repository.revoke_auth_sessions_for_user(user.id)
+        repository.mark_user_login(user.id)
+        return issue_tokens(repository, user.id, request.app.state.settings)
 
     @app.get(
         "/api/v1/organizations/{organization_id}/members",

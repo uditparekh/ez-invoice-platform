@@ -314,6 +314,26 @@ class PasswordChangeRequest(BaseModel):
     new_password: str = Field(min_length=12, max_length=256)
 
 
+class PasswordResetRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_reset_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=1000)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class PasswordResetResponse(BaseModel):
+    message: str
+    reset_token: Optional[str] = None
+    expires_at: Optional[datetime] = None
+
+
 class CorrectionLearningSignal(BaseModel):
     id: str
     invoice_id: str
