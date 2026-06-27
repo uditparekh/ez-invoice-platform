@@ -97,12 +97,32 @@ the target system and builds the accounting payload from that profile.
 
 - PostgreSQL with migrations and backups.
 - Encrypted secret storage for OAuth tokens and connector tokens.
-- Password reset email delivery, role editing, member deactivation, and audit export.
+- Role editing, member deactivation, and audit export.
 - Rate limiting, login throttling, and production session policies.
 - Hosted document storage with signed URLs.
 - Queue workers for OCR/parsing/posting jobs.
 - Client installer or managed connector for Tally desktop environments.
 - Automated parser evaluation against client invoice samples.
+
+## Deployable Pilot Setup
+
+Use this mode for a private hosted demo before the Postgres migration is
+finished:
+
+1. Buy the domain and point `app.yourdomain.com` to the Next.js host.
+2. Point `api.yourdomain.com` to the FastAPI host.
+3. Copy `.env.pilot.example` into the host provider secrets.
+4. Use `EZ_API_ENVIRONMENT=pilot` or `staging` while the backend still uses a
+   persistent SQLite volume.
+5. Set `EZ_API_DATABASE_URL=sqlite:////absolute/persistent/path/siftentry.db`.
+6. Set `EZ_API_UPLOAD_DIRECTORY` to a persistent upload directory.
+7. Configure SMTP for invitation and password reset email delivery.
+8. Open `/health/deployment` on the API and resolve every listed problem before
+   letting a pilot client log in.
+
+In strict `EZ_API_ENVIRONMENT=production`, the API fails fast if local/demo
+defaults are still present. That is intentional: real production data should use
+PostgreSQL with migrations, backups, and encrypted secret storage.
 
 ## Pilot Packaging
 

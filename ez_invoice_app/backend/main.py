@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 
 from .adapters import default_adapters
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
+from .email import EmailDeliveryError, EmailService
 from .models import (
     AccountingSystem,
     AuthBootstrapRequest,
@@ -95,6 +96,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         app.state.repository = InvoiceRepository(resolved.database_path)
         app.state.storage = LocalDocumentStorage(resolved.upload_directory)
         app.state.adapters = default_adapters()
+        app.state.email = EmailService(resolved)
         yield
 
     app = FastAPI(
@@ -114,6 +116,34 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:
         return HealthResponse(status="ok", service="ez-invoice-api", version=API_VERSION)
+
+    @app.get("/health/deployment", tags=["system"])
+    def deployment_health(request: Request) -> Dict[str, Any]:
+        settings = request.app.state.settings
+        problems = settings.production_readiness_problems()
+        return {
+            "status": "ready" if not problems else "needs_configuration",
+            "environment": settings.environment,
+            "checks": {
+                "jwt_secret": settings.jwt_secret != "ez-invoice-local-development-secret-change-me"
+                and len(settings.jwt_secret) >= 32,
+                "dev_bootstrap_disabled": not settings.allow_dev_bootstrap,
+                "database_url_configured": bool(settings.database_url),
+                "sqlite_pilot_database": settings.is_sqlite,
+                "https_app_url": settings.app_base_url.startswith("https://"),
+                "cors_configured": bool(settings.cors_origins)
+                and not any(
+                    "localhost" in origin or "127.0.0.1" in origin
+                    for origin in settings.cors_origins
+                ),
+                "email_provider": settings.email_provider,
+                "smtp_configured": settings.email_provider == "smtp"
+                and bool(settings.smtp_host)
+                and bool(settings.smtp_username)
+                and bool(settings.smtp_password),
+            },
+            "problems": problems,
+        }
 
     @app.post(
         "/api/v1/auth/bootstrap",
@@ -263,6 +293,19 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             token_hash=hash_password_reset_token(token),
             expires_at=expires_at,
         )
+        reset_url = f"{settings.app_base_url}/reset-password?token={token}"
+        try:
+            request.app.state.email.send_password_reset(
+                to_email=user.email,
+                full_name=user.full_name,
+                reset_url=reset_url,
+                expires_at=expires_at,
+            )
+        except EmailDeliveryError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Password reset email could not be sent. Check email configuration.",
+            ) from exc
         return PasswordResetResponse(
             message=message,
             reset_token=token if settings.environment != "production" else None,
@@ -361,6 +404,22 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             invited_by=current_user.id,
             expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
+        organization = _repo(request).get_organization(organization_id)
+        invitation_url = f"{request.app.state.settings.app_base_url}/invite?token={token}"
+        try:
+            request.app.state.email.send_invitation(
+                to_email=invitation.email,
+                organization_name=organization.name if organization else "your workspace",
+                invited_by_name=current_user.full_name or current_user.email,
+                role=str(invitation.role),
+                invitation_url=invitation_url,
+                expires_at=invitation.expires_at,
+            )
+        except EmailDeliveryError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Invitation email could not be sent. Check email configuration.",
+            ) from exc
         return invitation.model_copy(
             update={
                 "invitation_token": (

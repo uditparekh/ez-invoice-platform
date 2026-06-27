@@ -13,15 +13,18 @@ from .test_domain import sample_legacy_payload
 def make_client(tmp_path: Path) -> TestClient:
     app = create_app(
         ApiSettings(
+            database_url=f"sqlite:///{tmp_path / 'api.db'}",
             database_path=tmp_path / "api.db",
             upload_directory=tmp_path / "uploads",
             max_upload_bytes=2 * 1024 * 1024,
             cors_origins=("http://localhost:3000",),
+            app_base_url="http://testserver",
             jwt_secret="test-secret-that-is-not-used-in-production",
             access_token_minutes=5,
             refresh_token_days=2,
             allow_dev_bootstrap=True,
             environment="test",
+            email_provider="memory",
         )
     )
     return TestClient(app)
@@ -257,6 +260,9 @@ def test_password_reset_flow(tmp_path: Path):
         reset_payload = requested.json()
         assert reset_payload["reset_token"]
         assert reset_payload["expires_at"]
+        assert len(client.app.state.email.outbox) == 1
+        assert client.app.state.email.outbox[0].to_email == "owner@example.com"
+        assert "/reset-password?token=" in client.app.state.email.outbox[0].text_body
 
         invalid = client.post(
             "/api/v1/auth/password-reset/confirm",
@@ -455,6 +461,11 @@ def test_tenant_isolation_and_role_permissions(tmp_path: Path):
         assert invitation.status_code == 201
         invitation_token = invitation.json()["invitation_token"]
         assert invitation_token
+        assert any(
+            message.to_email == "viewer@example.com"
+            and "/invite?token=" in message.text_body
+            for message in client.app.state.email.outbox
+        )
 
         pending_invitations = client.get(
             f"/api/v1/organizations/{organization_b}/invitations",

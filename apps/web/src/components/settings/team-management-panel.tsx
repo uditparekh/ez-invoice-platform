@@ -101,8 +101,12 @@ export function TeamManagementPanel() {
       if (!response.ok) {
         throw new Error("detail" in payload ? payload.detail : "Invite could not be sent.");
       }
-      setMessage(`Invitation prepared for ${email.trim()}.`);
       const token = "invitation_token" in payload ? payload.invitation_token ?? "" : "";
+      setMessage(
+        token
+          ? `Invitation prepared for ${email.trim()}.`
+          : `Invitation email sent to ${email.trim()}.`,
+      );
       setLastInviteToken(token);
       setLastInviteUrl(
         token ? `${window.location.origin}/invite?token=${encodeURIComponent(token)}` : "",

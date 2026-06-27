@@ -93,13 +93,29 @@ organization. Later runs use the normal login endpoint.
 Before any hosted deployment, set:
 
 ```bash
-export EZ_API_ENVIRONMENT="production"
+export EZ_API_ENVIRONMENT="pilot"
 export EZ_API_JWT_SECRET="GENERATE_A_LONG_RANDOM_SECRET"
 export EZ_API_ALLOW_DEV_BOOTSTRAP="false"
+export EZ_APP_BASE_URL="https://app.siftentry.com"
+export EZ_API_CORS_ORIGINS="https://app.siftentry.com"
+export EZ_API_DATABASE_URL="sqlite:////var/lib/siftentry/siftentry.db"
+export EZ_API_UPLOAD_DIRECTORY="/var/lib/siftentry/uploads"
+export EZ_EMAIL_PROVIDER="smtp"
+export EZ_EMAIL_FROM="SiftEntry <no-reply@siftentry.com>"
+export EZ_SMTP_HOST="smtp.example.com"
+export EZ_SMTP_PORT="587"
+export EZ_SMTP_USERNAME="apikey-or-user"
+export EZ_SMTP_PASSWORD="provider-secret"
 ```
 
-Production must provide a unique JWT secret. Refresh sessions are rotating,
-revocable, and stored only as token hashes in the database.
+Hosted pilots must provide a unique JWT secret and real SMTP email settings for
+team invites and password reset links. Refresh sessions are rotating, revocable,
+and stored only as token hashes in the database.
+
+Use `/health/deployment` after startup to see any remaining production-readiness
+problems. Strict `EZ_API_ENVIRONMENT=production` intentionally fails fast while
+the repository is still SQLite-backed; use `pilot` or `staging` with a persistent
+disk until the planned PostgreSQL migration is complete.
 
 Authentication endpoints are available in the FastAPI documentation:
 

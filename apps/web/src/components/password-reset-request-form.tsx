@@ -82,6 +82,11 @@ export function PasswordResetRequestForm() {
               Open local reset link
             </Link>
           )}
+          {!response.reset_token && (
+            <p className="mt-2 text-xs font-bold text-success">
+              Check your inbox for the reset link.
+            </p>
+          )}
         </div>
       )}
       <Button
