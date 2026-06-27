@@ -93,6 +93,7 @@ function InvoiceDetail({
 }) {
   const confidence =
     invoice.confidence == null ? null : Math.round(invoice.confidence * 100);
+  const isPreviewOnly = !invoice.source_path || invoice.id.startsWith("preview-");
   const postingTarget = useMemo(
     () => postingTargetForSystem(targetSystem),
     [targetSystem],
@@ -114,6 +115,10 @@ function InvoiceDetail({
   const [reviewNotice, setReviewNotice] = useState("");
 
   useEffect(() => {
+    if (isPreviewOnly) {
+      setPostings([]);
+      return;
+    }
     const controller = new AbortController();
 
     async function loadPostings() {
@@ -136,13 +141,15 @@ function InvoiceDetail({
 
     void loadPostings();
     return () => controller.abort();
-  }, [invoice.id]);
+  }, [invoice.id, isPreviewOnly]);
 
   const canPost =
+    !isPreviewOnly &&
     resolvedPostingTarget !== null &&
     ["validated", "approved", "failed"].includes(invoice.status);
-  const canValidate = !["posting", "posted"].includes(invoice.status);
-  const canApprove = invoice.status === "validated";
+  const canValidate =
+    !isPreviewOnly && !["posting", "posted"].includes(invoice.status);
+  const canApprove = !isPreviewOnly && invoice.status === "validated";
 
   async function validateInvoice() {
     setValidating(true);
@@ -352,6 +359,7 @@ function InvoiceDetail({
         draft={reviewDraft}
         saving={savingReview}
         notice={reviewNotice}
+        previewOnly={isPreviewOnly}
         onDraftChange={setReviewDraft}
         onSave={() => void saveInvoiceCorrections()}
       />
@@ -419,9 +427,11 @@ function InvoiceDetail({
               : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
           )}
           title={
-            resolvedPostingTarget
-              ? "Invoice must be validated before posting."
-              : "Posting is available for QuickBooks, Tally, and Zoho Books."
+            isPreviewOnly
+              ? "Preview-only invoices are not saved to the queue."
+              : resolvedPostingTarget
+                ? "Invoice must be validated before posting."
+                : "Posting is available for QuickBooks, Tally, and Zoho Books."
           }
         >
           {posting ? (
@@ -439,6 +449,16 @@ function InvoiceDetail({
         <div className="mt-4 flex gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">
           <AlertCircle size={18} className="mt-0.5 shrink-0" />
           <span>{workflowError}</span>
+        </div>
+      )}
+
+      {isPreviewOnly && (
+        <div className="mt-4 flex gap-3 rounded-xl border border-cyan/25 bg-cyan-soft px-4 py-3 text-sm font-semibold text-cyan">
+          <FileSearch size={18} className="mt-0.5 shrink-0" />
+          <span>
+            Preview only. This invoice was parsed for demo review and was not
+            saved to the queue or backend database.
+          </span>
         </div>
       )}
 
@@ -613,6 +633,7 @@ function ReviewWorkspace({
   draft,
   saving,
   notice,
+  previewOnly,
   onDraftChange,
   onSave,
 }: {
@@ -621,6 +642,7 @@ function ReviewWorkspace({
   draft: ReviewDraft;
   saving: boolean;
   notice: string;
+  previewOnly: boolean;
   onDraftChange: (draft: ReviewDraft) => void;
   onSave: () => void;
 }) {
@@ -667,32 +689,49 @@ function ReviewWorkspace({
                 {invoice.page_count || 1} page
               </p>
             </div>
-            <a
-              href={`/api/invoices/${invoice.id}/document`}
-              target="_blank"
-              rel="noreferrer"
-              className="shrink-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
-            >
-              Open PDF
-            </a>
+            {!previewOnly && (
+              <a
+                href={`/api/invoices/${invoice.id}/document`}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+              >
+                Open PDF
+              </a>
+            )}
           </div>
-          <object
-            data={`/api/invoices/${invoice.id}/document`}
-            type="application/pdf"
-            className="h-[420px] w-full rounded-lg border border-line bg-surface"
-          >
+          {previewOnly ? (
             <div className="grid h-[420px] place-items-center rounded-lg border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
               <div>
                 <FileSearch className="mx-auto text-ink-muted" size={28} />
                 <p className="mt-3 text-sm font-black text-ink">
-                  PDF preview is not available in this browser.
+                  PDF preview is disabled in demo preview mode.
                 </p>
                 <p className="mt-1 text-xs font-semibold text-ink-muted">
-                  Use Open PDF to review the source document.
+                  The file was parsed in memory and was not stored on the
+                  server.
                 </p>
               </div>
             </div>
-          </object>
+          ) : (
+            <object
+              data={`/api/invoices/${invoice.id}/document`}
+              type="application/pdf"
+              className="h-[420px] w-full rounded-lg border border-line bg-surface"
+            >
+              <div className="grid h-[420px] place-items-center rounded-lg border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
+                <div>
+                  <FileSearch className="mx-auto text-ink-muted" size={28} />
+                  <p className="mt-3 text-sm font-black text-ink">
+                    PDF preview is not available in this browser.
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-ink-muted">
+                    Use Open PDF to review the source document.
+                  </p>
+                </div>
+              </div>
+            </object>
+          )}
         </div>
 
         <div className="rounded-xl border border-line bg-canvas p-4">
@@ -758,16 +797,25 @@ function ReviewWorkspace({
             </div>
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || previewOnly}
               onClick={onSave}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-black text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
+              title={
+                previewOnly
+                  ? "Preview-only invoices are not saved to the backend."
+                  : "Save corrected extraction fields."
+              }
             >
               {saving ? (
                 <LoaderCircle size={16} className="animate-spin" />
               ) : (
                 <Save size={16} />
               )}
-              {saving ? "Saving" : "Save corrections"}
+              {previewOnly
+                ? "Preview only"
+                : saving
+                  ? "Saving"
+                  : "Save corrections"}
             </button>
           </div>
 

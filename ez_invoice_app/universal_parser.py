@@ -453,7 +453,17 @@ def _find_invoice_no(text: str, filename: str) -> str:
     if value and value.upper() not in {"INVOICE", "BILL", "INV"}:
         return value.rstrip(".")
 
-    match = re.search(r"\b(?:INV|INVOICE|BILL)[\-\/ ][A-Z0-9][A-Z0-9\-\/_.]{2,30}\b", text, re.IGNORECASE)
+    heading_match = re.search(
+        r"\b(?:INVOICE|BILL)[\s:\/-]+(?P<number>[A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+        text,
+        re.IGNORECASE,
+    )
+    if heading_match:
+        number = heading_match.group("number").strip().rstrip(".")
+        if re.search(r"\d", number) and number.upper() not in {"DATE", "NUMBER", "NO"}:
+            return number
+
+    match = re.search(r"\bINV[\-\/ ][A-Z0-9][A-Z0-9\-\/_.]{1,30}\b", text, re.IGNORECASE)
     if match:
         return match.group(0).strip()
     return re.sub(r"\.pdf$", "", filename, flags=re.IGNORECASE)

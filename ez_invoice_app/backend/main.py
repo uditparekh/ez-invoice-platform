@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 import sqlite3
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -687,6 +688,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         file: Annotated[UploadFile, File(description="Supplier invoice PDF")],
         current_user: CurrentUser,
         parser_mode: str = Query(default="auto"),
+        persist: bool = Query(default=True),
     ) -> Invoice:
         _require_membership(request, current_user, organization_id, EDIT_ROLES)
         organization = _get_organization(request, organization_id)
@@ -699,22 +701,34 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         if len(content) > request.app.state.settings.max_upload_bytes:
             raise HTTPException(status_code=413, detail="The uploaded PDF exceeds the size limit.")
 
-        stored_path = _storage(request).save(organization_id, filename, content)
+        stored_path: Optional[Path] = None
+        if persist:
+            stored_path = _storage(request).save(organization_id, filename, content)
         try:
             parsed = parse_pdf_invoice(
                 filename=filename,
                 pdf_bytes=content,
                 organization_id=organization_id,
                 legal_names=organization.legal_names or [organization.name],
-                source_path=str(stored_path),
+                source_path=str(stored_path or ""),
                 parser_mode=parser_mode,
             )
-            return _repo(request).create_invoice(parsed)
+            if persist:
+                return _repo(request).create_invoice(parsed)
+            now = datetime.now(timezone.utc)
+            return Invoice(
+                id=f"preview-{uuid.uuid4()}",
+                created_at=now,
+                updated_at=now,
+                **parsed.model_dump(),
+            )
         except ValueError as exc:
-            _storage(request).delete(stored_path)
+            if stored_path:
+                _storage(request).delete(stored_path)
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
-            _storage(request).delete(stored_path)
+            if stored_path:
+                _storage(request).delete(stored_path)
             raise HTTPException(status_code=500, detail=f"Invoice processing failed: {exc}") from exc
 
     @app.get("/api/v1/invoices", response_model=List[Invoice], tags=["invoices"])

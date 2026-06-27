@@ -50,6 +50,9 @@ const parserOptions = [
   { label: "Universal extraction", value: "universal" },
 ];
 
+const previewOnlyUploads =
+  process.env.NEXT_PUBLIC_DEMO_PREVIEW_UPLOADS !== "false";
+
 const targetSystems = [
   "QuickBooks",
   "Tally",
@@ -386,6 +389,7 @@ export function InvoiceWorkspace() {
         const query = new URLSearchParams({
           organization_id: organizationId,
           parser_mode: parserMode,
+          persist: previewOnlyUploads ? "false" : "true",
         });
         const response = await fetch(`/api/invoices/upload?${query}`, {
           method: "POST",
@@ -626,7 +630,11 @@ export function InvoiceWorkspace() {
                 <DropdownPanel align="right" width="w-[360px]">
                   <PanelTitle
                     title="Upload PDFs"
-                    detail="200MB per file · PDF"
+                    detail={
+                      previewOnlyUploads
+                        ? "Preview only · not saved to queue"
+                        : "200MB per file · PDF"
+                    }
                   />
                   <input
                     ref={fileInput}
@@ -674,6 +682,13 @@ export function InvoiceWorkspace() {
                         </div>
                       ))}
                     </div>
+                  )}
+
+                  {previewOnlyUploads && (
+                    <p className="mt-3 rounded-xl border border-cyan/25 bg-cyan-soft px-3 py-2 text-xs font-bold text-cyan">
+                      Demo mode: processed invoices stay only in this browser
+                      session and disappear after refresh or Clear queue.
+                    </p>
                   )}
 
                   <div className="mt-4 grid gap-3">

@@ -651,3 +651,40 @@ def test_clear_queue_removes_stored_pdf(tmp_path: Path):
         )
         assert cleared.status_code == 200
         assert not stored_path.exists()
+
+
+def test_preview_upload_does_not_persist_invoice_or_pdf(tmp_path: Path):
+    import fitz
+
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        document = fitz.open()
+        page = document.new_page()
+        page.insert_text(
+            (72, 72),
+            "INVOICE INV-200\nSupplier Example\nInvoice Date 19-JUN-2026\nTotal USD 118.00",
+        )
+        pdf_bytes = document.tobytes()
+        document.close()
+
+        uploaded = client.post(
+            "/api/v1/invoices/upload",
+            params={"organization_id": org_id, "persist": "false"},
+            files={"file": ("preview.pdf", pdf_bytes, "application/pdf")},
+            headers=authorization(tokens),
+        )
+        assert uploaded.status_code == 201
+        payload = uploaded.json()
+        assert payload["id"].startswith("preview-")
+        assert payload["source_path"] == ""
+        assert payload["invoice_number"] == "INV-200"
+
+        saved = client.get(
+            "/api/v1/invoices",
+            params={"organization_id": org_id},
+            headers=authorization(tokens),
+        )
+        assert saved.status_code == 200
+        assert saved.json() == []
+        assert not any((tmp_path / "uploads").rglob("preview.pdf"))
