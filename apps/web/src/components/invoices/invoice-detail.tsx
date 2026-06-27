@@ -5,7 +5,9 @@ import {
   CheckCircle2,
   FileSearch,
   LoaderCircle,
+  PencilLine,
   RotateCcw,
+  Save,
   SendHorizontal,
   ShieldCheck,
 } from "lucide-react";
@@ -16,6 +18,7 @@ import type {
   ApiErrorPayload,
   ClientProfile,
   Invoice,
+  InvoicePatch,
   InvoiceStatus,
   PostingResult,
   PostingTarget,
@@ -103,6 +106,16 @@ function InvoiceDetail({
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [postingError, setPostingError] = useState("");
   const [workflowError, setWorkflowError] = useState("");
+  const [reviewDraft, setReviewDraft] = useState<ReviewDraft>(() =>
+    reviewDraftFromInvoice(invoice),
+  );
+  const [savingReview, setSavingReview] = useState(false);
+  const [reviewNotice, setReviewNotice] = useState("");
+
+  useEffect(() => {
+    setReviewDraft(reviewDraftFromInvoice(invoice));
+    setReviewNotice("");
+  }, [invoice]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -258,6 +271,32 @@ function InvoiceDetail({
     }
   }
 
+  async function saveInvoiceCorrections() {
+    setSavingReview(true);
+    setWorkflowError("");
+    setReviewNotice("");
+    try {
+      const patch = invoicePatchFromReviewDraft(invoice, reviewDraft);
+      const response = await fetch(`/api/invoices/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          (payload as ApiErrorPayload).detail ?? "Could not save corrections.",
+        );
+      }
+      onInvoiceUpdate?.(payload as Invoice);
+      setReviewNotice("Corrections saved. Re-validate before posting.");
+    } catch (error) {
+      setWorkflowError((error as Error).message);
+    } finally {
+      setSavingReview(false);
+    }
+  }
+
   return (
     <article className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-5 pb-6 sm:flex-row sm:items-start sm:justify-between">
@@ -310,6 +349,16 @@ function InvoiceDetail({
           </p>
         </div>
       )}
+
+      <ReviewWorkspace
+        invoice={invoice}
+        clientProfile={clientProfile}
+        draft={reviewDraft}
+        saving={savingReview}
+        notice={reviewNotice}
+        onDraftChange={setReviewDraft}
+        onSave={() => void saveInvoiceCorrections()}
+      />
 
       <div className="mt-6 grid gap-3 border-t border-line pt-6 sm:grid-cols-2 xl:grid-cols-5">
         <button
@@ -498,6 +547,264 @@ function postingTargetForAccountingSystem(system: string): PostingTarget | null 
   if (system === "zoho_books") return "zoho_books";
   if (system === "quickbooks") return "quickbooks";
   return null;
+}
+
+type ReviewDraft = {
+  invoice_number: string;
+  supplier_name: string;
+  invoice_date: string;
+  due_date: string;
+  purchase_order: string;
+  currency: string;
+  subtotal: string;
+  tax_total: string;
+  total: string;
+  direction: string;
+};
+
+function reviewDraftFromInvoice(invoice: Invoice): ReviewDraft {
+  return {
+    invoice_number: invoice.invoice_number ?? "",
+    supplier_name: invoice.supplier.name ?? "",
+    invoice_date: invoice.invoice_date ?? "",
+    due_date: invoice.due_date ?? "",
+    purchase_order: invoice.purchase_order ?? "",
+    currency: invoice.currency || "USD",
+    subtotal: amountDraft(invoice.subtotal),
+    tax_total: amountDraft(invoice.tax_total),
+    total: amountDraft(invoice.total),
+    direction: invoice.direction || "inbound",
+  };
+}
+
+function amountDraft(value: number) {
+  return Number.isFinite(value) ? String(value) : "0";
+}
+
+function amountFromDraft(value: string, fallback: number) {
+  const normalized = value.replace(/,/g, "").trim();
+  if (!normalized) return fallback;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function invoicePatchFromReviewDraft(
+  invoice: Invoice,
+  draft: ReviewDraft,
+): InvoicePatch {
+  return {
+    invoice_number: draft.invoice_number.trim(),
+    invoice_date: draft.invoice_date.trim(),
+    due_date: draft.due_date.trim(),
+    purchase_order: draft.purchase_order.trim(),
+    currency: draft.currency.trim().toUpperCase() || "USD",
+    subtotal: amountFromDraft(draft.subtotal, invoice.subtotal),
+    tax_total: amountFromDraft(draft.tax_total, invoice.tax_total),
+    total: amountFromDraft(draft.total, invoice.total),
+    direction: draft.direction.trim() || invoice.direction || "inbound",
+    supplier: {
+      ...invoice.supplier,
+      name: draft.supplier_name.trim() || invoice.supplier.name,
+    },
+  };
+}
+
+function ReviewWorkspace({
+  invoice,
+  clientProfile,
+  draft,
+  saving,
+  notice,
+  onDraftChange,
+  onSave,
+}: {
+  invoice: Invoice;
+  clientProfile: ClientProfile | null;
+  draft: ReviewDraft;
+  saving: boolean;
+  notice: string;
+  onDraftChange: (draft: ReviewDraft) => void;
+  onSave: () => void;
+}) {
+  function updateDraft<Key extends keyof ReviewDraft>(
+    key: Key,
+    value: ReviewDraft[Key],
+  ) {
+    onDraftChange({ ...draft, [key]: value });
+  }
+
+  const selectedProfileLabel = clientProfile
+    ? `${clientProfile.name} · ${clientProfile.settings.country_code || "US"} · ${
+        clientProfile.settings.default_currency || "USD"
+      }`
+    : "No client profile selected";
+
+  return (
+    <section className="mt-7 rounded-2xl border border-line bg-surface">
+      <div className="flex flex-col gap-3 border-b border-line px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+            <PencilLine size={15} className="text-accent dark:text-cyan" />
+            Invoice review workspace
+          </div>
+          <p className="mt-1 text-sm font-semibold text-ink-secondary">
+            Compare the source PDF with extracted fields, then save corrections
+            before validation and posting.
+          </p>
+        </div>
+        <span className="inline-flex max-w-full items-center rounded-full border border-line-strong bg-canvas px-3 py-1 text-xs font-black text-ink-secondary">
+          <span className="truncate">{selectedProfileLabel}</span>
+        </span>
+      </div>
+
+      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(320px,0.9fr)_minmax(420px,1.1fr)]">
+        <div className="min-w-0 rounded-xl border border-line bg-canvas p-3">
+          <div className="flex items-center justify-between gap-3 px-1 pb-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-ink">
+                {invoice.source_file}
+              </p>
+              <p className="mt-0.5 text-xs font-bold text-ink-muted">
+                {invoice.parser} · {invoice.extraction_engine} ·{" "}
+                {invoice.page_count || 1} page
+              </p>
+            </div>
+            <a
+              href={`/api/invoices/${invoice.id}/document`}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+            >
+              Open PDF
+            </a>
+          </div>
+          <object
+            data={`/api/invoices/${invoice.id}/document`}
+            type="application/pdf"
+            className="h-[420px] w-full rounded-lg border border-line bg-surface"
+          >
+            <div className="grid h-[420px] place-items-center rounded-lg border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
+              <div>
+                <FileSearch className="mx-auto text-ink-muted" size={28} />
+                <p className="mt-3 text-sm font-black text-ink">
+                  PDF preview is not available in this browser.
+                </p>
+                <p className="mt-1 text-xs font-semibold text-ink-muted">
+                  Use Open PDF to review the source document.
+                </p>
+              </div>
+            </div>
+          </object>
+        </div>
+
+        <div className="rounded-xl border border-line bg-canvas p-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <ReviewTextField
+              label="Invoice number"
+              value={draft.invoice_number}
+              onChange={(value) => updateDraft("invoice_number", value)}
+            />
+            <ReviewTextField
+              label="Supplier"
+              value={draft.supplier_name}
+              onChange={(value) => updateDraft("supplier_name", value)}
+            />
+            <ReviewTextField
+              label="Invoice date"
+              value={draft.invoice_date}
+              onChange={(value) => updateDraft("invoice_date", value)}
+            />
+            <ReviewTextField
+              label="Due date"
+              value={draft.due_date}
+              onChange={(value) => updateDraft("due_date", value)}
+            />
+            <ReviewTextField
+              label="Purchase order"
+              value={draft.purchase_order}
+              onChange={(value) => updateDraft("purchase_order", value)}
+            />
+            <ReviewTextField
+              label="Currency"
+              value={draft.currency}
+              onChange={(value) => updateDraft("currency", value.toUpperCase())}
+            />
+            <ReviewTextField
+              label="Subtotal"
+              value={draft.subtotal}
+              onChange={(value) => updateDraft("subtotal", value)}
+            />
+            <ReviewTextField
+              label="Tax total"
+              value={draft.tax_total}
+              onChange={(value) => updateDraft("tax_total", value)}
+            />
+            <ReviewTextField
+              label="Total"
+              value={draft.total}
+              onChange={(value) => updateDraft("total", value)}
+            />
+            <ReviewTextField
+              label="Direction"
+              value={draft.direction}
+              onChange={(value) => updateDraft("direction", value)}
+            />
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm font-semibold text-ink-secondary">
+              Current total:{" "}
+              <span className="font-mono font-black text-ink">
+                {formatCurrency(invoice.total, invoice.currency)}
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={onSave}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-black text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? (
+                <LoaderCircle size={16} className="animate-spin" />
+              ) : (
+                <Save size={16} />
+              )}
+              {saving ? "Saving" : "Save corrections"}
+            </button>
+          </div>
+
+          {notice && (
+            <div className="mt-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-bold text-success">
+              {notice}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReviewTextField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
+        {label}
+      </span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
+      />
+    </label>
+  );
 }
 
 function PostingActivity({

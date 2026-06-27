@@ -37,7 +37,10 @@ scripts/                  Development and release helpers
 - Zoho Books Bill posting
 - Streamlit invoice queue, history, analytics, and integration settings
 - SiftEntry Next.js login, organization-aware shell, invoice queue, search, filtering,
-  PDF upload, invoice selection, and line-item review
+  PDF upload, invoice selection, profile recommendations, PDF review, field
+  correction, and line-item review
+- Client profile management with import/export, profile-owned posting, posting
+  logs, and retry history
 - Same-origin web API boundary with secure HTTP-only session cookies
 
 ## Local Development
@@ -99,4 +102,5 @@ artifacts and are intentionally excluded from source control.
 
 See [CHANGELOG.md](CHANGELOG.md) and
 [docs/decisions](docs/decisions) for development history and architectural
-decisions.
+decisions. See [docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md) for the current
+demo and client handoff flow.

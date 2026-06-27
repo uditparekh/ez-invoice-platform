@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   CheckCircle2,
   CopyPlus,
+  Download,
   FileCog2,
   Globe2,
   Landmark,
@@ -15,9 +16,10 @@ import {
   Search,
   Star,
   Trash2,
+  Upload,
   Workflow,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ChangeEvent, useMemo, useRef, useState } from "react";
 
 import { ContentCard } from "@/components/dashboard/content-card";
 import { Button } from "@/components/ui/button";
@@ -358,6 +360,7 @@ export function ClientProfilesPanel({
   );
   const [notice, setNotice] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedId) ?? null,
@@ -503,6 +506,31 @@ export function ClientProfilesPanel({
     }
   }
 
+  async function importProfile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setNotice("");
+    try {
+      const imported = normalizeImportedProfile(
+        JSON.parse(await file.text()),
+        accountingSystem,
+      );
+      setSelectedId(null);
+      setDraft(imported);
+      setNotice("Profile imported into a draft. Review it, then save.");
+    } catch (importError) {
+      setNotice((importError as Error).message);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function exportProfile() {
+    const payload = selectedProfile ? profileToPayload(selectedProfile) : draft;
+    downloadProfileJson(payload, payload.name || "client-profile");
+    setNotice("Profile JSON exported.");
+  }
+
   async function makeDefault() {
     if (!selectedProfile) return;
     setNotice("");
@@ -553,6 +581,18 @@ export function ClientProfilesPanel({
             <Plus size={14} />
             New profile
           </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Upload size={14} />
+            Import JSON
+          </Button>
+          <Button size="sm" variant="secondary" onClick={exportProfile}>
+            <Download size={14} />
+            Export JSON
+          </Button>
           {(!accountingSystem || accountingSystem === "tally") && (
             <Button
               size="sm"
@@ -566,6 +606,13 @@ export function ClientProfilesPanel({
         </div>
       }
     >
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(event) => void importProfile(event)}
+      />
       <div className="space-y-5">
         <div className="grid gap-3 lg:grid-cols-3">
           <ProfileStat
@@ -1262,6 +1309,94 @@ function systemLabel(system: AccountingSystem) {
     accountingSystems.find((candidate) => candidate.value === system)?.label ??
     system
   );
+}
+
+function normalizeImportedProfile(
+  imported: unknown,
+  lockedSystem?: AccountingSystem,
+): ClientProfilePayload {
+  const rawContainer = asRecord(imported);
+  const raw = asRecord(rawContainer?.profile) ?? rawContainer;
+  if (!raw) throw new Error("The selected file is not a client profile JSON.");
+
+  const rawSystem = stringValue(raw.accounting_system);
+  const accountingSystem = lockedSystem ?? rawSystem;
+  if (!isAccountingSystem(accountingSystem)) {
+    throw new Error("Imported profile is missing a supported accounting system.");
+  }
+  if (lockedSystem && rawSystem && rawSystem !== lockedSystem) {
+    throw new Error(
+      `This page only accepts ${systemLabel(lockedSystem)} profiles.`,
+    );
+  }
+
+  const settings = asRecord(raw.settings) ?? {};
+  const itemMappings = Array.isArray(settings.item_mappings)
+    ? settings.item_mappings.filter(isRecord)
+    : [];
+
+  return {
+    name: stringValue(raw.name) || "Imported client profile",
+    accounting_system: accountingSystem,
+    description: stringValue(raw.description),
+    is_default: false,
+    settings: {
+      ...defaultSettings(),
+      ...(settings as Partial<ClientProfileSettings>),
+      connection_settings: asRecord(settings.connection_settings) ?? {},
+      tax_settings: asRecord(settings.tax_settings) ?? {},
+      metadata: asRecord(settings.metadata) ?? {},
+      item_mappings: itemMappings.map((mapping) => ({
+        ...emptyMapping,
+        ...mapping,
+      })) as ClientProfileItemMapping[],
+    },
+  };
+}
+
+function downloadProfileJson(profile: ClientProfilePayload, name: string) {
+  const payload = {
+    exported_at: new Date().toISOString(),
+    schema: "siftentry.client_profile.v1",
+    profile: {
+      ...profile,
+      is_default: false,
+    },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${slugify(name)}.client-profile.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function isAccountingSystem(value: string): value is AccountingSystem {
+  return accountingSystems.some((system) => system.value === value);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(asRecord(value));
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function slugify(value: string) {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return slug || "client-profile";
 }
 
 function CheckboxField({

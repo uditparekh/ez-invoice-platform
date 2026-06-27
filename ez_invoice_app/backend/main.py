@@ -11,6 +11,7 @@ from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from .adapters import default_adapters
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
@@ -545,6 +546,22 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> Invoice:
         return _require_invoice(request, invoice_id, current_user, READ_ROLES)
+
+    @app.get("/api/v1/invoices/{invoice_id}/document", tags=["invoices"])
+    def get_invoice_document(
+        request: Request,
+        invoice_id: str,
+        current_user: CurrentUser,
+    ) -> FileResponse:
+        invoice = _require_invoice(request, invoice_id, current_user, READ_ROLES)
+        source_path = Path(invoice.source_path)
+        if not source_path.exists() or not source_path.is_file():
+            raise HTTPException(status_code=404, detail="Invoice document not found.")
+        return FileResponse(
+            source_path,
+            media_type="application/pdf",
+            filename=invoice.source_file,
+        )
 
     @app.get(
         "/api/v1/invoices/{invoice_id}/profile-recommendations",

@@ -113,6 +113,24 @@ export interface Invoice {
   updated_at: string;
 }
 
+export type InvoicePatch = Partial<
+  Pick<
+    Invoice,
+    | "invoice_number"
+    | "invoice_date"
+    | "due_date"
+    | "purchase_order"
+    | "currency"
+    | "subtotal"
+    | "tax_total"
+    | "total"
+    | "supplier"
+    | "customer"
+    | "direction"
+    | "lines"
+  >
+>;
+
 export interface ClientProfileItemMapping {
   source_description_contains: string;
   source_hsn_sac: string;

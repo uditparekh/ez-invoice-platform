@@ -98,6 +98,25 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
         invoice = import_sample_invoice(client, tokens, org_id)
         invoice_id = invoice["id"]
 
+        corrected = client.patch(
+            f"/api/v1/invoices/{invoice_id}",
+            json={
+                "invoice_number": "INV-CORRECTED",
+                "currency": "usd",
+                "total": invoice["total"],
+                "supplier": {
+                    **invoice["supplier"],
+                    "name": "Corrected Supplier LLC",
+                },
+            },
+            headers=headers,
+        )
+        assert corrected.status_code == 200
+        assert corrected.json()["invoice_number"] == "INV-CORRECTED"
+        assert corrected.json()["currency"] == "USD"
+        assert corrected.json()["supplier"]["name"] == "Corrected Supplier LLC"
+        assert corrected.json()["status"] == InvoiceStatus.EXTRACTED.value
+
         validated = client.post(
             f"/api/v1/invoices/{invoice_id}/validate",
             headers=headers,
@@ -468,6 +487,14 @@ def test_clear_queue_removes_stored_pdf(tmp_path: Path):
         assert uploaded.status_code == 201
         stored_path = Path(uploaded.json()["source_path"])
         assert stored_path.exists()
+
+        document_response = client.get(
+            f"/api/v1/invoices/{uploaded.json()['id']}/document",
+            headers=authorization(tokens),
+        )
+        assert document_response.status_code == 200
+        assert document_response.headers["content-type"].startswith("application/pdf")
+        assert document_response.content.startswith(b"%PDF")
 
         cleared = client.delete(
             f"/api/v1/organizations/{org_id}/invoices",
