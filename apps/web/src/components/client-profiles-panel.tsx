@@ -4,11 +4,18 @@ import {
   BadgeCheck,
   CheckCircle2,
   CopyPlus,
+  FileCog2,
+  Globe2,
+  Landmark,
+  Layers3,
   LoaderCircle,
+  PlugZap,
   Plus,
   Save,
+  Search,
   Star,
   Trash2,
+  Workflow,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -350,11 +357,35 @@ export function ClientProfilesPanel({
     blankProfile(accountingSystem ?? "tally"),
   );
   const [notice, setNotice] = useState("");
+  const [profileSearch, setProfileSearch] = useState("");
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedId) ?? null,
     [profiles, selectedId],
   );
+  const filteredProfiles = useMemo(() => {
+    const needle = profileSearch.trim().toLowerCase();
+    if (!needle) return profiles;
+    return profiles.filter((profile) => {
+      const haystack = [
+        profile.name,
+        profile.description,
+        systemLabel(profile.accounting_system),
+        profile.settings.company_name,
+        profile.settings.country_name,
+        profile.settings.purchase_ledger,
+        profile.settings.stock_item_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [profileSearch, profiles]);
+  const defaultProfileCount = profiles.filter((profile) => profile.is_default).length;
+  const connectedProfileCount = profiles.filter((profile) =>
+    Object.keys(profile.settings.connection_settings ?? {}).length > 0,
+  ).length;
 
   function updateDraft<Key extends keyof ClientProfilePayload>(
     key: Key,
@@ -443,7 +474,9 @@ export function ClientProfilesPanel({
   function useIndiaGstItemTemplate() {
     setSelectedId(null);
     setDraft(indiaGstItemInvoiceTemplate());
-    setNotice("India GST item-invoice template loaded. Add the client's exact Tally names before saving.");
+    setNotice(
+      "India GST item-invoice template loaded. Add the client's exact Tally names before saving.",
+    );
   }
 
   async function saveProfile() {
@@ -508,6 +541,7 @@ export function ClientProfilesPanel({
     draft.settings.invoice_format,
   );
   const taxModeOptions = optionsWithCurrent(taxModes, draft.settings.tax_mode);
+  const draftSystem = accountingSystem ?? draft.accounting_system;
 
   return (
     <ContentCard
@@ -517,95 +551,183 @@ export function ClientProfilesPanel({
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={newProfile}>
             <Plus size={14} />
-            New
+            New profile
           </Button>
           {(!accountingSystem || accountingSystem === "tally") && (
-            <Button size="sm" variant="secondary" onClick={useIndiaGstItemTemplate}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={useIndiaGstItemTemplate}
+            >
               <CopyPlus size={14} />
-              GST item template
+              India GST template
             </Button>
           )}
         </div>
       }
     >
-      <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="space-y-3">
-          {loading ? (
-            <div className="rounded-2xl border border-line bg-canvas px-4 py-6 text-sm font-bold text-ink-secondary">
-              <LoaderCircle className="mr-2 inline animate-spin" size={16} />
-              Loading profiles
-            </div>
-          ) : profiles.length ? (
-            profiles.map((profile) => (
-              <button
-                key={profile.id}
-                type="button"
-                onClick={() => selectProfile(profile)}
-                className={cn(
-                  "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
-                  selectedId === profile.id
-                    ? "border-accent bg-accent-soft"
-                    : "border-line bg-canvas hover:border-accent hover:bg-surface-subtle",
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface text-xs font-black uppercase text-accent-ink">
-                    {profile.accounting_system.slice(0, 2)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-black text-ink">
-                      {profile.name}
-                    </span>
-                    <span className="mt-1 block text-xs font-bold capitalize text-ink-muted">
-                      {systemLabel(profile.accounting_system)}
-                    </span>
-                  </span>
-                  {profile.is_default && (
-                    <Star
-                      size={16}
-                      className="shrink-0 fill-accent text-accent"
-                    />
-                  )}
-                </div>
-              </button>
-            ))
-          ) : (
-            <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-6 text-sm font-semibold text-ink-secondary">
-              No profiles yet. Start with a blank profile or load a GST item
-              template.
-            </div>
-          )}
-        </aside>
+      <div className="space-y-5">
+        <div className="grid gap-3 lg:grid-cols-3">
+          <ProfileStat
+            icon={<FileCog2 size={18} />}
+            label="Saved profiles"
+            value={profiles.length.toString()}
+            detail={`${defaultProfileCount} default ${defaultProfileCount === 1 ? "profile" : "profiles"}`}
+          />
+          <ProfileStat
+            icon={<PlugZap size={18} />}
+            label="Connection setup"
+            value={connectedProfileCount.toString()}
+            detail="Profiles with connector or API metadata"
+          />
+          <ProfileStat
+            icon={<Workflow size={18} />}
+            label="Current draft"
+            value={systemLabel(draftSystem)}
+            detail={`${draft.settings.country_code || "US"} / ${draft.settings.default_currency || "USD"} / ${postingModeLabel(draft.settings.posting_mode)}`}
+          />
+        </div>
 
-        <section className="rounded-2xl border border-line bg-canvas">
-          <div className="flex flex-col gap-3 border-b border-line px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-[11px] font-extrabold uppercase text-ink-muted">
-                {selectedProfile ? "Editing profile" : "New profile"}
-              </p>
-              <h3 className="mt-1 text-lg font-black text-ink">
-                {draft.name || "Untitled client setup"}
-              </h3>
+        <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+          <aside className="rounded-2xl border border-line bg-canvas p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                  Profile library
+                </p>
+                <h3 className="mt-1 text-base font-black text-ink">
+                  Workspace setups
+                </h3>
+              </div>
+              <span className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-black text-ink-secondary">
+                {filteredProfiles.length}
+              </span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {selectedProfile && !selectedProfile.is_default && (
-                <Button size="sm" variant="secondary" onClick={makeDefault}>
-                  <BadgeCheck size={14} />
-                  Set default
-                </Button>
+
+            <label className="mt-4 flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink-secondary">
+              <Search size={16} className="shrink-0 text-ink-muted" />
+              <input
+                value={profileSearch}
+                onChange={(event) => setProfileSearch(event.target.value)}
+                placeholder="Search profiles"
+                className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-muted"
+              />
+            </label>
+
+            <div className="mt-4 space-y-3">
+              {loading ? (
+                <div className="rounded-2xl border border-line bg-surface px-4 py-6 text-sm font-bold text-ink-secondary">
+                  <LoaderCircle
+                    className="mr-2 inline animate-spin"
+                    size={16}
+                  />
+                  Loading profiles
+                </div>
+              ) : filteredProfiles.length ? (
+                filteredProfiles.map((profile) => (
+                  <button
+                    key={profile.id}
+                    type="button"
+                    onClick={() => selectProfile(profile)}
+                    className={cn(
+                      "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                      selectedId === profile.id
+                        ? "border-accent bg-accent-soft"
+                        : "border-line bg-surface hover:border-accent hover:bg-surface-subtle",
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-xs font-black uppercase text-accent-ink">
+                        {profile.accounting_system.slice(0, 2)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-black text-ink">
+                          {profile.name}
+                        </span>
+                        <span className="mt-1 block truncate text-xs font-bold text-ink-muted">
+                          {systemLabel(profile.accounting_system)} ·{" "}
+                          {profile.settings.company_name || "Company not set"}
+                        </span>
+                        <span className="mt-2 flex flex-wrap gap-1.5">
+                          <MiniChip>
+                            {profile.settings.default_currency || "USD"}
+                          </MiniChip>
+                          <MiniChip>
+                            {postingModeLabel(profile.settings.posting_mode)}
+                          </MiniChip>
+                          {profile.is_default && (
+                            <MiniChip tone="accent">Default</MiniChip>
+                          )}
+                        </span>
+                      </span>
+                      {profile.is_default && (
+                        <Star
+                          size={16}
+                          className="shrink-0 fill-accent text-accent"
+                        />
+                      )}
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-line-strong bg-surface px-4 py-6 text-sm font-semibold leading-6 text-ink-secondary">
+                  {profileSearch
+                    ? "No profiles match that search."
+                    : "No profiles saved yet. Use the India GST template or start with a blank profile."}
+                </div>
               )}
-              {selectedProfile && (
-                <Button size="sm" variant="danger" onClick={removeProfile}>
-                  <Trash2 size={14} />
-                  Delete
-                </Button>
-              )}
-              <Button size="sm" variant="primary" onClick={saveProfile} disabled={saving}>
-                {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />}
-                Save profile
-              </Button>
             </div>
-          </div>
+          </aside>
+
+          <section className="overflow-hidden rounded-2xl border border-line bg-canvas">
+            <div className="flex flex-col gap-4 border-b border-line bg-surface px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                  {selectedProfile ? "Editing profile" : "New profile"}
+                </p>
+                <h3 className="mt-1 text-xl font-black text-ink">
+                  {draft.name || "Untitled client setup"}
+                </h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Pill icon={<Landmark size={13} />}>
+                    {systemLabel(draftSystem)}
+                  </Pill>
+                  <Pill icon={<Globe2 size={13} />}>
+                    {draft.settings.country_name || "Country not set"}
+                  </Pill>
+                  <Pill icon={<Layers3 size={13} />}>
+                    {draft.settings.default_currency || "USD"}
+                  </Pill>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedProfile && !selectedProfile.is_default && (
+                  <Button size="sm" variant="secondary" onClick={makeDefault}>
+                    <BadgeCheck size={14} />
+                    Set default
+                  </Button>
+                )}
+                {selectedProfile && (
+                  <Button size="sm" variant="danger" onClick={removeProfile}>
+                    <Trash2 size={14} />
+                    Delete
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={saveProfile}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <LoaderCircle size={14} className="animate-spin" />
+                  ) : (
+                    <Save size={14} />
+                  )}
+                  Save profile
+                </Button>
+              </div>
+            </div>
 
           {(notice || error) && (
             <div
@@ -666,7 +788,7 @@ export function ClientProfilesPanel({
               detail="Save workspace-level connection metadata here. Keep production secrets and long-lived OAuth tokens in server-side secret storage."
             />
             {renderConnectionFields(
-              accountingSystem ?? draft.accounting_system,
+              draftSystem,
               draft.settings.connection_settings ?? {},
               updateConnectionSetting,
             )}
@@ -853,13 +975,17 @@ export function ClientProfilesPanel({
               <TextField
                 label="Source HSN/SAC"
                 value={mapping.source_hsn_sac}
-                onChange={(value) => updatePrimaryMapping("source_hsn_sac", value)}
+                onChange={(value) =>
+                  updatePrimaryMapping("source_hsn_sac", value)
+                }
                 placeholder="HSN/SAC code"
               />
               <TextField
                 label="Target item"
                 value={mapping.target_item_name}
-                onChange={(value) => updatePrimaryMapping("target_item_name", value)}
+                onChange={(value) =>
+                  updatePrimaryMapping("target_item_name", value)
+                }
                 placeholder="Exact stock item"
               />
               <TextField
@@ -871,13 +997,17 @@ export function ClientProfilesPanel({
               <TextField
                 label="Mapping purchase ledger"
                 value={mapping.purchase_ledger}
-                onChange={(value) => updatePrimaryMapping("purchase_ledger", value)}
+                onChange={(value) =>
+                  updatePrimaryMapping("purchase_ledger", value)
+                }
                 placeholder="Exact purchase ledger"
               />
               <TextField
                 label="Mapping tax ledger"
                 value={mapping.tax_ledger}
-                onChange={(value) => updatePrimaryMapping("tax_ledger", value)}
+                onChange={(value) =>
+                  updatePrimaryMapping("tax_ledger", value)
+                }
                 placeholder="Exact tax ledger"
               />
             </FormGrid>
@@ -886,7 +1016,7 @@ export function ClientProfilesPanel({
               <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-bold text-success">
                 <CheckCircle2 size={16} />
                 This profile will become the default for{" "}
-                {systemLabel(draft.accounting_system)}.
+                {systemLabel(draftSystem)}.
               </div>
             )}
 
@@ -894,7 +1024,9 @@ export function ClientProfilesPanel({
               <input
                 type="checkbox"
                 checked={draft.is_default}
-                onChange={(event) => updateDraft("is_default", event.target.checked)}
+                onChange={(event) =>
+                  updateDraft("is_default", event.target.checked)
+                }
                 className="size-4 accent-[var(--accent)]"
               />
               Use as default for this accounting system
@@ -902,7 +1034,77 @@ export function ClientProfilesPanel({
           </div>
         </section>
       </div>
+    </div>
     </ContentCard>
+  );
+}
+
+function postingModeLabel(mode: ProfilePostingMode) {
+  return (
+    postingModes.find((candidate) => candidate.value === mode)?.label ?? mode
+  );
+}
+
+function ProfileStat({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-canvas px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+          {label}
+        </p>
+        <span className="text-accent dark:text-cyan">{icon}</span>
+      </div>
+      <p className="mt-3 truncate text-lg font-black text-ink">{value}</p>
+      <p className="mt-1 truncate text-xs font-bold text-ink-secondary">
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function Pill({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-line bg-canvas px-2.5 py-1 text-xs font-black text-ink-secondary">
+      <span className="shrink-0 text-accent dark:text-cyan">{icon}</span>
+      <span className="truncate">{children}</span>
+    </span>
+  );
+}
+
+function MiniChip({
+  children,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  tone?: "default" | "accent";
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em]",
+        tone === "accent"
+          ? "border-accent/30 bg-accent-soft text-accent-ink"
+          : "border-line bg-canvas text-ink-muted",
+      )}
+    >
+      <span className="truncate">{children}</span>
+    </span>
   );
 }
 
