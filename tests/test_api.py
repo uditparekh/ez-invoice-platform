@@ -168,6 +168,118 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
         ).json() == []
 
 
+def test_profile_owned_posting_and_retry_history(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+        invoice = import_sample_invoice(client, tokens, org_id)
+        invoice_id = invoice["id"]
+
+        validated = client.post(
+            f"/api/v1/invoices/{invoice_id}/validate",
+            headers=headers,
+        )
+        assert validated.status_code == 200
+
+        profile_response = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "QuickBooks AP",
+                "accounting_system": "quickbooks",
+                "description": "Profile-owned QuickBooks posting setup.",
+                "is_default": True,
+                "settings": {
+                    "company_name": "Example Client",
+                    "default_currency": "USD",
+                    "posting_mode": "supplier_bill",
+                    "purchase_ledger": "Purchases A/C",
+                    "connection_settings": {
+                        "environment": "sandbox",
+                        "client_id": "sandbox-client",
+                        "client_secret": "sandbox-secret",
+                    },
+                    "item_mappings": [
+                        {
+                            "source_description_contains": "material",
+                            "source_hsn_sac": "1234",
+                            "target_item_name": "Mapped Material",
+                            "target_uom": "EA",
+                            "purchase_ledger": "Purchases A/C",
+                            "metadata": {
+                                "category": "materials",
+                                "gl_code": "5000",
+                            },
+                        }
+                    ],
+                },
+            },
+            headers=headers,
+        )
+        assert profile_response.status_code == 201
+        profile = profile_response.json()
+
+        target_required = client.post(
+            f"/api/v1/invoices/{invoice_id}/post",
+            json={"dry_run": True},
+            headers=headers,
+        )
+        assert target_required.status_code == 400
+
+        mismatch = client.post(
+            f"/api/v1/invoices/{invoice_id}/post",
+            json={
+                "target": "tally",
+                "client_profile_id": profile["id"],
+                "dry_run": True,
+            },
+            headers=headers,
+        )
+        assert mismatch.status_code == 409
+
+        first_post = client.post(
+            f"/api/v1/invoices/{invoice_id}/post",
+            json={"client_profile_id": profile["id"], "dry_run": True},
+            headers=headers,
+        )
+        assert first_post.status_code == 200
+        first_payload = first_post.json()
+        assert first_payload["success"] is True
+        assert first_payload["target"] == "quickbooks"
+        assert first_payload["client_profile_id"] == profile["id"]
+        assert (
+            first_payload["request_payload"]["posting_plan"]["profile"]["name"]
+            == "QuickBooks AP"
+        )
+        assert (
+            first_payload["request_payload"]["posting_plan"]["profile"]["settings"]
+            ["connection_settings"]["client_secret"]
+            == "[redacted]"
+        )
+
+        retry = client.post(
+            f"/api/v1/postings/{first_payload['id']}/retry",
+            json={},
+            headers=headers,
+        )
+        assert retry.status_code == 200
+        retry_payload = retry.json()
+        assert retry_payload["id"] != first_payload["id"]
+        assert retry_payload["target"] == "quickbooks"
+        assert retry_payload["client_profile_id"] == profile["id"]
+        assert retry_payload["request_payload"]["retry_of"] == first_payload["id"]
+
+        postings = client.get(
+            f"/api/v1/invoices/{invoice_id}/postings",
+            headers=headers,
+        )
+        assert postings.status_code == 200
+        assert [item["id"] for item in postings.json()[:2]] == [
+            retry_payload["id"],
+            first_payload["id"],
+        ]
+
+
 def test_tenant_isolation_and_role_permissions(tmp_path: Path):
     with make_client(tmp_path) as client:
         owner_tokens = bootstrap(client)

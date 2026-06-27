@@ -61,6 +61,140 @@ def _connector_result(
     )
 
 
+def _profiled_legacy_payload(
+    invoice: Invoice,
+    client_profile: Optional[ClientProfile],
+) -> Dict[str, Any]:
+    payload = invoice_to_legacy_payload(invoice)
+    if not client_profile:
+        return payload
+
+    settings = client_profile.settings
+    legacy_invoice = payload.setdefault("INVOICE", {})
+    system = (
+        client_profile.accounting_system.value
+        if hasattr(client_profile.accounting_system, "value")
+        else str(client_profile.accounting_system)
+    )
+    legacy_invoice["ACCOUNTING PROFILE"] = {
+        "ID": client_profile.id,
+        "NAME": client_profile.name,
+        "SYSTEM": system,
+        "COUNTRY": settings.country_code,
+        "COUNTRY NAME": settings.country_name,
+        "DEFAULT CURRENCY": settings.default_currency,
+        "INVOICE FORMAT": settings.invoice_format,
+        "TAX MODE": settings.tax_mode,
+        "POSTING MODE": str(settings.posting_mode),
+    }
+    legacy_invoice["ACCOUNTING ROUTE"] = {
+        "TARGET": system,
+        "DIRECTION": settings.direction or invoice.direction,
+        "POSTING MODE": str(settings.posting_mode),
+        "VOUCHER TYPE": settings.voucher_type,
+        "PURCHASE LEDGER": settings.purchase_ledger,
+        "TAX LEDGER": settings.tax_ledger,
+        "TCS LEDGER": settings.tcs_ledger,
+        "ROUND OFF LEDGER": settings.round_off_ledger,
+        "GODOWN": settings.godown_name,
+    }
+
+    line_items = legacy_invoice.setdefault("LINE ITEMS", {})
+    rows = line_items.setdefault("ROWS", [])
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        _apply_profile_line_defaults(row, settings)
+        for mapping in settings.item_mappings:
+            if _mapping_matches_row(mapping, row):
+                _apply_profile_mapping(row, mapping)
+
+    columns = list(line_items.get("COLUMNS") or [])
+    for column in (
+        "CLIENT_CATEGORY",
+        "TALLY_LEDGER",
+        "TALLY_STOCK_ITEM",
+        "TARGET_ITEM_NAME",
+        "TARGET_UOM",
+    ):
+        if column not in columns:
+            columns.append(column)
+    line_items["COLUMNS"] = columns
+    return payload
+
+
+def _apply_profile_line_defaults(row: Dict[str, Any], settings: Any) -> None:
+    if settings.purchase_ledger:
+        row.setdefault("TALLY_LEDGER", settings.purchase_ledger)
+        row.setdefault("PURCHASE_LEDGER", settings.purchase_ledger)
+    if settings.tax_ledger:
+        row.setdefault("TAX_LEDGER", settings.tax_ledger)
+    if settings.stock_item_name:
+        row.setdefault("TALLY_STOCK_ITEM", settings.stock_item_name)
+        row.setdefault("TARGET_ITEM_NAME", settings.stock_item_name)
+    if settings.stock_item_uom:
+        row.setdefault("TARGET_UOM", settings.stock_item_uom)
+    if settings.godown_name:
+        row.setdefault("GODOWN", settings.godown_name)
+
+
+def _mapping_matches_row(mapping: Any, row: Dict[str, Any]) -> bool:
+    description_filter = str(mapping.source_description_contains or "").strip().lower()
+    hsn_filter = _digits(mapping.source_hsn_sac)
+    if not description_filter and not hsn_filter:
+        return False
+
+    description = str(row.get("DESCRIPTION") or row.get("ITEM") or "").lower()
+    row_hsn = _digits(row.get("HSN/SAC") or row.get("HSN") or row.get("SAC"))
+    description_matches = bool(description_filter and description_filter in description)
+    hsn_matches = bool(hsn_filter and row_hsn == hsn_filter)
+    return description_matches or hsn_matches
+
+
+def _apply_profile_mapping(row: Dict[str, Any], mapping: Any) -> None:
+    metadata = mapping.metadata or {}
+    category = str(
+        metadata.get("category")
+        or metadata.get("platform_category")
+        or metadata.get("client_category")
+        or ""
+    ).strip()
+    gl_code = str(metadata.get("gl_code") or metadata.get("account_code") or "").strip()
+    qb_account_id = str(metadata.get("qb_account_id") or "").strip()
+    qb_account_name = str(metadata.get("qb_account_name") or "").strip()
+    zoho_account_id = str(metadata.get("zoho_account_id") or "").strip()
+    zoho_tax_id = str(metadata.get("zoho_tax_id") or "").strip()
+
+    if category:
+        row["CATEGORY"] = category
+        row["PLATFORM_CATEGORY"] = category
+        row["CLIENT_CATEGORY"] = category
+    if gl_code:
+        row["GL_CODE"] = gl_code
+    if qb_account_id:
+        row["QB_ACCOUNT_ID"] = qb_account_id
+    if qb_account_name:
+        row["QB_ACCOUNT"] = qb_account_name
+    if zoho_account_id:
+        row["ZOHO_ACCOUNT_ID"] = zoho_account_id
+    if zoho_tax_id:
+        row["ZOHO_TAX_ID"] = zoho_tax_id
+    if mapping.target_item_name:
+        row["TARGET_ITEM_NAME"] = mapping.target_item_name
+        row["TALLY_STOCK_ITEM"] = mapping.target_item_name
+    if mapping.target_uom:
+        row["TARGET_UOM"] = mapping.target_uom
+    if mapping.purchase_ledger:
+        row["PURCHASE_LEDGER"] = mapping.purchase_ledger
+        row["TALLY_LEDGER"] = mapping.purchase_ledger
+    if mapping.tax_ledger:
+        row["TAX_LEDGER"] = mapping.tax_ledger
+
+
+def _digits(value: Any) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
 @dataclass
 class QuickBooksAdapter:
     target: PostingTarget = PostingTarget.QUICKBOOKS
@@ -74,12 +208,18 @@ class QuickBooksAdapter:
         issues = _basic_issues(invoice)
         if issues:
             return ConnectorResult(False, issues[0].message, issues=issues)
-        payload = invoice_to_legacy_payload(invoice)
+        payload = _profiled_legacy_payload(invoice, client_profile)
         if dry_run:
             return ConnectorResult(
                 True,
                 "QuickBooks preflight passed. No Bill was created.",
-                raw={"invoice_number": invoice.invoice_number, "line_count": len(invoice.lines)},
+                raw={
+                    "invoice_number": invoice.invoice_number,
+                    "line_count": len(invoice.lines),
+                    "profile_id": client_profile.id if client_profile else None,
+                    "profile_name": client_profile.name if client_profile else None,
+                    "target": self.target.value,
+                },
             )
         try:
             from ..qb_integration import send_to_quickbooks
@@ -109,7 +249,7 @@ class TallyAdapter:
             from ..tally_integration import send_to_tally
 
             result = send_to_tally(
-                invoice_to_legacy_payload(invoice),
+                _profiled_legacy_payload(invoice, client_profile),
                 dry_run=dry_run,
                 settings_override=_tally_settings_from_profile(client_profile),
                 connector_settings_override=_tally_connector_settings_from_profile(
@@ -134,7 +274,7 @@ class ZohoBooksAdapter:
         issues = _basic_issues(invoice)
         if issues:
             return ConnectorResult(False, issues[0].message, issues=issues)
-        payload = invoice_to_legacy_payload(invoice)
+        payload = _profiled_legacy_payload(invoice, client_profile)
         try:
             if dry_run:
                 from ..zoho_integration import build_zoho_export

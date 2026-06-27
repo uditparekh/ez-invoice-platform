@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   FileSearch,
   LoaderCircle,
+  RotateCcw,
   SendHorizontal,
   ShieldCheck,
 } from "lucide-react";
@@ -92,10 +93,14 @@ function InvoiceDetail({
     () => postingTargetForSystem(targetSystem),
     [targetSystem],
   );
+  const resolvedPostingTarget = clientProfile
+    ? postingTargetForAccountingSystem(clientProfile.accounting_system)
+    : postingTarget;
   const [postings, setPostings] = useState<PostingResult[]>([]);
   const [validating, setValidating] = useState(false);
   const [approving, setApproving] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [postingError, setPostingError] = useState("");
   const [workflowError, setWorkflowError] = useState("");
 
@@ -125,7 +130,7 @@ function InvoiceDetail({
   }, [invoice.id]);
 
   const canPost =
-    postingTarget !== null &&
+    resolvedPostingTarget !== null &&
     ["validated", "approved", "failed"].includes(invoice.status);
   const canValidate = !["posting", "posted"].includes(invoice.status);
   const canApprove = invoice.status === "validated";
@@ -179,7 +184,7 @@ function InvoiceDetail({
   }
 
   async function postInvoice() {
-    if (!postingTarget) return;
+    if (!resolvedPostingTarget) return;
     setPosting(true);
     setPostingError("");
     try {
@@ -187,7 +192,7 @@ function InvoiceDetail({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          target: postingTarget,
+          target: clientProfile?.id ? undefined : resolvedPostingTarget,
           dry_run: false,
           client_profile_id: clientProfile?.id ?? null,
         }),
@@ -215,6 +220,41 @@ function InvoiceDetail({
       setPostingError((error as Error).message);
     } finally {
       setPosting(false);
+    }
+  }
+
+  async function retryPosting(postingId: string) {
+    setRetryingId(postingId);
+    setPostingError("");
+    try {
+      const response = await fetch(`/api/postings/${postingId}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          (payload as ApiErrorPayload).detail ?? "Retry failed.",
+        );
+      }
+      const result = payload as PostingResult;
+      setPostings((current) => [
+        result,
+        ...current.filter((postingAttempt) => postingAttempt.id !== result.id),
+      ]);
+      onPostingComplete?.(result);
+      if (!result.success) {
+        onInvoicePatch?.(invoice.id, {
+          status: "failed",
+          updated_at: result.updated_at,
+        });
+        setPostingError(result.message);
+      }
+    } catch (error) {
+      setPostingError((error as Error).message);
+    } finally {
+      setRetryingId(null);
     }
   }
 
@@ -334,7 +374,7 @@ function InvoiceDetail({
               : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
           )}
           title={
-            postingTarget
+            resolvedPostingTarget
               ? "Invoice must be validated before posting."
               : "Posting is available for QuickBooks, Tally, and Zoho Books."
           }
@@ -362,7 +402,13 @@ function InvoiceDetail({
         </div>
       )}
 
-      {postings.length > 0 && <PostingActivity postings={postings} />}
+      {postings.length > 0 && (
+        <PostingActivity
+          postings={postings}
+          retryingId={retryingId}
+          onRetry={(postingId) => void retryPosting(postingId)}
+        />
+      )}
 
       <div className="mt-10 flex flex-col gap-3 border-t border-line pt-7 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -447,7 +493,22 @@ function postingTargetForSystem(system: string): PostingTarget | null {
   return null;
 }
 
-function PostingActivity({ postings }: { postings: PostingResult[] }) {
+function postingTargetForAccountingSystem(system: string): PostingTarget | null {
+  if (system === "tally") return "tally";
+  if (system === "zoho_books") return "zoho_books";
+  if (system === "quickbooks") return "quickbooks";
+  return null;
+}
+
+function PostingActivity({
+  postings,
+  retryingId,
+  onRetry,
+}: {
+  postings: PostingResult[];
+  retryingId: string | null;
+  onRetry: (postingId: string) => void;
+}) {
   return (
     <section className="mt-6 rounded-xl border border-line bg-surface">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
@@ -464,34 +525,109 @@ function PostingActivity({ postings }: { postings: PostingResult[] }) {
         </span>
       </div>
       <div className="divide-y divide-line">
-        {postings.slice(0, 4).map((posting) => (
-          <div
-            key={posting.id}
-            className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[160px_1fr_auto] sm:items-center"
-          >
-            <span
-              className={cn(
-                "w-fit rounded-full px-2.5 py-1 text-xs font-black capitalize",
-                posting.status === "succeeded" &&
-                  "bg-success-soft text-success",
-                posting.status === "failed" && "bg-danger-soft text-danger",
-                posting.status === "started" && "bg-gold-soft text-gold",
-              )}
+        {postings.slice(0, 5).map((posting) => {
+          const profileLabel = postingProfileLabel(posting);
+          const retryOf = postingRetryOf(posting);
+          const isRetrying = retryingId === posting.id;
+          return (
+            <div
+              key={posting.id}
+              className="grid gap-3 px-4 py-3 text-sm lg:grid-cols-[minmax(220px,280px)_1fr_auto] lg:items-center"
             >
-              {posting.dry_run ? "Dry run " : ""}
-              {posting.status}
-            </span>
-            <p className="min-w-0 break-words font-semibold text-ink-secondary">
-              {posting.message}
-            </p>
-            <time className="text-xs font-bold text-ink-muted">
-              {formatTimestamp(posting.updated_at)}
-            </time>
-          </div>
-        ))}
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-xs font-black capitalize",
+                    posting.status === "succeeded" &&
+                      "bg-success-soft text-success",
+                    posting.status === "failed" && "bg-danger-soft text-danger",
+                    posting.status === "started" && "bg-gold-soft text-gold",
+                  )}
+                >
+                  {posting.dry_run ? "Dry run " : ""}
+                  {posting.status}
+                </span>
+                <span className="rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-black text-ink-secondary">
+                  {postingTargetLabel(posting.target)}
+                </span>
+                {profileLabel && (
+                  <span className="max-w-full truncate rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black text-accent-ink">
+                    {profileLabel}
+                  </span>
+                )}
+                {retryOf && (
+                  <span className="rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-black text-ink-muted">
+                    Retry
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="break-words font-semibold text-ink-secondary">
+                  {posting.message}
+                </p>
+                <p className="mt-1 text-xs font-bold text-ink-muted">
+                  {posting.external_id
+                    ? `External ID ${posting.external_id}`
+                    : `Attempt ${posting.id.slice(0, 8)}`}
+                  {retryOf ? ` · retry of ${retryOf.slice(0, 8)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 lg:justify-end">
+                <time className="text-xs font-bold text-ink-muted">
+                  {formatTimestamp(posting.updated_at)}
+                </time>
+                {posting.status === "failed" && (
+                  <button
+                    type="button"
+                    disabled={isRetrying}
+                    onClick={() => onRetry(posting.id)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isRetrying ? (
+                      <LoaderCircle size={14} className="animate-spin" />
+                    ) : (
+                      <RotateCcw size={14} />
+                    )}
+                    Retry
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
+}
+
+function postingTargetLabel(target: PostingTarget) {
+  if (target === "tally") return "Tally";
+  if (target === "zoho_books") return "Zoho";
+  return "QuickBooks";
+}
+
+function postingProfileLabel(posting: PostingResult) {
+  const requestPayload = asRecord(posting.request_payload);
+  const directName = stringValue(requestPayload?.client_profile_name);
+  if (directName) return directName;
+
+  const postingPlan = asRecord(requestPayload?.posting_plan);
+  const profile = asRecord(postingPlan?.profile);
+  return stringValue(profile?.name);
+}
+
+function postingRetryOf(posting: PostingResult) {
+  const requestPayload = asRecord(posting.request_payload);
+  return stringValue(requestPayload?.retry_of);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
 function formatTimestamp(value: string) {

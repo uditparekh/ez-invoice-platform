@@ -808,7 +808,7 @@ function ExportPackagePanel({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            target: postingTarget,
+            target: clientProfileId ? undefined : postingTarget,
             dry_run: false,
             client_profile_id: clientProfileId,
           }),

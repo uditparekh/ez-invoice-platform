@@ -171,7 +171,7 @@ export interface ClientProfilePayload {
 }
 
 export interface PostingRequest {
-  target: PostingTarget;
+  target?: PostingTarget;
   dry_run?: boolean;
   client_profile_id?: string | null;
 }

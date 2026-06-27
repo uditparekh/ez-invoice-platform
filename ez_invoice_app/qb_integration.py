@@ -597,6 +597,23 @@ def _rule_matches(rule, context):
 
 def _resolve_line_account(payload, row, accounts, mapping, rules, fallback_acct):
     context = _line_context(payload, row)
+    explicit_account_id = str(
+        row.get("QB_ACCOUNT_ID") or row.get("QUICKBOOKS_ACCOUNT_ID") or ""
+    ).strip()
+    if explicit_account_id:
+        return (
+            {
+                "name": str(
+                    row.get("QB_ACCOUNT")
+                    or row.get("QUICKBOOKS_ACCOUNT")
+                    or "Client profile account"
+                ),
+                "value": explicit_account_id,
+            },
+            context["category"],
+            "Client profile account",
+        )
+
     for rule in rules:
         if _rule_matches(rule, context):
             acct = rule.get("account", {})

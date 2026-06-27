@@ -398,9 +398,13 @@ class ValidationResult(BaseModel):
 
 
 class PostingRequest(BaseModel):
-    target: PostingTarget
+    target: Optional[PostingTarget] = None
     dry_run: bool = False
     client_profile_id: Optional[str] = None
+
+
+class PostingRetryRequest(BaseModel):
+    dry_run: Optional[bool] = None
 
 
 class PostingResultCreate(BaseModel):

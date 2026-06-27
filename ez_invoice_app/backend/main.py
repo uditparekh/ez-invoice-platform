@@ -7,7 +7,7 @@ import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +37,7 @@ from .models import (
     OrganizationCreate,
     OrganizationRole,
     PostingRequest,
+    PostingRetryRequest,
     PostingResult,
     PostingResultCreate,
     PostingTarget,
@@ -653,84 +654,14 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> PostingResult:
         invoice = _require_invoice(request, invoice_id, current_user, EDIT_ROLES)
-        current_status = InvoiceStatus(invoice.status)
-        if current_status not in {
-            InvoiceStatus.VALIDATED,
-            InvoiceStatus.APPROVED,
-            InvoiceStatus.FAILED,
-        }:
-            raise HTTPException(
-                status_code=409,
-                detail="Validate the invoice before posting.",
-            )
-        adapter = request.app.state.adapters.get(body.target)
-        if adapter is None:
-            raise HTTPException(status_code=400, detail="Unsupported accounting target.")
-
-        client_profile = _resolve_posting_profile(
+        return _execute_posting(
             request,
-            invoice.organization_id,
-            body.target,
-            body.client_profile_id,
             current_user,
             invoice,
-        )
-        request_payload = {
-            "target": body.target.value,
-            "dry_run": body.dry_run,
-            "client_profile_id": client_profile.id if client_profile else None,
-            "client_profile_name": client_profile.name if client_profile else None,
-            "invoice_number": invoice.invoice_number,
-            "source_file": invoice.source_file,
-        }
-        posting = _repo(request).start_posting(
-            invoice_id=invoice_id,
             target=body.target,
+            client_profile_id=body.client_profile_id,
             dry_run=body.dry_run,
-            actor_id=current_user.id,
-            client_profile_id=client_profile.id if client_profile else None,
-            request_payload=request_payload,
         )
-        if not body.dry_run:
-            _repo(request).set_status(invoice_id, InvoiceStatus.POSTING)
-        try:
-            connector_result = adapter.post(
-                invoice,
-                dry_run=body.dry_run,
-                client_profile=client_profile,
-            )
-        except Exception as exc:
-            completed = _repo(request).complete_posting(
-                posting_id=posting.id,
-                success=False,
-                message=f"Connector failed unexpectedly: {exc}",
-                raw={"error": str(exc)},
-                response_payload={"error": str(exc)},
-            )
-            if not body.dry_run:
-                _repo(request).set_status(invoice_id, InvoiceStatus.FAILED)
-            return completed
-        completed = _repo(request).complete_posting(
-            posting_id=posting.id,
-            success=connector_result.success,
-            message=connector_result.message,
-            external_id=connector_result.external_id,
-            issues=[issue.__dict__ for issue in connector_result.issues],
-            raw=connector_result.raw,
-            response_payload={
-                "success": connector_result.success,
-                "message": connector_result.message,
-                "external_id": connector_result.external_id,
-                "issues": [issue.__dict__ for issue in connector_result.issues],
-                "raw": connector_result.raw,
-            },
-        )
-        if not body.dry_run:
-            final_status = (
-                InvoiceStatus.POSTED if connector_result.success else InvoiceStatus.FAILED
-            )
-            _repo(request).set_status(invoice_id, final_status)
-        return completed
 
     @app.get(
         "/api/v1/invoices/{invoice_id}/postings",
@@ -761,6 +692,36 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Posting attempt not found.")
         _require_invoice(request, posting.invoice_id, current_user, READ_ROLES)
         return posting
+
+    @app.post(
+        "/api/v1/postings/{posting_id}/retry",
+        response_model=PostingResult,
+        tags=["workflow"],
+    )
+    def retry_posting(
+        request: Request,
+        posting_id: str,
+        body: PostingRetryRequest,
+        current_user: CurrentUser,
+    ) -> PostingResult:
+        previous = _repo(request).get_posting(posting_id)
+        if not previous:
+            raise HTTPException(status_code=404, detail="Posting attempt not found.")
+        invoice = _require_invoice(
+            request,
+            previous.invoice_id,
+            current_user,
+            EDIT_ROLES,
+        )
+        return _execute_posting(
+            request,
+            current_user,
+            invoice,
+            target=PostingTarget(previous.target),
+            client_profile_id=previous.client_profile_id,
+            dry_run=previous.dry_run if body.dry_run is None else body.dry_run,
+            retry_of=previous.id,
+        )
 
     @app.post(
         "/api/v1/invoices/{invoice_id}/posting-results",
@@ -859,6 +820,239 @@ def _require_client_profile(
     if not profile or profile.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Client profile not found.")
     return profile
+
+
+def _execute_posting(
+    request: Request,
+    current_user: AuthenticatedUser,
+    invoice: Invoice,
+    target: Optional[PostingTarget],
+    client_profile_id: Optional[str],
+    dry_run: bool,
+    retry_of: Optional[str] = None,
+) -> PostingResult:
+    current_status = InvoiceStatus(invoice.status)
+    if current_status not in {
+        InvoiceStatus.VALIDATED,
+        InvoiceStatus.APPROVED,
+        InvoiceStatus.FAILED,
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail="Validate the invoice before posting.",
+        )
+
+    resolved_target, client_profile = _resolve_posting_target_and_profile(
+        request,
+        invoice.organization_id,
+        target,
+        client_profile_id,
+        current_user,
+        invoice,
+    )
+    adapter = request.app.state.adapters.get(resolved_target)
+    if adapter is None:
+        raise HTTPException(status_code=400, detail="Unsupported accounting target.")
+
+    request_payload = _posting_request_payload(
+        invoice=invoice,
+        target=resolved_target,
+        dry_run=dry_run,
+        client_profile=client_profile,
+        retry_of=retry_of,
+    )
+    posting = _repo(request).start_posting(
+        invoice_id=invoice.id,
+        target=resolved_target,
+        dry_run=dry_run,
+        actor_id=current_user.id,
+        client_profile_id=client_profile.id if client_profile else None,
+        request_payload=request_payload,
+    )
+    if not dry_run:
+        _repo(request).set_status(invoice.id, InvoiceStatus.POSTING)
+    try:
+        connector_result = adapter.post(
+            invoice,
+            dry_run=dry_run,
+            client_profile=client_profile,
+        )
+    except Exception as exc:
+        completed = _repo(request).complete_posting(
+            posting_id=posting.id,
+            success=False,
+            message=f"Connector failed unexpectedly: {exc}",
+            raw={"error": str(exc), "retry_of": retry_of},
+            response_payload={
+                "success": False,
+                "message": f"Connector failed unexpectedly: {exc}",
+                "error": str(exc),
+                "retry_of": retry_of,
+                "posting_plan": request_payload.get("posting_plan", {}),
+            },
+        )
+        if not dry_run:
+            _repo(request).set_status(invoice.id, InvoiceStatus.FAILED)
+        return completed
+
+    response_payload = {
+        "success": connector_result.success,
+        "message": connector_result.message,
+        "external_id": connector_result.external_id,
+        "issues": [issue.__dict__ for issue in connector_result.issues],
+        "raw": connector_result.raw,
+        "retry_of": retry_of,
+        "posting_plan": request_payload.get("posting_plan", {}),
+    }
+    completed = _repo(request).complete_posting(
+        posting_id=posting.id,
+        success=connector_result.success,
+        message=connector_result.message,
+        external_id=connector_result.external_id,
+        issues=[issue.__dict__ for issue in connector_result.issues],
+        raw=connector_result.raw,
+        response_payload=response_payload,
+    )
+    if not dry_run:
+        final_status = (
+            InvoiceStatus.POSTED
+            if connector_result.success
+            else InvoiceStatus.FAILED
+        )
+        _repo(request).set_status(invoice.id, final_status)
+    return completed
+
+
+def _resolve_posting_target_and_profile(
+    request: Request,
+    organization_id: str,
+    target: Optional[PostingTarget],
+    profile_id: Optional[str],
+    current_user: AuthenticatedUser,
+    invoice: Optional[Invoice] = None,
+) -> tuple[PostingTarget, Optional[ClientProfile]]:
+    if profile_id:
+        profile = _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            READ_ROLES,
+        )
+        profile_target = _posting_target_for_profile(profile)
+        if target is not None and profile_target != target:
+            raise HTTPException(
+                status_code=409,
+                detail="The selected client profile does not match the posting target.",
+            )
+        return profile_target, profile
+
+    if target is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Select a client profile or posting target before posting.",
+        )
+
+    return target, _resolve_posting_profile(
+        request,
+        organization_id,
+        target,
+        None,
+        current_user,
+        invoice,
+    )
+
+
+def _posting_target_for_profile(profile: ClientProfile) -> PostingTarget:
+    system = (
+        profile.accounting_system.value
+        if hasattr(profile.accounting_system, "value")
+        else str(profile.accounting_system)
+    )
+    try:
+        return PostingTarget(system)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="The selected client profile is not connected to a live posting target.",
+        ) from exc
+
+
+def _posting_request_payload(
+    invoice: Invoice,
+    target: PostingTarget,
+    dry_run: bool,
+    client_profile: Optional[ClientProfile],
+    retry_of: Optional[str],
+) -> Dict[str, Any]:
+    profile_snapshot = _client_profile_snapshot(client_profile)
+    return {
+        "target": target.value,
+        "dry_run": dry_run,
+        "retry_of": retry_of,
+        "client_profile_id": client_profile.id if client_profile else None,
+        "client_profile_name": client_profile.name if client_profile else None,
+        "invoice_number": invoice.invoice_number,
+        "source_file": invoice.source_file,
+        "posting_plan": {
+            "target": target.value,
+            "dry_run": dry_run,
+            "retry_of": retry_of,
+            "profile": profile_snapshot,
+            "invoice": {
+                "id": invoice.id,
+                "number": invoice.invoice_number,
+                "supplier": invoice.supplier.name,
+                "currency": invoice.currency,
+                "total": invoice.total,
+                "line_count": len(invoice.lines),
+                "direction": invoice.direction,
+            },
+        },
+    }
+
+
+def _client_profile_snapshot(
+    client_profile: Optional[ClientProfile],
+) -> Optional[Dict[str, Any]]:
+    if not client_profile:
+        return None
+    return {
+        "id": client_profile.id,
+        "name": client_profile.name,
+        "accounting_system": (
+            client_profile.accounting_system.value
+            if hasattr(client_profile.accounting_system, "value")
+            else str(client_profile.accounting_system)
+        ),
+        "is_default": client_profile.is_default,
+        "settings": _redact_secrets(
+            client_profile.settings.model_dump(mode="json")
+        ),
+        "updated_at": client_profile.updated_at.isoformat(),
+    }
+
+
+def _redact_secrets(value: Any) -> Any:
+    if isinstance(value, dict):
+        output: Dict[str, Any] = {}
+        for key, item in value.items():
+            lowered = str(key).lower()
+            secret_markers = (
+                "token",
+                "secret",
+                "password",
+                "client_secret",
+                "refresh",
+            )
+            if any(marker in lowered for marker in secret_markers):
+                output[key] = "[redacted]" if item else ""
+            else:
+                output[key] = _redact_secrets(item)
+        return output
+    if isinstance(value, list):
+        return [_redact_secrets(item) for item in value]
+    return value
 
 
 def _resolve_posting_profile(

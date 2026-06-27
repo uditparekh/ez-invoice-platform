@@ -603,7 +603,7 @@ def build_zoho_bill_payload(
         if category not in dict(LINE_CATEGORIES):
             category = _classify_line(description)
         account = mapping.get(category) or mapping.get("general") or {}
-        account_id = str(account.get("account_id", "") or "")
+        account_id = str(row.get("ZOHO_ACCOUNT_ID") or account.get("account_id", "") or "")
         if not account_id:
             raise ValueError("No Zoho Books account is mapped for line: " + description)
         amount = abs(_number(row.get("AMOUNT", 0) or row.get("EXTENDED AMOUNT", 0)))
