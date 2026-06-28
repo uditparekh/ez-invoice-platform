@@ -67,8 +67,8 @@ class TallyConnectorWindow:
 
     def _build_window(self) -> None:
         self.root.title("SiftEntry Tally Connector")
-        self.root.geometry("780x620")
-        self.root.minsize(720, 560)
+        self.root.geometry("980x720")
+        self.root.minsize(900, 660)
 
         style = ttk.Style()
         style.theme_use("clam")
@@ -76,7 +76,7 @@ class TallyConnectorWindow:
         style.configure("Subtitle.TLabel", font=("Segoe UI", 10), foreground="#667085")
         style.configure("Card.TFrame", background="#FFFFFF", borderwidth=1, relief="solid")
         style.configure("StatusTitle.TLabel", background="#FFFFFF", font=("Segoe UI", 9, "bold"), foreground="#667085")
-        style.configure("StatusValue.TLabel", background="#FFFFFF", font=("Segoe UI", 15, "bold"), foreground="#08111F")
+        style.configure("StatusValue.TLabel", background="#FFFFFF", font=("Segoe UI", 14, "bold"), foreground="#08111F")
         style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"))
         style.configure("Danger.TButton", font=("Segoe UI", 10, "bold"))
         style.configure("TFrame", background="#F8FAFC")
@@ -97,17 +97,17 @@ class TallyConnectorWindow:
 
         status_grid = ttk.Frame(outer)
         status_grid.pack(fill="x", pady=(0, 18))
-        for index in range(4):
+        for index in range(2):
             status_grid.columnconfigure(index, weight=1, uniform="status")
-        self._status_card(status_grid, 0, "Connected to SiftEntry", self.siftentry_status)
-        self._status_card(status_grid, 1, "Tally detected", self.tally_status)
-        self._status_card(status_grid, 2, "Last posted invoice", self.last_invoice)
-        self._status_card(status_grid, 3, "Retry failed jobs", self.failed_jobs)
+        self._status_card(status_grid, 0, 0, "Connected to SiftEntry", self.siftentry_status)
+        self._status_card(status_grid, 0, 1, "Tally detected", self.tally_status)
+        self._status_card(status_grid, 1, 0, "Last posted invoice", self.last_invoice)
+        self._status_card(status_grid, 1, 1, "Retry failed jobs", self.failed_jobs)
 
         form = ttk.LabelFrame(outer, text="Connector settings", padding=16)
         form.pack(fill="x", pady=(0, 16))
-        form.columnconfigure(1, weight=1)
-        form.columnconfigure(3, weight=1)
+        form.columnconfigure(1, weight=1, minsize=260)
+        form.columnconfigure(3, weight=1, minsize=260)
 
         self._field(form, 0, 0, "SiftEntry URL", self.cloud_url)
         self._field(form, 0, 2, "Workspace ID", self.workspace_id)
@@ -162,11 +162,24 @@ class TallyConnectorWindow:
         self.activity.pack(fill="both", expand=True)
         self._append_log("Status window ready.")
 
-    def _status_card(self, parent: ttk.Frame, column: int, title: str, value: tk.StringVar) -> None:
+    def _status_card(self, parent: ttk.Frame, row: int, column: int, title: str, value: tk.StringVar) -> None:
         card = ttk.Frame(parent, style="Card.TFrame", padding=14)
-        card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 8, 0))
+        card.grid(
+            row=row,
+            column=column,
+            sticky="nsew",
+            padx=(0 if column == 0 else 10, 0),
+            pady=(0 if row == 0 else 10, 0),
+        )
+        card.columnconfigure(0, weight=1)
         ttk.Label(card, text=title.upper(), style="StatusTitle.TLabel").pack(anchor="w")
-        ttk.Label(card, textvariable=value, style="StatusValue.TLabel").pack(anchor="w", pady=(8, 0))
+        ttk.Label(
+            card,
+            textvariable=value,
+            style="StatusValue.TLabel",
+            wraplength=360,
+            justify="left",
+        ).pack(anchor="w", fill="x", pady=(8, 0))
 
     def _field(
         self,
@@ -270,10 +283,17 @@ class TallyConnectorWindow:
             self.siftentry_status.set("Not checked")
         self.tally_status.set("Online" if status.get("tally_detected") else "Offline")
         if status.get("last_posted_invoice"):
-            self.last_invoice.set(str(status.get("last_posted_invoice")))
+            self.last_invoice.set(self._short_text(str(status.get("last_posted_invoice")), 34))
         self.failed_jobs.set(str(status.get("failed_jobs", 0)))
         self.last_message.set(str(status.get("message", "")))
         self._append_log(str(status.get("message", "Polling completed.")))
+
+    @staticmethod
+    def _short_text(value: str, limit: int) -> str:
+        cleaned = " ".join(value.split())
+        if len(cleaned) <= limit:
+            return cleaned
+        return cleaned[: max(0, limit - 1)].rstrip() + "…"
 
     def _append_log(self, message: str) -> None:
         timestamp = time.strftime("%H:%M:%S")
