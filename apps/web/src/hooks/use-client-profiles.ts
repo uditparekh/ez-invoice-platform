@@ -9,6 +9,7 @@ import type {
   ClientProfile,
   ClientProfilePayload,
 } from "@/lib/types";
+import { apiErrorMessage } from "@/lib/utils";
 
 interface UseClientProfilesOptions {
   accountingSystem?: AccountingSystem;
@@ -22,7 +23,7 @@ function profileUrl(organizationId: string, profileId?: string) {
 async function readError(response: Response, fallback: string) {
   try {
     const payload = (await response.json()) as ApiErrorPayload;
-    return payload.detail ?? fallback;
+    return apiErrorMessage(payload, fallback);
   } catch {
     return fallback;
   }
@@ -168,6 +169,87 @@ export function useClientProfiles({
     [organizationId],
   );
 
+  const submitProfileForReview = useCallback(
+    async (profileId: string) => {
+      if (!organizationId) throw new Error("No active organization selected.");
+      setSaving(true);
+      setError("");
+      try {
+        const response = await fetch(
+          `${profileUrl(organizationId, profileId)}/submit-review`,
+          { method: "POST" },
+        );
+        if (!response.ok) {
+          throw new Error(
+            await readError(response, "Unable to submit profile for review."),
+          );
+        }
+        const updated = (await response.json()) as ClientProfile;
+        setProfiles((current) =>
+          current.map((profile) => (profile.id === updated.id ? updated : profile)),
+        );
+        return updated;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [organizationId],
+  );
+
+  const recommendProfileSettings = useCallback(
+    async (profileId: string) => {
+      if (!organizationId) throw new Error("No active organization selected.");
+      setSaving(true);
+      setError("");
+      try {
+        const response = await fetch(
+          `${profileUrl(organizationId, profileId)}/recommend-settings`,
+          { method: "POST" },
+        );
+        if (!response.ok) {
+          throw new Error(
+            await readError(response, "Unable to generate profile recommendations."),
+          );
+        }
+        const updated = (await response.json()) as ClientProfile;
+        setProfiles((current) =>
+          current.map((profile) => (profile.id === updated.id ? updated : profile)),
+        );
+        return updated;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [organizationId],
+  );
+
+  const activateProfile = useCallback(
+    async (profileId: string) => {
+      if (!organizationId) throw new Error("No active organization selected.");
+      setSaving(true);
+      setError("");
+      try {
+        const response = await fetch(
+          `${profileUrl(organizationId, profileId)}/activate`,
+          { method: "POST" },
+        );
+        if (!response.ok) {
+          throw new Error(
+            await readError(response, "Unable to activate client profile."),
+          );
+        }
+        const updated = (await response.json()) as ClientProfile;
+        setProfiles((current) =>
+          current.map((profile) => (profile.id === updated.id ? updated : profile)),
+        );
+        return updated;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [organizationId],
+  );
+
   const deleteProfile = useCallback(
     async (profileId: string) => {
       if (!organizationId) throw new Error("No active organization selected.");
@@ -192,6 +274,40 @@ export function useClientProfiles({
     [organizationId],
   );
 
+  const uploadTrainingSample = useCallback(
+    async (profileId: string, file: File, notes = "") => {
+      if (!organizationId) throw new Error("No active organization selected.");
+      setSaving(true);
+      setError("");
+      try {
+        const form = new FormData();
+        form.set("file", file);
+        form.set("sample_type", "invoice");
+        form.set("notes", notes);
+        const response = await fetch(
+          `${profileUrl(organizationId, profileId)}/training-samples`,
+          {
+            method: "POST",
+            body: form,
+          },
+        );
+        if (!response.ok) {
+          throw new Error(
+            await readError(response, "Unable to upload training sample."),
+          );
+        }
+        const updated = (await response.json()) as ClientProfile;
+        setProfiles((current) =>
+          current.map((profile) => (profile.id === updated.id ? updated : profile)),
+        );
+        return updated;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [organizationId],
+  );
+
   return {
     profiles,
     loading,
@@ -201,6 +317,10 @@ export function useClientProfiles({
     createProfile,
     updateProfile,
     setDefaultProfile,
+    submitProfileForReview,
+    recommendProfileSettings,
+    activateProfile,
     deleteProfile,
+    uploadTrainingSample,
   };
 }

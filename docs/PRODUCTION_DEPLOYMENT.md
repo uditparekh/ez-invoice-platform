@@ -41,6 +41,14 @@ EZ_SMTP_PORT=587
 EZ_SMTP_USERNAME=apikey-or-user
 EZ_SMTP_PASSWORD=provider-secret
 EZ_SMTP_USE_TLS=true
+SIFTENTRY_AI_PROVIDER=profile_context
+SIFTENTRY_AI_POLICY=review_only
+# Later, when a live extraction service is selected:
+# SIFTENTRY_AI_PROVIDER=webhook
+# SIFTENTRY_AI_EXTRACTOR_URL=https://extractor.example.com/siftentry/extract
+# SIFTENTRY_AI_EXTRACTOR_TOKEN=provider-or-internal-token
+# SIFTENTRY_AI_TIMEOUT_SECONDS=8
+# SIFTENTRY_AI_MAX_PAYLOAD_CHARS=120000
 ```
 
 Future strict production, after the Postgres repository migration:
@@ -95,9 +103,19 @@ curl https://api.siftentry.com/health/deployment
 ```
 
 The endpoint returns non-secret checks for JWT configuration, CORS, email,
-database mode, and domain URLs. Resolve every `problems` item before a pilot
-client logs in. In strict production mode, the API fails at startup if required
-controls are missing.
+database mode, domain URLs, and AI/OCR extraction mode. Resolve every `problems`
+item before a pilot client logs in. In strict production mode, the API fails at
+startup if required controls are missing.
+
+For authenticated product diagnostics, call:
+
+```bash
+curl -H "Authorization: Bearer $ACCESS_TOKEN" \
+  https://api.siftentry.com/api/v1/system/ai-extraction
+```
+
+This returns non-secret provider state such as `profile_context_fallback` or
+`external_webhook`, whether a token is configured, and the active review policy.
 
 ## Database Migration Path
 

@@ -345,6 +345,8 @@ class EzInvoiceApiClient:
 
 def parser_mode_for_api(value: str) -> str:
     normalized = (value or "Auto").strip().lower()
+    if "ai" in normalized or "ocr" in normalized:
+        return "ai_assisted"
     if "gst" in normalized:
         return "gst/e-invoice adapter"
     if normalized == "auto":

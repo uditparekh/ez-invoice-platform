@@ -20,6 +20,12 @@ class LocalDocumentStorage:
         destination.write_bytes(content)
         return destination
 
+    def storage_key(self, path: Path) -> str:
+        try:
+            return str(Path(path).relative_to(self.root))
+        except ValueError:
+            return Path(path).name
+
     def delete(self, path: Path) -> None:
         try:
             Path(path).unlink(missing_ok=True)

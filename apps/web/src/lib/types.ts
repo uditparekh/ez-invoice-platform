@@ -83,6 +83,18 @@ export interface AuthTokens {
   user: AuthenticatedUser;
 }
 
+export interface AiExtractionStatus {
+  provider: string;
+  configured: boolean;
+  live_provider: boolean;
+  endpoint_configured: boolean;
+  token_configured: boolean;
+  policy: string;
+  timeout_seconds: number;
+  max_payload_chars: number;
+  mode: string;
+}
+
 export interface PasswordResetResponse {
   message: string;
   reset_token?: string | null;
@@ -113,6 +125,14 @@ export interface InvoiceLine {
   confidence: number | null;
 }
 
+export interface ExtractionEvidence {
+  field: string;
+  value: string;
+  page: number | null;
+  snippet: string;
+  confidence: number | null;
+}
+
 export interface Invoice {
   id: string;
   organization_id: string;
@@ -135,6 +155,7 @@ export interface Invoice {
   direction: string;
   lines: InvoiceLine[];
   confidence: number | null;
+  evidence: ExtractionEvidence[];
   validation_issues: string[];
   created_at: string;
   updated_at: string;
@@ -168,6 +189,34 @@ export interface ClientProfileItemMapping {
   metadata: Record<string, unknown>;
 }
 
+export interface ClientTrainingSample {
+  id: string;
+  filename: string;
+  stored_path: string;
+  size_bytes: number;
+  content_type: string;
+  sample_type: string;
+  status: string;
+  notes: string;
+  uploaded_at: string;
+  fields_confirmed: boolean;
+}
+
+export interface ClientTrainingProfile {
+  onboarding_status: string;
+  business_process: string;
+  invoice_volume: string;
+  expected_fields: string[];
+  accounting_exports: string[];
+  sample_invoices: ClientTrainingSample[];
+  extraction_instructions: string;
+  validation_rules: string[];
+  posting_expectations: string;
+  exception_examples: string;
+  llm_ready: boolean;
+  llm_policy: string;
+}
+
 export interface ClientProfileSettings {
   company_name: string;
   environment: string;
@@ -192,6 +241,7 @@ export interface ClientProfileSettings {
   godown_name: string;
   item_mappings: ClientProfileItemMapping[];
   tax_settings: Record<string, unknown>;
+  training_profile: ClientTrainingProfile;
   metadata: Record<string, unknown>;
 }
 
@@ -285,6 +335,38 @@ export interface ProfileRecommendationResult {
   auto_profile_id: string | null;
 }
 
+export type InvoiceReviewSeverity = "ok" | "review" | "error";
+
+export interface InvoiceReviewField {
+  field_path: string;
+  label: string;
+  value: string;
+  confidence: number | null;
+  severity: InvoiceReviewSeverity;
+  issue: string;
+  suggestion: string;
+  evidence: ExtractionEvidence[];
+}
+
+export interface InvoiceReviewInsight {
+  title: string;
+  detail: string;
+  severity: InvoiceReviewSeverity;
+  action: string;
+}
+
+export interface InvoiceReviewResult {
+  invoice_id: string;
+  overall_score: number;
+  needs_attention: number;
+  fields: InvoiceReviewField[];
+  insights: InvoiceReviewInsight[];
+  suggested_patch: Record<string, unknown>;
+  detected: DetectedInvoiceProfile;
+  recommended_profile_id: string | null;
+  profile_reasons: string[];
+}
+
 export interface ApiErrorPayload {
-  detail?: string;
+  detail?: string | Record<string, unknown>;
 }

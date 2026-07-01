@@ -1,5 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 
+import type { ApiErrorPayload } from "@/lib/types";
+
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
@@ -31,4 +33,34 @@ export function formatDate(value?: string) {
     month: "short",
     year: "numeric",
   }).format(parsed);
+}
+
+export function apiErrorMessage(
+  payload: ApiErrorPayload | unknown,
+  fallback: string,
+) {
+  if (!payload || typeof payload !== "object" || !("detail" in payload)) {
+    return fallback;
+  }
+  const detail = (payload as ApiErrorPayload).detail;
+  if (typeof detail === "string") return detail || fallback;
+  if (!detail || typeof detail !== "object") return fallback;
+
+  const message =
+    "message" in detail && typeof detail.message === "string"
+      ? detail.message
+      : "";
+  const issues =
+    "issues" in detail && Array.isArray(detail.issues)
+      ? detail.issues
+          .map((issue) =>
+            issue && typeof issue === "object" && "message" in issue
+              ? String(issue.message || "")
+              : "",
+          )
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(" ")
+      : "";
+  return [message, issues].filter(Boolean).join(" ") || fallback;
 }

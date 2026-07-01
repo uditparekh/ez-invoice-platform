@@ -16,22 +16,22 @@ Streamlit demo into the Next.js + FastAPI SaaS foundation.
 Run the API:
 
 ```bash
-cd "/Users/uditparekh/Documents/Ez Invoice"
-PYTHONDONTWRITEBYTECODE=1 python3 -m uvicorn ez_invoice_app.backend.main:app --reload --port 8000
+cd "/path/to/siftentry-repo"
+make api
 ```
 
 Run the Next.js app:
 
 ```bash
-cd "/Users/uditparekh/Documents/Ez Invoice/apps/web"
-PATH="$HOME/.nvm/versions/node/v26.4.0/bin:$PATH" pnpm dev
+cd "/path/to/siftentry-repo"
+make web
 ```
 
 Open:
 
 - Next.js UI: `http://127.0.0.1:3000/login`
 - FastAPI docs: `http://127.0.0.1:8000/docs`
-- Streamlit demo: `python3 -m streamlit run ez_invoice_app/app.py --server.port 8506`
+- Streamlit demo: `make streamlit`, then `http://127.0.0.1:8506`
 
 ## Demo Accounts
 

@@ -7,11 +7,12 @@ import { useAuth } from "@/components/auth-provider";
 import { ContentCard } from "@/components/dashboard/content-card";
 import { Button } from "@/components/ui/button";
 import type {
+  ApiErrorPayload,
   Invitation,
   OrganizationMember,
   OrganizationRole,
 } from "@/lib/types";
-import { cn, formatDate } from "@/lib/utils";
+import { apiErrorMessage, cn, formatDate } from "@/lib/utils";
 
 const inviteRoles: { label: string; value: OrganizationRole }[] = [
   { label: "Accountant", value: "accountant" },
@@ -97,9 +98,9 @@ export function TeamManagementPanel() {
       );
       const payload = (await response.json().catch(() => ({}))) as
         | Invitation
-        | { detail?: string };
+        | ApiErrorPayload;
       if (!response.ok) {
-        throw new Error("detail" in payload ? payload.detail : "Invite could not be sent.");
+        throw new Error(apiErrorMessage(payload, "Invite could not be sent."));
       }
       const token = "invitation_token" in payload ? payload.invitation_token ?? "" : "";
       setMessage(

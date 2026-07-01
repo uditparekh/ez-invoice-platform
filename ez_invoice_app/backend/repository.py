@@ -18,6 +18,7 @@ from .models import (
     CorrectionLearningSignal,
     Invitation,
     Invoice,
+    InvoiceDocumentRetention,
     InvoiceCreate,
     InvoiceLine,
     InvoicePatch,
@@ -27,6 +28,7 @@ from .models import (
     OrganizationCreate,
     OrganizationMember,
     OrganizationRole,
+    PdfRetentionPolicy,
     PostingResult,
     PostingStatus,
     PostingTarget,
@@ -76,6 +78,37 @@ class PasswordResetRecord:
     expires_at: datetime
     used_at: Optional[datetime]
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class InvoiceFileRecord:
+    id: str
+    organization_id: str
+    invoice_id: str
+    original_filename: str
+    content_type: str
+    storage_backend: str
+    storage_key: str
+    local_path: str
+    sha256_hash: str
+    size_bytes: int
+    retention_policy: str
+    retention_until: Optional[datetime]
+    deleted_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    def retention_model(self) -> InvoiceDocumentRetention:
+        return InvoiceDocumentRetention(
+            file_id=self.id,
+            retained=self.deleted_at is None,
+            retention_policy=self.retention_policy,
+            retention_until=self.retention_until,
+            deleted_at=self.deleted_at,
+            sha256_hash=self.sha256_hash,
+            size_bytes=self.size_bytes,
+            storage_backend=self.storage_backend,
+        )
 
 
 class InvoiceRepository:
@@ -205,6 +238,32 @@ class InvoiceRepository:
 
                 CREATE INDEX IF NOT EXISTS idx_invoice_org_status
                 ON invoices(organization_id, status, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS invoice_files (
+                    id TEXT PRIMARY KEY,
+                    organization_id TEXT NOT NULL,
+                    invoice_id TEXT NOT NULL,
+                    original_filename TEXT NOT NULL,
+                    content_type TEXT NOT NULL,
+                    storage_backend TEXT NOT NULL,
+                    storage_key TEXT NOT NULL,
+                    local_path TEXT NOT NULL,
+                    sha256_hash TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    retention_policy TEXT NOT NULL,
+                    retention_until TEXT,
+                    deleted_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                    FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_invoice_files_invoice_active
+                ON invoice_files(invoice_id, deleted_at, created_at DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_invoice_files_org_retention
+                ON invoice_files(organization_id, retention_until, deleted_at);
 
                 CREATE TABLE IF NOT EXISTS invoice_lines (
                     id TEXT PRIMARY KEY,
@@ -1284,6 +1343,203 @@ class InvoiceRepository:
             )
         return deleted
 
+    def create_invoice_file(
+        self,
+        *,
+        organization_id: str,
+        invoice_id: str,
+        original_filename: str,
+        content_type: str,
+        storage_backend: str,
+        storage_key: str,
+        local_path: str,
+        sha256_hash: str,
+        size_bytes: int,
+        retention_policy: str,
+        retention_until: Optional[datetime],
+    ) -> InvoiceFileRecord:
+        now = utc_now()
+        file_id = str(uuid.uuid4())
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO invoice_files (
+                    id, organization_id, invoice_id, original_filename,
+                    content_type, storage_backend, storage_key, local_path,
+                    sha256_hash, size_bytes, retention_policy, retention_until,
+                    deleted_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+                """,
+                (
+                    file_id,
+                    organization_id,
+                    invoice_id,
+                    original_filename,
+                    content_type,
+                    storage_backend,
+                    storage_key,
+                    local_path,
+                    sha256_hash,
+                    size_bytes,
+                    retention_policy,
+                    retention_until.isoformat() if retention_until else None,
+                    now.isoformat(),
+                    now.isoformat(),
+                ),
+            )
+            self._insert_audit(
+                connection,
+                organization_id,
+                invoice_id,
+                "invoice.file_retained",
+                {
+                    "file_id": file_id,
+                    "sha256_hash": sha256_hash,
+                    "size_bytes": size_bytes,
+                    "retention_policy": retention_policy,
+                    "retention_until": (
+                        retention_until.isoformat() if retention_until else None
+                    ),
+                },
+            )
+            row = connection.execute(
+                "SELECT * FROM invoice_files WHERE id = ?",
+                (file_id,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Invoice file metadata creation failed.")
+        return self._invoice_file_from_row(row)
+
+    def get_active_invoice_file(self, invoice_id: str) -> Optional[InvoiceFileRecord]:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM invoice_files
+                WHERE invoice_id = ?
+                  AND deleted_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (invoice_id,),
+            ).fetchone()
+        return self._invoice_file_from_row(row) if row else None
+
+    def get_latest_invoice_file(self, invoice_id: str) -> Optional[InvoiceFileRecord]:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM invoice_files
+                WHERE invoice_id = ?
+                ORDER BY deleted_at IS NULL DESC, created_at DESC
+                LIMIT 1
+                """,
+                (invoice_id,),
+            ).fetchone()
+        return self._invoice_file_from_row(row) if row else None
+
+    def list_organization_invoice_files(
+        self,
+        organization_id: str,
+        include_deleted: bool = False,
+    ) -> List[InvoiceFileRecord]:
+        where_deleted = "" if include_deleted else " AND deleted_at IS NULL"
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM invoice_files
+                WHERE organization_id = ?
+                {where_deleted}
+                ORDER BY created_at DESC
+                """,
+                (organization_id,),
+            ).fetchall()
+        return [self._invoice_file_from_row(row) for row in rows]
+
+    def list_expired_invoice_files(
+        self,
+        *,
+        now: datetime,
+        organization_id: Optional[str] = None,
+        limit: int = 500,
+    ) -> List[InvoiceFileRecord]:
+        clauses = [
+            "deleted_at IS NULL",
+            "retention_until IS NOT NULL",
+            "retention_until <= ?",
+        ]
+        values: List[Any] = [now.isoformat()]
+        if organization_id:
+            clauses.append("organization_id = ?")
+            values.append(organization_id)
+        values.append(limit)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM invoice_files
+                WHERE {" AND ".join(clauses)}
+                ORDER BY retention_until ASC
+                LIMIT ?
+                """,
+                values,
+            ).fetchall()
+        return [self._invoice_file_from_row(row) for row in rows]
+
+    def mark_invoice_file_deleted(
+        self,
+        file_id: str,
+        deleted_at: Optional[datetime] = None,
+    ) -> Optional[InvoiceFileRecord]:
+        now = deleted_at or utc_now()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM invoice_files WHERE id = ?",
+                (file_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            record = self._invoice_file_from_row(row)
+            connection.execute(
+                """
+                UPDATE invoice_files
+                SET deleted_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (now.isoformat(), now.isoformat(), file_id),
+            )
+            connection.execute(
+                """
+                UPDATE invoices
+                SET source_path = '', updated_at = ?
+                WHERE id = ?
+                  AND source_path = ?
+                """,
+                (now.isoformat(), record.invoice_id, record.local_path),
+            )
+            self._insert_audit(
+                connection,
+                record.organization_id,
+                record.invoice_id,
+                "invoice.file_deleted",
+                {
+                    "file_id": file_id,
+                    "retention_policy": record.retention_policy,
+                    "retention_until": (
+                        record.retention_until.isoformat()
+                        if record.retention_until
+                        else None
+                    ),
+                },
+            )
+            updated = connection.execute(
+                "SELECT * FROM invoice_files WHERE id = ?",
+                (file_id,),
+            ).fetchone()
+        return self._invoice_file_from_row(updated) if updated else None
+
     def patch_invoice(
         self,
         invoice_id: str,
@@ -1723,6 +1979,21 @@ class InvoiceRepository:
             "SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY line_number",
             (row["id"],),
         ).fetchall()
+        file_row = connection.execute(
+            """
+            SELECT *
+            FROM invoice_files
+            WHERE invoice_id = ?
+            ORDER BY deleted_at IS NULL DESC, created_at DESC
+            LIMIT 1
+            """,
+            (row["id"],),
+        ).fetchone()
+        document_retention = (
+            self._invoice_file_from_row(file_row).retention_model()
+            if file_row
+            else None
+        )
         lines = [
             InvoiceLine(
                 id=line["id"],
@@ -1766,6 +2037,34 @@ class InvoiceRepository:
             evidence=_loads(row["evidence_json"], []),
             validation_issues=_loads(row["validation_issues_json"], []),
             raw_payload=_loads(row["raw_payload_json"], {}),
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+            document_retention=document_retention,
+        )
+
+    def _invoice_file_from_row(self, row: sqlite3.Row) -> InvoiceFileRecord:
+        return InvoiceFileRecord(
+            id=row["id"],
+            organization_id=row["organization_id"],
+            invoice_id=row["invoice_id"],
+            original_filename=row["original_filename"],
+            content_type=row["content_type"],
+            storage_backend=row["storage_backend"],
+            storage_key=row["storage_key"],
+            local_path=row["local_path"],
+            sha256_hash=row["sha256_hash"],
+            size_bytes=int(row["size_bytes"]),
+            retention_policy=row["retention_policy"],
+            retention_until=(
+                datetime.fromisoformat(row["retention_until"])
+                if row["retention_until"]
+                else None
+            ),
+            deleted_at=(
+                datetime.fromisoformat(row["deleted_at"])
+                if row["deleted_at"]
+                else None
+            ),
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )

@@ -32,7 +32,7 @@ import type {
   PostingTarget,
   ProfileRecommendationResult,
 } from "@/lib/types";
-import { cn, formatCurrency } from "@/lib/utils";
+import { apiErrorMessage, cn, formatCurrency } from "@/lib/utils";
 
 const statusOptions: { label: string; status?: InvoiceStatus }[] = [
   { label: "All invoices" },
@@ -45,6 +45,7 @@ const statusOptions: { label: string; status?: InvoiceStatus }[] = [
 
 const parserOptions = [
   { label: "Auto", value: "auto" },
+  { label: "AI/OCR assisted", value: "ai_assisted" },
   { label: "GST/e-Invoice adapter", value: "gst_einvoice" },
   { label: "Structured adapter", value: "structured" },
   { label: "Universal extraction", value: "universal" },
@@ -165,6 +166,7 @@ export function InvoiceWorkspace() {
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailMode, setDetailMode] = useState<"detail" | "review">("detail");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InvoiceStatus | undefined>();
@@ -391,19 +393,21 @@ export function InvoiceWorkspace() {
           parser_mode: parserMode,
           persist: previewOnlyUploads ? "false" : "true",
         });
+        if (selectedProfileId) query.set("client_profile_id", selectedProfileId);
         const response = await fetch(`/api/invoices/upload?${query}`, {
           method: "POST",
           body: formData,
         });
         if (!response.ok) {
           const payload = (await response.json()) as ApiErrorPayload;
-          throw new Error(payload.detail ?? `Could not process ${file.name}.`);
+          throw new Error(apiErrorMessage(payload, `Could not process ${file.name}.`));
         }
         uploadedInvoices.push((await response.json()) as Invoice);
       }
 
       setInvoices((current) => [...uploadedInvoices.reverse(), ...current]);
       setSelectedId(uploadedInvoices.at(-1)?.id ?? null);
+      setDetailMode("detail");
       setManualProfileOverride(false);
       setSelectedFiles([]);
       setUploadOpen(false);
@@ -425,10 +429,11 @@ export function InvoiceWorkspace() {
       });
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
-        throw new Error(payload.detail ?? "Could not clear the invoice queue.");
+        throw new Error(apiErrorMessage(payload, "Could not clear the invoice queue."));
       }
       setInvoices([]);
       setSelectedId(null);
+      setDetailMode("detail");
       setManualProfileOverride(false);
       setProfileRecommendation(null);
       setSelectedFiles([]);
@@ -725,25 +730,29 @@ export function InvoiceWorkspace() {
         </div>
       </section>
 
-      <QueueMetrics counts={counts} />
+      {detailMode !== "review" && (
+        <>
+          <QueueMetrics counts={counts} />
 
-      <ExportPackagePanel
-        invoices={readyInvoices}
-        targetSystem={targetSystem}
-        profileLabel={selectedProfileLabel}
-        detectedProfile={activeProfileRecommendation?.detected ?? null}
-        tallyProfile={selectedTallyProfile}
-        clientProfileId={selectedClientProfile?.id ?? null}
-        open={exportOpen}
-        menuRef={exportMenuRef}
-        onPostingComplete={handlePostingComplete}
-        onClose={() => setExportOpen(false)}
-        onToggle={() => {
-          setExportOpen((current) => !current);
-          setFilterOpen(false);
-          setUploadOpen(false);
-        }}
-      />
+          <ExportPackagePanel
+            invoices={readyInvoices}
+            targetSystem={targetSystem}
+            profileLabel={selectedProfileLabel}
+            detectedProfile={activeProfileRecommendation?.detected ?? null}
+            tallyProfile={selectedTallyProfile}
+            clientProfileId={selectedClientProfile?.id ?? null}
+            open={exportOpen}
+            menuRef={exportMenuRef}
+            onPostingComplete={handlePostingComplete}
+            onClose={() => setExportOpen(false)}
+            onToggle={() => {
+              setExportOpen((current) => !current);
+              setFilterOpen(false);
+              setUploadOpen(false);
+            }}
+          />
+        </>
+      )}
 
       {error && (
         <div className="border-b border-danger/25 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger sm:px-6 lg:px-8">
@@ -751,20 +760,33 @@ export function InvoiceWorkspace() {
         </div>
       )}
 
-      <section className="mx-auto grid min-h-[640px] max-w-[1440px] lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
-        <InvoiceList
-          invoices={visibleInvoices}
-          selectedId={selected?.id ?? null}
-          loading={loading}
-          onSelect={(invoiceId) => {
-            setSelectedId(invoiceId);
-            setManualProfileOverride(false);
-          }}
-        />
+      <section
+        className={cn(
+          "mx-auto grid min-h-[640px] max-w-[1440px]",
+          detailMode === "review"
+            ? "lg:grid-cols-1"
+            : "lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]",
+        )}
+      >
+        {detailMode !== "review" && (
+          <InvoiceList
+            invoices={visibleInvoices}
+            selectedId={selected?.id ?? null}
+            loading={loading}
+            onSelect={(invoiceId) => {
+              setSelectedId(invoiceId);
+              setDetailMode("detail");
+              setManualProfileOverride(false);
+            }}
+          />
+        )}
         <InvoiceDetailPanel
           invoice={selected}
           targetSystem={targetSystem}
           clientProfile={selectedClientProfile}
+          mode={detailMode}
+          onOpenReview={() => setDetailMode("review")}
+          onCloseReview={() => setDetailMode("detail")}
           onPostingComplete={handlePostingComplete}
           onInvoiceUpdate={updateInvoice}
           onInvoicePatch={patchInvoice}
@@ -850,9 +872,9 @@ function ExportPackagePanel({
   }
 
   return (
-    <section className="border-b border-line bg-canvas px-4 py-3 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-3 xl:flex-row xl:items-center">
-        <div ref={menuRef} className="relative w-full sm:w-[224px]">
+    <section className="border-b border-line bg-canvas px-4 py-4 sm:px-6 lg:px-8">
+      <div className="mx-auto grid max-w-[1440px] gap-3 xl:grid-cols-[230px_minmax(0,1fr)] xl:items-stretch">
+        <div ref={menuRef} className="relative w-full">
           <ControlButton
             label="Export Package"
             open={open}
@@ -931,29 +953,60 @@ function ExportPackagePanel({
           )}
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <ExportSummaryChip
-            label="Ready"
-            value={invoiceCount ? `${invoiceCount} ${noun}` : "0 invoices"}
-            tone={invoiceCount ? "accent" : "muted"}
-          />
-          <ExportSummaryChip label="Target" value={targetSystem} />
-          <ExportSummaryChip
-            label="Mapping"
-            value={
-              profileLabel || "Generic categories"
-            }
-          />
-          {detectedProfile && (
-            <ExportSummaryChip
-              label="Detected"
-              value={`${detectedProfile.country_code} · ${humanize(detectedProfile.tax_mode)}`}
+        <div className="min-w-0 rounded-2xl border border-line bg-surface px-4 py-3 shadow-sm shadow-black/[0.03]">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_190px] lg:items-center">
+            <div className="min-w-0">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-ink-muted">
+                Export readiness
+              </p>
+              <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                <p className="text-lg font-black leading-7 text-ink">
+                  {invoiceCount
+                    ? `${invoiceCount} ${noun} ready`
+                    : "No invoices ready"}
+                </p>
+                <span className="text-sm font-bold text-ink-muted">for</span>
+                <p className="text-lg font-black leading-7 text-accent-ink dark:text-cyan">
+                  {targetSystem}
+                </p>
+              </div>
+              <p className="mt-1 truncate text-sm font-semibold text-ink-secondary">
+                {profileLabel || "Generic category mapping"}
+                {detectedProfile
+                  ? ` · Detected ${detectedProfile.country_code} ${humanize(
+                      detectedProfile.tax_mode,
+                    )}`
+                  : ""}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-line bg-canvas px-3 py-2">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                Total
+              </p>
+              <p className="mt-1 truncate text-sm font-black text-ink">
+                {invoiceCount ? formatCurrency(total, currency) : "No total"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 border-t border-line pt-3 sm:grid-cols-3">
+            <ExportReadinessMeta
+              label="Ready"
+              value={invoiceCount ? `${invoiceCount} ${noun}` : "0"}
             />
-          )}
-          <ExportSummaryChip
-            label="Total"
-            value={invoiceCount ? formatCurrency(total, currency) : "No total"}
-          />
+            <ExportReadinessMeta label="Target" value={targetSystem} />
+            <ExportReadinessMeta
+              label="Detected"
+              value={
+                detectedProfile
+                  ? `${detectedProfile.country_code} · ${humanize(
+                      detectedProfile.tax_mode,
+                    )}`
+                  : "Not detected"
+              }
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -1149,29 +1202,19 @@ function ExportFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ExportSummaryChip({
+function ExportReadinessMeta({
   label,
   value,
-  tone = "neutral",
 }: {
   label: string;
   value: string;
-  tone?: "neutral" | "accent" | "muted";
 }) {
   return (
-    <div
-      className={cn(
-        "inline-flex h-10 max-w-full items-center gap-2 rounded-full border px-3 text-sm",
-        tone === "accent"
-          ? "border-accent/30 bg-accent-soft text-accent-ink"
-          : "border-line bg-surface text-ink-secondary",
-        tone === "muted" && "bg-transparent text-ink-muted",
-      )}
-    >
-      <span className="shrink-0 text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+    <div className="min-w-0">
+      <p className="truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
         {label}
-      </span>
-      <span className="truncate font-black text-ink">{value}</span>
+      </p>
+      <p className="mt-1 truncate text-sm font-black text-ink">{value}</p>
     </div>
   );
 }

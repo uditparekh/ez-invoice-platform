@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ApiErrorPayload, PasswordResetResponse } from "@/lib/types";
+import { apiErrorMessage } from "@/lib/utils";
 
 export function PasswordResetRequestForm() {
   const [email, setEmail] = useState("");
@@ -31,7 +32,7 @@ export function PasswordResetRequestForm() {
       if (!request.ok) {
         setError(
           "detail" in payload
-            ? payload.detail ?? "Reset could not be prepared."
+            ? apiErrorMessage(payload, "Reset could not be prepared.")
             : "Reset could not be prepared.",
         );
         return;

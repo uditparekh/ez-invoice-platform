@@ -29,8 +29,7 @@ def looks_like_gst_invoice(text: str) -> bool:
     has_gst = any(marker in upper for marker in ("GSTIN", "GST NO", "GSTIN/UIN", "GSTIN REGN"))
     has_hsn = any(marker in upper for marker in ("HSN/SAC", "HSN CODE", "HSN"))
     has_invoice = "TAXINVOICE" in compact or "EINVOICE" in compact or "INVOICE NO" in upper
-    has_tax = any(marker in upper for marker in ("CGST", "SGST", "IGST", "GST "))
-    return has_gst and has_hsn and has_invoice and has_tax
+    return has_gst and has_hsn and has_invoice
 
 
 def _compact(value: Any) -> str:
@@ -145,7 +144,12 @@ def _seller_name(text: str, lines: List[str]) -> str:
         clean = _compact(line)
         if clean.startswith(":") or re.fullmatch(r"[:\s-]*[a-f0-9-]{12,}", clean, re.IGNORECASE):
             continue
-        if not clean or skip.search(clean) or re.search(r"AUTHORISED|TEL:|EMAIL:|PH\s*:", clean, re.IGNORECASE):
+        if (
+            not clean
+            or skip.search(clean)
+            or _first_date(clean)
+            or re.search(r"AUTHORISED|TEL:|EMAIL:|PH\s*:", clean, re.IGNORECASE)
+        ):
             continue
         if len(clean) > 2:
             return clean[:120]

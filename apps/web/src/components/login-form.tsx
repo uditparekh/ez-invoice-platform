@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ApiErrorPayload } from "@/lib/types";
+import { apiErrorMessage } from "@/lib/utils";
 
 export function LoginForm() {
   const router = useRouter();
@@ -27,7 +28,7 @@ export function LoginForm() {
       });
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
-        setError(payload.detail ?? "Unable to sign in.");
+        setError(apiErrorMessage(payload, "Unable to sign in."));
         return;
       }
       router.replace("/app/invoices");

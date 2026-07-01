@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 
 import { ContentCard } from "@/components/dashboard/content-card";
 import { Button } from "@/components/ui/button";
+import type { ApiErrorPayload } from "@/lib/types";
+import { apiErrorMessage } from "@/lib/utils";
 
 export function PasswordChangeCard() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -38,10 +40,8 @@ export function PasswordChangeCard() {
         }),
       });
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as {
-          detail?: string;
-        };
-        throw new Error(payload.detail ?? "Password could not be updated.");
+        const payload = (await response.json().catch(() => ({}))) as ApiErrorPayload;
+        throw new Error(apiErrorMessage(payload, "Password could not be updated."));
       }
       setCurrentPassword("");
       setNewPassword("");

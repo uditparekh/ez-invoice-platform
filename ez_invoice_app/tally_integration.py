@@ -207,7 +207,13 @@ def _posting_mode(settings: Dict[str, Any]) -> str:
 
 
 def _line_stock_item(row: Dict[str, Any], settings: Dict[str, Any]) -> str:
-    explicit = str(row.get("TALLY_STOCK_ITEM") or row.get("STOCK ITEM") or "").strip()
+    explicit = str(
+        row.get("TALLY_STOCK_ITEM")
+        or row.get("TARGET_ITEM_NAME")
+        or row.get("TARGET ITEM")
+        or row.get("STOCK ITEM")
+        or ""
+    ).strip()
     if explicit:
         return explicit
 
@@ -224,7 +230,7 @@ def _line_stock_item(row: Dict[str, Any], settings: Dict[str, Any]) -> str:
 
 
 def _line_tally_uom(row: Dict[str, Any], settings: Dict[str, Any]) -> str:
-    uom = str(row.get("UOM") or row.get("UNIT") or "EA").strip().upper() or "EA"
+    uom = str(row.get("TARGET_UOM") or row.get("TALLY_UOM") or row.get("UOM") or row.get("UNIT") or "EA").strip().upper() or "EA"
     tally_uom = str(settings.get("stock_item_uom") or "").strip().upper()
     if tally_uom and uom in {"KG", "KGS"}:
         return tally_uom
@@ -249,6 +255,37 @@ def _tax_total(parts: Dict[str, Any], rows: List[Dict[str, Any]]) -> float:
     return round(sum(_amount(row.get("TAX AMOUNT")) for row in rows), 2)
 
 
+def _settings_tax_ledger(settings: Dict[str, Any], *keys: str) -> str:
+    tax_settings = settings.get("tax_settings") or {}
+    if not isinstance(tax_settings, dict):
+        tax_settings = {}
+    for key in keys:
+        for candidate in (
+            key,
+            key.lower(),
+            key.upper(),
+            key.replace(" ", "_").lower(),
+            key.replace("_", " ").upper(),
+        ):
+            value = str(tax_settings.get(candidate) or "").strip()
+            if value:
+                return value
+    return ""
+
+
+def _row_summary_amount(rows: List[Dict[str, Any]], labels: List[str]) -> float:
+    wanted = {label.upper() for label in labels}
+    total = 0.0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for key, value in row.items():
+            key_norm = str(key or "").upper().replace("_", " ")
+            if key_norm in wanted or any(label in key_norm for label in wanted):
+                total += _amount(value)
+    return round(total, 2)
+
+
 def _summary_amount(parts: Dict[str, Any], labels: List[str]) -> float:
     invoice = parts["invoice"]
     candidates = [
@@ -266,6 +303,82 @@ def _summary_amount(parts: Dict[str, Any], labels: List[str]) -> float:
                 if amount:
                     return amount
     return 0.0
+
+
+def _tax_ledger_components(
+    parts: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+    settings: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    tax_total = _tax_total(parts, rows)
+    if not tax_total:
+        return []
+
+    tax_mode = str(settings.get("tax_mode") or "").strip().lower()
+    invoice_text = json.dumps(parts.get("invoice") or {}, default=str).upper()
+    igst_total = _summary_amount(parts, ["IGST", "INPUT IGST", "IGST AMOUNT"])
+    cgst_total = _summary_amount(parts, ["CGST", "INPUT CGST", "CGST AMOUNT"])
+    sgst_total = _summary_amount(parts, ["SGST", "INPUT SGST", "SGST AMOUNT"])
+
+    igst_total = igst_total or _row_summary_amount(rows, ["IGST", "IGST AMOUNT"])
+    cgst_total = cgst_total or _row_summary_amount(rows, ["CGST", "CGST AMOUNT"])
+    sgst_total = sgst_total or _row_summary_amount(rows, ["SGST", "SGST AMOUNT"])
+
+    igst_ledger = (
+        _settings_tax_ledger(settings, "igst_ledger", "input_igst_ledger", "input igst")
+        or str(settings.get("tax_ledger") or "").strip()
+    )
+    cgst_ledger = _settings_tax_ledger(
+        settings,
+        "cgst_ledger",
+        "input_cgst_ledger",
+        "input cgst",
+    )
+    sgst_ledger = _settings_tax_ledger(
+        settings,
+        "sgst_ledger",
+        "input_sgst_ledger",
+        "input sgst",
+    )
+    generic_tax_ledger = str(settings.get("tax_ledger") or "").strip()
+
+    if igst_total or tax_mode == "gst_igst" or ("IGST" in invoice_text and "CGST" not in invoice_text):
+        return [
+            {
+                "kind": "igst",
+                "ledger": igst_ledger,
+                "amount": round(igst_total or tax_total, 2),
+                "field": "tax_ledger",
+            }
+        ]
+
+    if cgst_total or sgst_total or tax_mode == "gst_cgst_sgst":
+        if not cgst_total and not sgst_total:
+            cgst_total = round(tax_total / 2, 2)
+            sgst_total = round(tax_total - cgst_total, 2)
+        return [
+            {
+                "kind": "cgst",
+                "ledger": cgst_ledger if tax_mode == "gst_cgst_sgst" else cgst_ledger or generic_tax_ledger,
+                "amount": round(cgst_total, 2),
+                "field": "tax_settings.cgst_ledger",
+            },
+            {
+                "kind": "sgst",
+                "ledger": sgst_ledger if tax_mode == "gst_cgst_sgst" else sgst_ledger or generic_tax_ledger,
+                "amount": round(sgst_total, 2),
+                "field": "tax_settings.sgst_ledger",
+            },
+        ]
+
+    return [
+        {
+            "kind": "tax",
+            "ledger": generic_tax_ledger,
+            "amount": tax_total,
+            "field": "tax_ledger",
+        }
+    ]
 
 
 def _ledger_entry(
@@ -356,9 +469,9 @@ def _build_item_invoice_adjustment_entries(
 ) -> str:
     entries: List[str] = []
     tax_total = _tax_total(parts, rows)
-    if tax_total:
-        tax_ledger = settings.get("tax_ledger") or settings.get("purchase_ledger") or "Purchase Accounts"
-        entries.append(_ledger_entry(tax_ledger, -tax_total, "Yes"))
+    for component in _tax_ledger_components(parts, rows, settings):
+        ledger = component.get("ledger") or settings.get("purchase_ledger") or "Purchase Accounts"
+        entries.append(_ledger_entry(ledger, -component.get("amount", 0), "Yes"))
 
     tcs_total = _summary_amount(parts, ["TCS", "TCS AMOUNT", "TOTAL TCS"])
     if tcs_total:
@@ -386,7 +499,6 @@ def _build_ledger_entries(
     parts = _invoice_parts(payload)
     rows = parts["rows"]
     default_ledger = settings.get("purchase_ledger") or "Purchase Accounts"
-    tax_ledger = settings.get("tax_ledger") or ""
     if classifier:
         try:
             rows = classifier.classify_invoice_rows(rows)
@@ -394,19 +506,17 @@ def _build_ledger_entries(
             pass
 
     ledger_totals: Dict[str, float] = {}
-    tax_total = 0.0
     for row in rows:
         amount = _amount(row.get("EXTENDED AMOUNT") or row.get("AMOUNT"))
-        tax_total += _amount(row.get("TAX AMOUNT"))
         ledger = _line_ledger(row, default_ledger)
         ledger_totals[ledger] = ledger_totals.get(ledger, 0.0) + amount
 
     if not ledger_totals and parts["total"]:
         ledger_totals[default_ledger] = parts["total"]
 
-    if tax_total:
-        tax_target = tax_ledger or default_ledger
-        ledger_totals[tax_target] = ledger_totals.get(tax_target, 0.0) + tax_total
+    for component in _tax_ledger_components(parts, rows, settings):
+        tax_target = component.get("ledger") or default_ledger
+        ledger_totals[tax_target] = ledger_totals.get(tax_target, 0.0) + component.get("amount", 0)
 
     entries = []
     vendor_amount = parts["total"] or sum(ledger_totals.values())
@@ -609,8 +719,10 @@ def _friendly_tally_message(message: str) -> str:
         ledger = ledger_match.group(1).strip()
         return (
             f"Tally rejected the voucher because ledger '{ledger}' does not exist. "
-            "Open the selected client profile and use the exact Tally ledger names "
-            "for purchase, GST, TCS, and round-off, or create the missing ledger in Tally."
+            "Open the selected client profile and use the exact ledger name from "
+            "Tally. For India GST profiles, check Purchase ledger, IGST/CGST/SGST "
+            "ledgers, TCS ledger, and Round-off ledger. If the name is correct, "
+            "create that ledger in Tally before retrying."
         )
     stock_match = re.search(r"Stock Item ['\"]?([^'\"!]+)['\"]? does not exist", text, re.I)
     if stock_match:
@@ -632,6 +744,16 @@ def _friendly_tally_message(message: str) -> str:
         return (
             "Tally rejected the voucher type. Confirm the client profile voucher type "
             "matches the exact Tally name, usually 'Purchase' for inbound bills."
+        )
+    if "unit" in text.lower() and "does not exist" in text.lower():
+        return (
+            "Tally rejected the item unit. Confirm the client profile UOM matches the "
+            "exact Tally unit symbol for this stock item, for example KGS instead of KG."
+        )
+    if "company" in text.lower() and ("does not exist" in text.lower() or "not found" in text.lower()):
+        return (
+            "Tally could not post into the selected company. Keep the correct company "
+            "open in TallyPrime and make sure the client profile company name matches it exactly."
         )
     return text or "Tally rejected this voucher."
 
@@ -703,7 +825,8 @@ def _tally_preflight_issues(
             )
         )
 
-    tax_total = _tax_total(parts, rows)
+    tax_components = _tax_ledger_components(parts, rows, settings)
+    tax_total = round(sum(_amount(component.get("amount")) for component in tax_components), 2)
     tcs_total = _summary_amount(parts, ["TCS", "TCS AMOUNT", "TOTAL TCS"])
     net_total = round(sum(_line_net_amount(row) for row in rows), 2)
     current_total = round(net_total + tax_total + tcs_total, 2)
@@ -735,11 +858,12 @@ def _tally_preflight_issues(
             )
         for index, row in enumerate(rows, start=1):
             stock_item = str(
-                row.get("TALLY ITEM")
+                row.get("TALLY_STOCK_ITEM")
+                or row.get("TALLY ITEM")
+                or row.get("TARGET_ITEM_NAME")
                 or row.get("TARGET ITEM")
                 or row.get("STOCK ITEM")
                 or row.get("ITEM")
-                or row.get("DESCRIPTION")
                 or settings.get("stock_item_name")
                 or ""
             ).strip()
@@ -763,14 +887,19 @@ def _tally_preflight_issues(
                     )
                 )
 
-    if tax_total and not str(settings.get("tax_ledger") or "").strip():
-        issues.append(
-            _tally_issue(
-                "tally_tax_ledger_missing",
-                "This invoice has tax, so the exact Tally GST/tax ledger must be set in the selected client profile.",
-                "tax_ledger",
+    for component in tax_components:
+        ledger = str(component.get("ledger") or "").strip()
+        amount = _amount(component.get("amount"))
+        kind = str(component.get("kind") or "tax").upper()
+        field = str(component.get("field") or "tax_ledger")
+        if amount and not ledger:
+            issues.append(
+                _tally_issue(
+                    f"tally_{kind.lower()}_ledger_missing",
+                    f"This invoice has {kind}, so the exact Tally {kind} ledger must be set in the selected client profile.",
+                    field,
+                )
             )
-        )
     if tcs_total and not str(settings.get("tcs_ledger") or "").strip():
         issues.append(
             _tally_issue(

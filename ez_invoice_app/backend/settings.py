@@ -65,6 +65,14 @@ class ApiSettings:
     smtp_password: str = ""
     smtp_use_tls: bool = True
     smtp_timeout_seconds: float = 10.0
+    ai_provider: str = "profile_context"
+    ai_extractor_url: str = ""
+    ai_extractor_token: str = ""
+    ai_timeout_seconds: float = 8.0
+    ai_max_payload_chars: int = 120_000
+    ai_policy: str = "review_only"
+    default_pdf_retention_policy: str = "review_window"
+    default_pdf_retention_days: int = 3
 
     @classmethod
     def from_environment(cls) -> "ApiSettings":
@@ -131,6 +139,30 @@ class ApiSettings:
             smtp_password=os.environ.get("EZ_SMTP_PASSWORD", ""),
             smtp_use_tls=_truthy(os.environ.get("EZ_SMTP_USE_TLS", "true")),
             smtp_timeout_seconds=float(os.environ.get("EZ_SMTP_TIMEOUT_SECONDS", "10")),
+            ai_provider=os.environ.get(
+                "SIFTENTRY_AI_PROVIDER",
+                "profile_context",
+            )
+            .strip()
+            .lower(),
+            ai_extractor_url=os.environ.get("SIFTENTRY_AI_EXTRACTOR_URL", "").strip(),
+            ai_extractor_token=os.environ.get("SIFTENTRY_AI_EXTRACTOR_TOKEN", "").strip(),
+            ai_timeout_seconds=float(os.environ.get("SIFTENTRY_AI_TIMEOUT_SECONDS", "8")),
+            ai_max_payload_chars=int(
+                os.environ.get("SIFTENTRY_AI_MAX_PAYLOAD_CHARS", "120000")
+            ),
+            ai_policy=os.environ.get("SIFTENTRY_AI_POLICY", "review_only").strip()
+            or "review_only",
+            default_pdf_retention_policy=os.environ.get(
+                "SIFTENTRY_PDF_RETENTION_POLICY",
+                "review_window",
+            )
+            .strip()
+            .lower()
+            or "review_window",
+            default_pdf_retention_days=int(
+                os.environ.get("SIFTENTRY_PDF_RETENTION_DAYS", "3")
+            ),
         )
         settings.validate_startup()
         return settings
@@ -184,4 +216,6 @@ class ApiSettings:
                 problems.append("set EZ_SMTP_USERNAME")
             if not self.smtp_password:
                 problems.append("set EZ_SMTP_PASSWORD")
+        if self.ai_provider == "webhook" and not self.ai_extractor_url:
+            problems.append("set SIFTENTRY_AI_EXTRACTOR_URL or use SIFTENTRY_AI_PROVIDER=profile_context")
         return problems

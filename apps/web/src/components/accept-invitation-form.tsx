@@ -13,6 +13,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ApiErrorPayload } from "@/lib/types";
+import { apiErrorMessage } from "@/lib/utils";
 
 export function AcceptInvitationForm() {
   const router = useRouter();
@@ -44,7 +45,7 @@ export function AcceptInvitationForm() {
       });
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
-        setError(payload.detail ?? "Invitation could not be accepted.");
+        setError(apiErrorMessage(payload, "Invitation could not be accepted."));
         return;
       }
       router.replace("/app/invoices");

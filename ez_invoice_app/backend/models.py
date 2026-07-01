@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -49,6 +50,13 @@ class ProfilePostingMode(str, Enum):
     SUPPLIER_BILL = "supplier_bill"
     EXPORT_PACKAGE = "export_package"
     CUSTOM = "custom"
+
+
+class PdfRetentionPolicy(str, Enum):
+    REVIEW_WINDOW = "review_window"
+    EXTENDED_90_DAYS = "extended_90_days"
+    RETAIN_UNTIL_DELETED = "retain_until_deleted"
+    DO_NOT_STORE = "do_not_store"
 
 
 class OrganizationRole(str, Enum):
@@ -108,6 +116,76 @@ class ClientProfileItemMapping(BaseModel):
         return value.strip()
 
 
+class ClientTrainingSample(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    filename: str = ""
+    stored_path: str = ""
+    size_bytes: int = 0
+    content_type: str = "application/pdf"
+    sample_type: str = "invoice"
+    status: str = "uploaded"
+    notes: str = ""
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    fields_confirmed: bool = False
+
+    @field_validator(
+        "filename",
+        "stored_path",
+        "content_type",
+        "sample_type",
+        "status",
+        "notes",
+    )
+    @classmethod
+    def clean_sample_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class ClientTrainingProfile(BaseModel):
+    onboarding_status: str = "draft"
+    business_process: str = "inbound_ap"
+    invoice_volume: str = ""
+    expected_fields: List[str] = Field(
+        default_factory=lambda: [
+            "invoice_number",
+            "supplier",
+            "invoice_date",
+            "due_date",
+            "currency",
+            "subtotal",
+            "tax_total",
+            "total",
+            "line_items",
+        ]
+    )
+    accounting_exports: List[str] = Field(default_factory=list)
+    sample_invoices: List[ClientTrainingSample] = Field(default_factory=list)
+    extraction_instructions: str = ""
+    validation_rules: List[str] = Field(default_factory=list)
+    posting_expectations: str = ""
+    exception_examples: str = ""
+    llm_ready: bool = False
+    llm_policy: str = "review_only"
+
+    @field_validator(
+        "onboarding_status",
+        "business_process",
+        "invoice_volume",
+        "extraction_instructions",
+        "posting_expectations",
+        "exception_examples",
+        "llm_policy",
+    )
+    @classmethod
+    def clean_training_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("expected_fields", "accounting_exports", "validation_rules")
+    @classmethod
+    def clean_training_list(cls, values: List[str]) -> List[str]:
+        return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+
+
 class ClientProfileSettings(BaseModel):
     company_name: str = ""
     environment: str = "production"
@@ -130,8 +208,12 @@ class ClientProfileSettings(BaseModel):
     stock_item_hsn: str = ""
     stock_item_uom: str = ""
     godown_name: str = ""
+    pdf_retention_policy: PdfRetentionPolicy = PdfRetentionPolicy.REVIEW_WINDOW
+    pdf_retention_days: int = Field(default=3, ge=0, le=3650)
+    paid_pdf_storage: bool = False
     item_mappings: List[ClientProfileItemMapping] = Field(default_factory=list)
     tax_settings: Dict[str, Any] = Field(default_factory=dict)
+    training_profile: ClientTrainingProfile = Field(default_factory=ClientTrainingProfile)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(use_enum_values=True, extra="allow")
@@ -414,6 +496,20 @@ class Invoice(InvoiceCreate):
     id: str
     created_at: datetime
     updated_at: datetime
+    document_retention: Optional["InvoiceDocumentRetention"] = None
+
+    model_config = ConfigDict(use_enum_values=True)
+
+
+class InvoiceDocumentRetention(BaseModel):
+    file_id: str
+    retained: bool
+    retention_policy: PdfRetentionPolicy
+    retention_until: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+    sha256_hash: str = ""
+    size_bytes: int = 0
+    storage_backend: str = "local"
 
     model_config = ConfigDict(use_enum_values=True)
 
@@ -577,12 +673,69 @@ class ProfileRecommendationResult(BaseModel):
     auto_profile_id: Optional[str] = None
 
 
+class InvoiceReviewSeverity(str, Enum):
+    OK = "ok"
+    REVIEW = "review"
+    ERROR = "error"
+
+
+class InvoiceReviewField(BaseModel):
+    field_path: str
+    label: str
+    value: str = ""
+    confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    severity: InvoiceReviewSeverity = InvoiceReviewSeverity.OK
+    issue: str = ""
+    suggestion: str = ""
+    evidence: List[ExtractionEvidence] = Field(default_factory=list)
+
+
+class InvoiceReviewInsight(BaseModel):
+    title: str
+    detail: str
+    severity: InvoiceReviewSeverity = InvoiceReviewSeverity.OK
+    action: str = ""
+
+
+class InvoiceReviewResult(BaseModel):
+    invoice_id: str
+    overall_score: float = Field(default=0, ge=0, le=1)
+    needs_attention: int = 0
+    fields: List[InvoiceReviewField] = Field(default_factory=list)
+    insights: List[InvoiceReviewInsight] = Field(default_factory=list)
+    suggested_patch: Dict[str, Any] = Field(default_factory=dict)
+    detected: DetectedInvoiceProfile
+    recommended_profile_id: Optional[str] = None
+    profile_reasons: List[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(use_enum_values=True)
+
+
 class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
 
 
+class AiExtractionStatus(BaseModel):
+    provider: str
+    configured: bool
+    live_provider: bool
+    endpoint_configured: bool
+    token_configured: bool
+    policy: str
+    timeout_seconds: float
+    max_payload_chars: int
+    mode: str
+
+
 class DeleteInvoicesResult(BaseModel):
     organization_id: str
     deleted: int
+
+
+class StorageCleanupResult(BaseModel):
+    organization_id: str
+    expired_files: int = 0
+    deleted_files: int = 0
+    errors: List[str] = Field(default_factory=list)

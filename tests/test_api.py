@@ -1,4 +1,7 @@
 from pathlib import Path
+import hashlib
+import sqlite3
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
@@ -82,6 +85,17 @@ def import_sample_invoice(
     return response.json()
 
 
+def make_text_pdf(text: str) -> bytes:
+    import fitz
+
+    document = fitz.open()
+    page = document.new_page()
+    page.insert_text((72, 72), text, fontsize=10)
+    pdf_bytes = document.tobytes()
+    document.close()
+    return pdf_bytes
+
+
 def test_authentication_and_invoice_workflow(tmp_path: Path):
     with make_client(tmp_path) as client:
         health = client.get("/health")
@@ -97,6 +111,12 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
         assert me.status_code == 200
         assert me.json()["email"] == "owner@example.com"
         assert me.json()["memberships"][0]["role"] == "owner"
+
+        ai_status = client.get("/api/v1/system/ai-extraction", headers=headers)
+        assert ai_status.status_code == 200
+        assert ai_status.json()["provider"] == "profile_context"
+        assert ai_status.json()["configured"] is True
+        assert ai_status.json()["live_provider"] is False
 
         members = client.get(
             f"/api/v1/organizations/{org_id}/members",
@@ -143,6 +163,22 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
 
         invoice = import_sample_invoice(client, tokens, org_id)
         invoice_id = invoice["id"]
+
+        review = client.get(
+            f"/api/v1/invoices/{invoice_id}/review",
+            headers=headers,
+        )
+        assert review.status_code == 200
+        review_body = review.json()
+        assert review_body["invoice_id"] == invoice_id
+        assert review_body["overall_score"] > 0
+        assert {field["field_path"] for field in review_body["fields"]} >= {
+            "invoice_number",
+            "supplier.name",
+            "total",
+            "lines",
+        }
+        assert review_body["detected"]["currency"] == "INR"
 
         corrected = client.patch(
             f"/api/v1/invoices/{invoice_id}",
@@ -308,6 +344,335 @@ def test_password_reset_flow(tmp_path: Path):
             },
         )
         assert new_login.status_code == 200
+
+
+def test_client_profile_training_profile_and_sample_upload(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        created = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "Neel Tally onboarding",
+                "accounting_system": "tally",
+                "description": "Training profile for client invoice formats.",
+                "settings": {
+                    "company_name": "NEEL ENTERPRISE",
+                    "country_code": "IN",
+                    "country_name": "India",
+                    "default_currency": "INR",
+                    "training_profile": {
+                        "business_process": "inbound_ap",
+                        "invoice_volume": "100 invoices/month",
+                        "expected_fields": [
+                            "invoice_number",
+                            "supplier",
+                            "total",
+                            "line_items",
+                            "hsn_sac",
+                        ],
+                        "extraction_instructions": (
+                            "Use GST invoice totals and keep IGST separate."
+                        ),
+                        "validation_rules": [
+                            "Total must equal taxable value plus IGST.",
+                        ],
+                    },
+                },
+            },
+            headers=headers,
+        )
+        assert created.status_code == 201
+        profile = created.json()
+        assert profile["settings"]["training_profile"]["invoice_volume"] == (
+            "100 invoices/month"
+        )
+        assert "hsn_sac" in profile["settings"]["training_profile"]["expected_fields"]
+
+        uploaded = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile['id']}/training-samples",
+            files={
+                "file": (
+                    "client-sample.pdf",
+                    b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF",
+                    "application/pdf",
+                )
+            },
+            data={"notes": "First GST sample from client", "sample_type": "invoice"},
+            headers=headers,
+        )
+        assert uploaded.status_code == 200
+        training = uploaded.json()["settings"]["training_profile"]
+        assert training["onboarding_status"] == "samples_added"
+        assert training["sample_invoices"][0]["filename"] == "client-sample.pdf"
+        assert training["sample_invoices"][0]["notes"] == (
+            "First GST sample from client"
+        )
+        assert Path(training["sample_invoices"][0]["stored_path"]).exists()
+
+
+def test_client_profile_recommend_settings_from_onboarding_context(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        created = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "Neel GST item invoice",
+                "accounting_system": "tally",
+                "description": "India GST purchase invoices for TallyPrime.",
+                "settings": {
+                    "company_name": "NEEL ENTERPRISE",
+                    "purchase_ledger": "PURCHASES A/C",
+                    "voucher_type": "Purchase",
+                    "training_profile": {
+                        "business_process": "inbound_ap",
+                        "accounting_exports": ["tally"],
+                        "extraction_instructions": (
+                            "Invoices have GSTIN, HSN/SAC, stock item, quantity and UOM."
+                        ),
+                        "posting_expectations": (
+                            "Use Tally Item Invoice with IGST, TCS, round-off and godown."
+                        ),
+                        "sample_invoices": [
+                            {
+                                "filename": "Digital Signed (1).pdf",
+                                "notes": "Client sample includes IGST and HSN 29173600.",
+                            }
+                        ],
+                    },
+                },
+            },
+            headers=headers,
+        )
+        assert created.status_code == 201
+        profile = created.json()
+
+        recommended = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile['id']}/recommend-settings",
+            headers=headers,
+        )
+        assert recommended.status_code == 200
+        settings = recommended.json()["settings"]
+        assert settings["country_code"] == "IN"
+        assert settings["default_currency"] == "INR"
+        assert settings["tax_mode"] == "gst_igst"
+        assert settings["posting_mode"] == "item_invoice"
+        assert (
+            settings["training_profile"]["onboarding_status"]
+            == "recommendations_generated"
+        )
+        missing = settings["metadata"]["recommendation_missing_fields"]
+        assert "Exact IGST ledger name" in missing
+        assert "Exact Tally UOM" in missing
+
+
+def test_client_profile_submit_review_and_activate_tally_profile(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        created = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "Neel Item Invoice",
+                "accounting_system": "tally",
+                "settings": {
+                    "company_name": "NEEL ENTERPRISE",
+                    "country_code": "IN",
+                    "country_name": "India",
+                    "default_currency": "INR",
+                    "tax_mode": "gst_igst",
+                    "posting_mode": "item_invoice",
+                    "voucher_type": "Purchase",
+                    "purchase_ledger": "PURCHASES A/C",
+                    "tax_ledger": "IGST A/C",
+                    "tcs_ledger": "TCS",
+                    "round_off_ledger": "ROUND OFF",
+                    "stock_item_name": "PTA SWEEP",
+                    "stock_item_hsn": "29173600",
+                    "stock_item_uom": "KGS",
+                    "godown_name": "Main Location",
+                    "tax_settings": {"igst_ledger": "IGST A/C"},
+                    "training_profile": {
+                        "business_process": "inbound_ap",
+                        "posting_expectations": (
+                            "Tally Item Invoice, IGST separate, TCS, round-off, godown."
+                        ),
+                        "extraction_instructions": (
+                            "Use supplier GST invoice totals and preserve item HSN."
+                        ),
+                    },
+                },
+            },
+            headers=headers,
+        )
+        assert created.status_code == 201
+        profile = created.json()
+
+        submitted = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile['id']}/submit-review",
+            headers=headers,
+        )
+        assert submitted.status_code == 200
+        assert (
+            submitted.json()["settings"]["training_profile"]["onboarding_status"]
+            == "ready_for_admin_review"
+        )
+
+        activated = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile['id']}/activate",
+            headers=headers,
+        )
+        assert activated.status_code == 200
+        body = activated.json()
+        assert body["settings"]["training_profile"]["onboarding_status"] == "active"
+        assert body["settings"]["metadata"]["activated_by"] == "owner@example.com"
+
+
+def test_client_profile_activation_blocks_missing_tally_item_fields(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        created = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "Incomplete Tally profile",
+                "accounting_system": "tally",
+                "settings": {
+                    "company_name": "NEEL ENTERPRISE",
+                    "country_code": "IN",
+                    "country_name": "India",
+                    "default_currency": "INR",
+                    "tax_mode": "gst_igst",
+                    "posting_mode": "item_invoice",
+                    "voucher_type": "Purchase",
+                },
+            },
+            headers=headers,
+        )
+        assert created.status_code == 201
+        profile = created.json()
+
+        activated = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile['id']}/activate",
+            headers=headers,
+        )
+        assert activated.status_code == 409
+        codes = {issue["code"] for issue in activated.json()["detail"]["issues"]}
+        assert "tally_purchase_ledger_missing" in codes
+        assert "tally_stock_item_missing" in codes
+        assert "tally_stock_uom_missing" in codes
+
+
+def test_ai_assisted_upload_uses_default_training_profile(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        created = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "Neel Tally GST profile",
+                "accounting_system": "tally",
+                "description": "Default profile for Indian GST purchase invoices.",
+                "is_default": True,
+                "settings": {
+                    "company_name": "NEEL ENTERPRISE",
+                    "country_code": "IN",
+                    "country_name": "India",
+                    "default_currency": "INR",
+                    "invoice_format": "gst_einvoice",
+                    "tax_mode": "gst_igst",
+                    "direction": "inbound",
+                    "purchase_ledger": "PURCHASES A/C",
+                    "tax_ledger": "IGST A/C",
+                    "tcs_ledger": "TCS",
+                    "round_off_ledger": "ROUND OFF",
+                    "stock_item_name": "PTA SWEEP",
+                    "stock_item_hsn": "29173600",
+                    "stock_item_uom": "KGS",
+                    "godown_name": "Main Location",
+                    "item_mappings": [
+                        {
+                            "source_description_contains": "terephthalic",
+                            "source_hsn_sac": "29173600",
+                            "target_item_name": "PTA SWEEP",
+                            "target_uom": "KGS",
+                            "purchase_ledger": "PURCHASES A/C",
+                            "tax_ledger": "IGST A/C",
+                            "metadata": {"category": "Materials", "gl_code": "PURCHASES A/C"},
+                        }
+                    ],
+                    "training_profile": {
+                        "business_process": "inbound_ap",
+                        "expected_fields": [
+                            "invoice_number",
+                            "supplier",
+                            "invoice_date",
+                            "currency",
+                            "total",
+                            "line_items",
+                            "hsn_sac",
+                        ],
+                        "extraction_instructions": (
+                            "Treat Indian GST totals, IGST, TCS, and round-off as posting lines."
+                        ),
+                        "validation_rules": [
+                            "GST ledgers should remain separate from purchase ledger.",
+                        ],
+                        "posting_expectations": "Create a Tally item invoice where item rules are available.",
+                    },
+                },
+            },
+            headers=headers,
+        )
+        assert created.status_code == 201
+        profile = created.json()
+
+        pdf_bytes = make_text_pdf(
+            "\n".join(
+                [
+                    "TAX INVOICE",
+                    "Invoice No. 2620002662",
+                    "Invoice Date 10-Jun-2026",
+                    "Supplier MADELIN ENTERPRISES PRIVATE LIMITED",
+                    "Description PURIFIED TEREPHTHALIC ACID",
+                    "HSN/SAC 29173600 Quantity 1600 KGS Rate 329.18 Amount 526680.00",
+                    "IGST A/C 107232.00",
+                    "Total INR 633912.00",
+                ]
+            )
+        )
+
+        uploaded = client.post(
+            f"/api/v1/invoices/upload?organization_id={org_id}&parser_mode=ai_assisted&persist=false",
+            files={"file": ("gst-sample.pdf", pdf_bytes, "application/pdf")},
+            headers=headers,
+        )
+        assert uploaded.status_code == 201
+        invoice = uploaded.json()
+        document = invoice["raw_payload"]["INVOICE"]["DOCUMENT"]
+        account_profile = invoice["raw_payload"]["INVOICE"]["ACCOUNTING PROFILE"]
+
+        assert invoice["parser"] == "AI/OCR assisted"
+        assert invoice["currency"] == "INR"
+        assert document["AI/OCR MODE"] == "profile_context_v1"
+        assert document["AI/OCR PROVIDER"] == "profile_context"
+        assert document["AI/OCR CONFIGURED"] is True
+        assert document["AI PARSER CONTEXT"]["profile_id"] == profile["id"]
+        assert document["PARSER EVALUATION"]["profile_name"] == "Neel Tally GST profile"
+        assert account_profile["PURCHASE LEDGER"] == "PURCHASES A/C"
+        assert account_profile["TCS LEDGER"] == "TCS"
+        assert account_profile["ROUND OFF LEDGER"] == "ROUND OFF"
 
 
 def test_profile_owned_posting_and_retry_history(tmp_path: Path):
@@ -734,8 +1099,15 @@ def test_clear_queue_removes_stored_pdf(tmp_path: Path):
             headers=authorization(tokens),
         )
         assert uploaded.status_code == 201
-        stored_path = Path(uploaded.json()["source_path"])
+        payload = uploaded.json()
+        stored_path = Path(payload["source_path"])
         assert stored_path.exists()
+        retention = payload["document_retention"]
+        assert retention["retained"] is True
+        assert retention["retention_policy"] == "review_window"
+        assert retention["retention_until"]
+        assert retention["sha256_hash"] == hashlib.sha256(pdf_bytes).hexdigest()
+        assert retention["size_bytes"] == len(pdf_bytes)
 
         document_response = client.get(
             f"/api/v1/invoices/{uploaded.json()['id']}/document",
@@ -751,6 +1123,101 @@ def test_clear_queue_removes_stored_pdf(tmp_path: Path):
         )
         assert cleared.status_code == 200
         assert not stored_path.exists()
+
+
+def test_expired_pdf_cleanup_keeps_invoice_history(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+        pdf_bytes = make_text_pdf(
+            "INVOICE INV-RET-1\nSupplier Example\nInvoice Date 19-JUN-2026\nTotal USD 118.00"
+        )
+
+        uploaded = client.post(
+            "/api/v1/invoices/upload",
+            params={"organization_id": org_id},
+            files={"file": ("retained.pdf", pdf_bytes, "application/pdf")},
+            headers=headers,
+        )
+        assert uploaded.status_code == 201
+        payload = uploaded.json()
+        invoice_id = payload["id"]
+        file_id = payload["document_retention"]["file_id"]
+        stored_path = Path(payload["source_path"])
+        assert stored_path.exists()
+
+        with sqlite3.connect(tmp_path / "api.db") as connection:
+            connection.execute(
+                "UPDATE invoice_files SET retention_until = ? WHERE id = ?",
+                (datetime(2000, 1, 1, tzinfo=timezone.utc).isoformat(), file_id),
+            )
+
+        cleanup = client.post(
+            f"/api/v1/organizations/{org_id}/storage/cleanup",
+            headers=headers,
+        )
+        assert cleanup.status_code == 200
+        assert cleanup.json()["expired_files"] == 1
+        assert cleanup.json()["deleted_files"] == 1
+        assert not stored_path.exists()
+
+        missing_document = client.get(
+            f"/api/v1/invoices/{invoice_id}/document",
+            headers=headers,
+        )
+        assert missing_document.status_code == 404
+
+        retained_invoice = client.get(
+            f"/api/v1/invoices/{invoice_id}",
+            headers=headers,
+        )
+        assert retained_invoice.status_code == 200
+        retained_payload = retained_invoice.json()
+        assert retained_payload["invoice_number"] == "INV-RET-1"
+        assert retained_payload["source_path"] == ""
+        assert retained_payload["document_retention"]["retained"] is False
+        assert retained_payload["document_retention"]["deleted_at"]
+
+
+def test_client_profile_extended_pdf_retention(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+        profile_response = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "Paid storage pilot",
+                "accounting_system": "quickbooks",
+                "description": "Profile with paid PDF retention enabled.",
+                "settings": {
+                    "company_name": "Example Client",
+                    "pdf_retention_policy": "extended_90_days",
+                    "pdf_retention_days": 30,
+                    "paid_pdf_storage": True,
+                },
+            },
+            headers=headers,
+        )
+        assert profile_response.status_code == 201
+        profile_id = profile_response.json()["id"]
+        pdf_bytes = make_text_pdf(
+            "INVOICE INV-RET-2\nSupplier Example\nInvoice Date 19-JUN-2026\nTotal USD 118.00"
+        )
+
+        uploaded = client.post(
+            "/api/v1/invoices/upload",
+            params={"organization_id": org_id, "client_profile_id": profile_id},
+            files={"file": ("paid-retention.pdf", pdf_bytes, "application/pdf")},
+            headers=headers,
+        )
+        assert uploaded.status_code == 201
+        retention = uploaded.json()["document_retention"]
+        assert retention["retained"] is True
+        assert retention["retention_policy"] == "extended_90_days"
+        retention_until = datetime.fromisoformat(retention["retention_until"])
+        assert (retention_until - datetime.now(timezone.utc)).days >= 89
 
 
 def test_preview_upload_does_not_persist_invoice_or_pdf(tmp_path: Path):

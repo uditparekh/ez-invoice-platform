@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ApiErrorPayload } from "@/lib/types";
+import { apiErrorMessage } from "@/lib/utils";
 
 export function PasswordResetConfirmForm() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export function PasswordResetConfirmForm() {
       });
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
-        setError(payload.detail ?? "Password could not be reset.");
+        setError(apiErrorMessage(payload, "Password could not be reset."));
         return;
       }
       router.replace("/app/invoices");

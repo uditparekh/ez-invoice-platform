@@ -62,5 +62,6 @@ def test_api_invoice_translates_to_pilot_payload():
 
 def test_parser_mode_mapping():
     assert parser_mode_for_api("Auto") == "auto"
+    assert parser_mode_for_api("AI/OCR assisted") == "ai_assisted"
     assert parser_mode_for_api("GST/e-Invoice adapter") == "gst/e-invoice adapter"
     assert parser_mode_for_api("Universal extraction") == "universal extraction"

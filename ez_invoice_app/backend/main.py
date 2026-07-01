@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 import sqlite3
 import uuid
@@ -11,11 +12,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .adapters import _profiled_legacy_payload, _tally_settings_from_profile, default_adapters
+from .ai_parser import AiExtractorConfig, is_ai_parser_mode
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
 from .email import EmailDeliveryError, EmailService
 from .models import (
@@ -23,9 +25,12 @@ from .models import (
     AuthBootstrapRequest,
     AuthenticatedUser,
     AuthTokens,
+    AiExtractionStatus,
     ClientProfile,
     ClientProfileCreate,
     ClientProfilePatch,
+    ClientProfileSettings,
+    ClientTrainingSample,
     CorrectionLearningSignal,
     DeleteInvoicesResult,
     HealthResponse,
@@ -35,6 +40,7 @@ from .models import (
     Invoice,
     InvoiceCreate,
     InvoicePatch,
+    InvoiceReviewResult,
     InvoiceStatus,
     LoginRequest,
     Membership,
@@ -46,6 +52,7 @@ from .models import (
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     PasswordResetResponse,
+    PdfRetentionPolicy,
     PostingRequest,
     PostingRetryRequest,
     PostingResult,
@@ -53,6 +60,7 @@ from .models import (
     PostingTarget,
     ProfileRecommendationResult,
     RefreshRequest,
+    StorageCleanupResult,
     TallyConnectorClaimRequest,
     TallyConnectorClaimResponse,
     TallyConnectorJob,
@@ -63,6 +71,7 @@ from .models import (
 from .parser_service import parse_pdf_invoice
 from .profile_recommendation import recommend_client_profiles
 from .repository import InvoiceRepository
+from .review_service import build_invoice_review
 from .security import (
     AuthenticationError,
     hash_invitation_token,
@@ -105,6 +114,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         app.state.storage = LocalDocumentStorage(resolved.upload_directory)
         app.state.adapters = default_adapters()
         app.state.email = EmailService(resolved)
+        app.state.ai_extractor_config = AiExtractorConfig.from_settings(resolved)
         yield
 
     app = FastAPI(
@@ -128,6 +138,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     @app.get("/health/deployment", tags=["system"])
     def deployment_health(request: Request) -> Dict[str, Any]:
         settings = request.app.state.settings
+        ai_status = AiExtractorConfig.from_settings(settings).status()
         problems = settings.production_readiness_problems()
         return {
             "status": "ready" if not problems else "needs_configuration",
@@ -149,9 +160,21 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 and bool(settings.smtp_host)
                 and bool(settings.smtp_username)
                 and bool(settings.smtp_password),
+                "ai_extraction": ai_status,
             },
             "problems": problems,
         }
+
+    @app.get(
+        "/api/v1/system/ai-extraction",
+        response_model=AiExtractionStatus,
+        tags=["system"],
+    )
+    def ai_extraction_status(
+        request: Request,
+        current_user: CurrentUser,
+    ) -> AiExtractionStatus:
+        return AiExtractionStatus(**request.app.state.ai_extractor_config.status())
 
     @app.post(
         "/api/v1/auth/bootstrap",
@@ -620,6 +643,74 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         return profile
 
     @app.post(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/training-samples",
+        response_model=ClientProfile,
+        tags=["client-profiles"],
+    )
+    async def upload_client_profile_training_sample(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        file: Annotated[UploadFile, File(description="Sample invoice PDF for profile training")],
+        current_user: CurrentUser,
+        notes: Annotated[str, Form()] = "",
+        sample_type: Annotated[str, Form()] = "invoice",
+    ) -> ClientProfile:
+        profile = _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            EDIT_ROLES,
+        )
+        filename = Path(file.filename or "training-sample.pdf").name
+        if not filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=415, detail="Only PDF training samples are accepted.")
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="The uploaded training sample is empty.")
+        if len(content) > request.app.state.settings.max_upload_bytes:
+            raise HTTPException(status_code=413, detail="The uploaded PDF exceeds the size limit.")
+
+        stored_path = _storage(request).save(
+            organization_id,
+            f"training-{profile_id}-{filename}",
+            content,
+        )
+        settings = profile.settings.model_copy(deep=True)
+        training_profile = settings.training_profile.model_copy(deep=True)
+        sample = ClientTrainingSample(
+            filename=filename,
+            stored_path=str(stored_path),
+            size_bytes=len(content),
+            content_type=file.content_type or "application/pdf",
+            sample_type=sample_type or "invoice",
+            notes=notes,
+        )
+        training_profile.sample_invoices = [
+            sample,
+            *training_profile.sample_invoices,
+        ]
+        if training_profile.onboarding_status == "draft":
+            training_profile.onboarding_status = "samples_added"
+        training_profile.llm_ready = bool(
+            training_profile.extraction_instructions.strip()
+            and training_profile.expected_fields
+            and len(training_profile.sample_invoices) >= 2
+        )
+        settings.training_profile = training_profile
+
+        updated = _repo(request).update_client_profile(
+            profile_id,
+            ClientProfilePatch(settings=settings),
+            actor_id=current_user.id,
+        )
+        if not updated:
+            _storage(request).delete(stored_path)
+            raise HTTPException(status_code=404, detail="Client profile not found.")
+        return updated
+
+    @app.post(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/set-default",
         response_model=ClientProfile,
         tags=["client-profiles"],
@@ -644,6 +735,116 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         if not profile:
             raise HTTPException(status_code=404, detail="Client profile not found.")
         return profile
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/submit-review",
+        response_model=ClientProfile,
+        tags=["client-profiles"],
+    )
+    def submit_client_profile_review(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        current_user: CurrentUser,
+    ) -> ClientProfile:
+        profile = _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            EDIT_ROLES,
+        )
+        settings = profile.settings.model_copy(deep=True)
+        training_profile = settings.training_profile.model_copy(deep=True)
+        training_profile.onboarding_status = "ready_for_admin_review"
+        settings.training_profile = training_profile
+        metadata = dict(settings.metadata or {})
+        metadata["submitted_for_review_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["submitted_for_review_by"] = current_user.email
+        metadata["activation_readiness"] = _client_profile_activation_issues(profile)
+        settings.metadata = metadata
+        updated = _repo(request).update_client_profile(
+            profile_id,
+            ClientProfilePatch(settings=settings),
+            actor_id=current_user.id,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Client profile not found.")
+        return updated
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/recommend-settings",
+        response_model=ClientProfile,
+        tags=["client-profiles"],
+    )
+    def recommend_client_profile_settings(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        current_user: CurrentUser,
+    ) -> ClientProfile:
+        profile = _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            EDIT_ROLES,
+        )
+        settings = _recommended_client_profile_settings(profile, current_user.email)
+        updated = _repo(request).update_client_profile(
+            profile_id,
+            ClientProfilePatch(settings=settings),
+            actor_id=current_user.id,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Client profile not found.")
+        return updated
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/activate",
+        response_model=ClientProfile,
+        tags=["client-profiles"],
+    )
+    def activate_client_profile(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        current_user: CurrentUser,
+    ) -> ClientProfile:
+        profile = _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            MANAGE_ROLES,
+        )
+        issues = _client_profile_activation_issues(profile)
+        blocking = [issue for issue in issues if issue.get("blocking", True)]
+        if blocking:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Client profile is not ready to activate.",
+                    "issues": blocking,
+                },
+            )
+        settings = profile.settings.model_copy(deep=True)
+        training_profile = settings.training_profile.model_copy(deep=True)
+        training_profile.onboarding_status = "active"
+        settings.training_profile = training_profile
+        metadata = dict(settings.metadata or {})
+        metadata["activated_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["activated_by"] = current_user.email
+        metadata["activation_readiness"] = issues
+        settings.metadata = metadata
+        updated = _repo(request).update_client_profile(
+            profile_id,
+            ClientProfilePatch(settings=settings),
+            actor_id=current_user.id,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Client profile not found.")
+        return updated
 
     @app.delete(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
@@ -696,6 +897,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
         parser_mode: str = Query(default="auto"),
         persist: bool = Query(default=True),
+        client_profile_id: Optional[str] = Query(default=None),
     ) -> Invoice:
         _require_membership(request, current_user, organization_id, EDIT_ROLES)
         organization = _get_organization(request, organization_id)
@@ -708,8 +910,27 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         if len(content) > request.app.state.settings.max_upload_bytes:
             raise HTTPException(status_code=413, detail="The uploaded PDF exceeds the size limit.")
 
+        client_profile = _resolve_parser_profile(
+            request,
+            organization_id,
+            client_profile_id,
+            parser_mode,
+            current_user,
+        )
+        correction_signals = (
+            _repo(request).list_correction_learning_signals(organization_id, limit=50)
+            if is_ai_parser_mode(parser_mode)
+            else []
+        )
+
+        retention_policy, retention_until = _resolve_pdf_retention(
+            request,
+            client_profile,
+        )
+        should_store_pdf = persist and retention_policy != PdfRetentionPolicy.DO_NOT_STORE.value
         stored_path: Optional[Path] = None
-        if persist:
+        file_hash = hashlib.sha256(content).hexdigest()
+        if should_store_pdf:
             stored_path = _storage(request).save(organization_id, filename, content)
         try:
             parsed = parse_pdf_invoice(
@@ -719,9 +940,28 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 legal_names=organization.legal_names or [organization.name],
                 source_path=str(stored_path or ""),
                 parser_mode=parser_mode,
+                client_profile=client_profile,
+                correction_signals=correction_signals,
+                ai_config=request.app.state.ai_extractor_config,
             )
             if persist:
-                return _repo(request).create_invoice(parsed)
+                invoice = _repo(request).create_invoice(parsed)
+                if stored_path:
+                    _repo(request).create_invoice_file(
+                        organization_id=organization_id,
+                        invoice_id=invoice.id,
+                        original_filename=filename,
+                        content_type=file.content_type or "application/pdf",
+                        storage_backend="local",
+                        storage_key=_storage(request).storage_key(stored_path),
+                        local_path=str(stored_path),
+                        sha256_hash=file_hash,
+                        size_bytes=len(content),
+                        retention_policy=retention_policy,
+                        retention_until=retention_until,
+                    )
+                    invoice = _repo(request).get_invoice(invoice.id) or invoice
+                return invoice
             now = datetime.now(timezone.utc)
             return Invoice(
                 id=f"preview-{uuid.uuid4()}",
@@ -770,13 +1010,17 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> FileResponse:
         invoice = _require_invoice(request, invoice_id, current_user, READ_ROLES)
-        source_path = Path(invoice.source_path)
+        document_file = _repo(request).get_active_invoice_file(invoice_id)
+        source_path = Path(document_file.local_path) if document_file else Path(invoice.source_path)
         if not source_path.exists() or not source_path.is_file():
-            raise HTTPException(status_code=404, detail="Invoice document not found.")
+            raise HTTPException(
+                status_code=404,
+                detail="Invoice document is not retained or is no longer available.",
+            )
         return FileResponse(
             source_path,
             media_type="application/pdf",
-            filename=invoice.source_file,
+            filename=document_file.original_filename if document_file else invoice.source_file,
         )
 
     @app.get(
@@ -799,6 +1043,27 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         )
         return recommend_client_profiles(invoice, profiles)
 
+    @app.get(
+        "/api/v1/invoices/{invoice_id}/review",
+        response_model=InvoiceReviewResult,
+        tags=["workflow"],
+    )
+    def review_invoice_endpoint(
+        request: Request,
+        invoice_id: str,
+        current_user: CurrentUser,
+        accounting_system: Optional[AccountingSystem] = Query(default=None),
+    ) -> InvoiceReviewResult:
+        invoice = _require_invoice(request, invoice_id, current_user, READ_ROLES)
+        profiles = _repo(request).list_client_profiles(
+            invoice.organization_id,
+            accounting_system=(
+                accounting_system.value if accounting_system is not None else None
+            ),
+        )
+        profile_result = recommend_client_profiles(invoice, profiles)
+        return build_invoice_review(invoice, profile_result)
+
     @app.delete(
         "/api/v1/organizations/{organization_id}/invoices",
         response_model=DeleteInvoicesResult,
@@ -810,6 +1075,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> DeleteInvoicesResult:
         _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        retained_files = _repo(request).list_organization_invoice_files(organization_id)
         stored_paths = [
             invoice.source_path
             for invoice in _repo(request).list_invoices(
@@ -819,10 +1085,24 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             )
             if invoice.source_path
         ]
+        stored_paths.extend(record.local_path for record in retained_files if record.local_path)
         deleted = _repo(request).delete_organization_invoices(organization_id)
-        for stored_path in stored_paths:
+        for stored_path in set(stored_paths):
             _storage(request).delete(Path(stored_path))
         return DeleteInvoicesResult(organization_id=organization_id, deleted=deleted)
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/storage/cleanup",
+        response_model=StorageCleanupResult,
+        tags=["invoices"],
+    )
+    def cleanup_organization_storage(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+    ) -> StorageCleanupResult:
+        _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        return _cleanup_expired_documents(request, organization_id)
 
     @app.patch("/api/v1/invoices/{invoice_id}", response_model=Invoice, tags=["invoices"])
     def patch_invoice(
@@ -1117,6 +1397,63 @@ def _repo(request: Request) -> InvoiceRepository:
 
 def _storage(request: Request) -> LocalDocumentStorage:
     return request.app.state.storage
+
+
+def _resolve_pdf_retention(
+    request: Request,
+    client_profile: Optional[ClientProfile],
+) -> tuple[str, Optional[datetime]]:
+    settings = request.app.state.settings
+    policy = str(settings.default_pdf_retention_policy or "review_window").strip().lower()
+    days = int(settings.default_pdf_retention_days or 3)
+    if client_profile is not None:
+        profile_settings = client_profile.settings
+        policy = str(
+            profile_settings.pdf_retention_policy
+            or PdfRetentionPolicy.REVIEW_WINDOW.value
+        ).strip().lower()
+        days = int(profile_settings.pdf_retention_days or days)
+
+    valid_policies = {item.value for item in PdfRetentionPolicy}
+    if policy not in valid_policies:
+        policy = PdfRetentionPolicy.REVIEW_WINDOW.value
+
+    if policy == PdfRetentionPolicy.DO_NOT_STORE.value:
+        return policy, None
+    if policy == PdfRetentionPolicy.RETAIN_UNTIL_DELETED.value:
+        return policy, None
+    if policy == PdfRetentionPolicy.EXTENDED_90_DAYS.value:
+        days = max(days, 90)
+    else:
+        days = max(days, 1)
+    return policy, datetime.now(timezone.utc) + timedelta(days=days)
+
+
+def _cleanup_expired_documents(
+    request: Request,
+    organization_id: str,
+) -> StorageCleanupResult:
+    now = datetime.now(timezone.utc)
+    expired = _repo(request).list_expired_invoice_files(
+        now=now,
+        organization_id=organization_id,
+    )
+    deleted = 0
+    errors: List[str] = []
+    for record in expired:
+        try:
+            if record.local_path:
+                _storage(request).delete(Path(record.local_path))
+            _repo(request).mark_invoice_file_deleted(record.id, deleted_at=now)
+            deleted += 1
+        except Exception as exc:  # pragma: no cover - defensive cleanup path
+            errors.append(f"{record.original_filename}: {exc}")
+    return StorageCleanupResult(
+        organization_id=organization_id,
+        expired_files=len(expired),
+        deleted_files=deleted,
+        errors=errors,
+    )
 
 
 def _get_organization(request: Request, organization_id: str) -> Organization:
@@ -1459,6 +1796,282 @@ def _client_profile_snapshot(
     }
 
 
+def _client_profile_activation_issues(profile: ClientProfile) -> List[Dict[str, Any]]:
+    settings = profile.settings
+    system = (
+        profile.accounting_system.value
+        if hasattr(profile.accounting_system, "value")
+        else str(profile.accounting_system)
+    )
+    issues: List[Dict[str, Any]] = []
+
+    def issue(code: str, message: str, field: str, blocking: bool = True) -> None:
+        issues.append(
+            {
+                "code": code,
+                "message": message,
+                "field": field,
+                "blocking": blocking,
+            }
+        )
+
+    if not profile.name.strip():
+        issue("profile_name_missing", "Profile name is required.", "name")
+    if not settings.country_code.strip():
+        issue("country_missing", "Country is required for profile recommendation.", "settings.country_code")
+    if not settings.default_currency.strip():
+        issue("currency_missing", "Default currency is required.", "settings.default_currency")
+
+    if system == AccountingSystem.TALLY.value:
+        _tally_activation_issues(settings, issue)
+    elif system == AccountingSystem.QUICKBOOKS.value:
+        connection = settings.connection_settings or {}
+        if not str(connection.get("environment") or "").strip():
+            issue("quickbooks_environment_missing", "QuickBooks environment is required.", "settings.connection_settings.environment")
+    elif system == AccountingSystem.ZOHO_BOOKS.value:
+        connection = settings.connection_settings or {}
+        if not str(connection.get("organization_id") or "").strip():
+            issue(
+                "zoho_organization_missing",
+                "Zoho organization ID is recommended before live posting.",
+                "settings.connection_settings.organization_id",
+                blocking=False,
+            )
+
+    samples = settings.training_profile.sample_invoices
+    if len(samples) < 1:
+        issue(
+            "training_samples_missing",
+            "Upload at least one sample invoice before activating this profile.",
+            "settings.training_profile.sample_invoices",
+            blocking=False,
+        )
+    if not settings.training_profile.extraction_instructions.strip():
+        issue(
+            "extraction_instructions_missing",
+            "Add parser instructions so future AI/OCR extraction has client context.",
+            "settings.training_profile.extraction_instructions",
+            blocking=False,
+        )
+    return issues
+
+
+def _tally_activation_issues(
+    settings: ClientProfileSettings,
+    issue,
+) -> None:
+    if not settings.company_name.strip():
+        issue("tally_company_missing", "Exact Tally company name is required.", "settings.company_name")
+    if not settings.voucher_type.strip():
+        issue("tally_voucher_type_missing", "Tally voucher type is required.", "settings.voucher_type")
+    if not settings.purchase_ledger.strip():
+        issue("tally_purchase_ledger_missing", "Exact Tally purchase ledger is required.", "settings.purchase_ledger")
+
+    tax_mode = (settings.tax_mode or "").lower()
+    tax_settings = settings.tax_settings or {}
+    igst_ledger = _profile_tax_setting(tax_settings, "igst_ledger", "input_igst_ledger") or settings.tax_ledger
+    cgst_ledger = _profile_tax_setting(tax_settings, "cgst_ledger", "input_cgst_ledger") or settings.tax_ledger
+    sgst_ledger = _profile_tax_setting(tax_settings, "sgst_ledger", "input_sgst_ledger") or settings.tax_ledger
+    if tax_mode in {"gst_auto", "gst_igst"} and not igst_ledger.strip():
+        issue("tally_igst_ledger_missing", "IGST ledger is required for India GST/IGST posting.", "settings.tax_ledger")
+    if tax_mode == "gst_cgst_sgst":
+        if not cgst_ledger.strip():
+            issue("tally_cgst_ledger_missing", "CGST ledger is required for CGST/SGST posting.", "settings.tax_settings.cgst_ledger")
+        if not sgst_ledger.strip():
+            issue("tally_sgst_ledger_missing", "SGST ledger is required for CGST/SGST posting.", "settings.tax_settings.sgst_ledger")
+
+    posting_mode = str(settings.posting_mode or "").lower()
+    if posting_mode == "item_invoice":
+        if not settings.stock_item_name.strip() and not settings.item_mappings:
+            issue("tally_stock_item_missing", "Item Invoice mode needs an exact stock item or item mapping.", "settings.stock_item_name")
+        if not settings.stock_item_uom.strip():
+            issue("tally_stock_uom_missing", "Item Invoice mode needs the exact Tally UOM.", "settings.stock_item_uom")
+        if not settings.stock_item_hsn.strip():
+            issue(
+                "tally_stock_hsn_missing",
+                "HSN/SAC is recommended for India Item Invoice GST validation.",
+                "settings.stock_item_hsn",
+                blocking=False,
+            )
+
+    expectations = " ".join(
+        [
+            settings.training_profile.posting_expectations,
+            settings.training_profile.extraction_instructions,
+            " ".join(settings.training_profile.validation_rules),
+        ]
+    ).lower()
+    if "tcs" in expectations and not settings.tcs_ledger.strip():
+        issue("tally_tcs_ledger_missing", "TCS is mentioned in onboarding, so the exact TCS ledger is required.", "settings.tcs_ledger")
+    if ("round off" in expectations or "round-off" in expectations or "roundoff" in expectations) and not settings.round_off_ledger.strip():
+        issue("tally_round_off_ledger_missing", "Round-off is mentioned in onboarding, so the exact round-off ledger is required.", "settings.round_off_ledger")
+    if "godown" in expectations and not settings.godown_name.strip():
+        issue(
+            "tally_godown_missing",
+            "Godown/location is mentioned in onboarding. Set it or confirm the client does not use godowns.",
+            "settings.godown_name",
+            blocking=False,
+        )
+
+
+def _profile_tax_setting(settings: Dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        for candidate in (key, key.lower(), key.upper()):
+            value = str(settings.get(candidate) or "").strip()
+            if value:
+                return value
+    return ""
+
+
+def _recommended_client_profile_settings(
+    profile: ClientProfile,
+    actor_email: str,
+) -> ClientProfileSettings:
+    settings = profile.settings.model_copy(deep=True)
+    training_profile = settings.training_profile.model_copy(deep=True)
+    sample_text = " ".join(
+        " ".join(
+            [
+                sample.filename,
+                sample.sample_type,
+                sample.notes,
+            ]
+        )
+        for sample in training_profile.sample_invoices
+    )
+    context = " ".join(
+        [
+            profile.name,
+            profile.description,
+            str(profile.accounting_system),
+            settings.company_name,
+            training_profile.business_process,
+            training_profile.invoice_volume,
+            training_profile.extraction_instructions,
+            training_profile.posting_expectations,
+            training_profile.exception_examples,
+            " ".join(training_profile.expected_fields),
+            " ".join(training_profile.accounting_exports),
+            " ".join(training_profile.validation_rules),
+            sample_text,
+        ]
+    ).lower()
+
+    recommendations: List[str] = []
+    missing_fields: List[str] = []
+    tax_settings = dict(settings.tax_settings or {})
+
+    india_terms = ("gst", "gstin", "hsn", "sac", "igst", "cgst", "sgst", "tcs")
+    if any(term in context for term in india_terms):
+        settings.country_code = "IN"
+        settings.country_name = "India"
+        settings.default_currency = "INR"
+        settings.invoice_format = "gst_einvoice"
+        settings.tax_registration_label = "GSTIN"
+        tax_settings["country_code"] = "IN"
+        tax_settings["default_currency"] = "INR"
+        recommendations.append("Detected India GST invoice context.")
+
+        has_cgst_sgst = "cgst" in context or "sgst" in context
+        has_igst = "igst" in context
+        if has_cgst_sgst:
+            settings.tax_mode = "gst_cgst_sgst"
+            tax_settings["gst_mode"] = "cgst_sgst"
+            recommendations.append("Recommended CGST/SGST split posting.")
+        elif has_igst:
+            settings.tax_mode = "gst_igst"
+            tax_settings["gst_mode"] = "igst"
+            recommendations.append("Recommended IGST posting.")
+        else:
+            settings.tax_mode = "gst_auto"
+            tax_settings["gst_mode"] = "auto"
+            recommendations.append("Recommended GST auto-detection.")
+
+    system = (
+        profile.accounting_system.value
+        if hasattr(profile.accounting_system, "value")
+        else str(profile.accounting_system)
+    )
+    tally_context = system == AccountingSystem.TALLY.value
+    item_invoice_terms = (
+        "item invoice",
+        "stock item",
+        "stock",
+        "hsn",
+        "godown",
+        "quantity",
+        "uom",
+    )
+    if tally_context and any(term in context for term in item_invoice_terms):
+        settings.posting_mode = "item_invoice"
+        recommendations.append("Recommended Tally Item Invoice mode.")
+    elif tally_context and not str(settings.posting_mode or "").strip():
+        settings.posting_mode = "accounting_voucher"
+
+    if tally_context:
+        if "tcs" in context and not settings.tcs_ledger.strip():
+            missing_fields.append("Exact TCS ledger name")
+        if (
+            "round off" in context
+            or "round-off" in context
+            or "roundoff" in context
+        ) and not settings.round_off_ledger.strip():
+            missing_fields.append("Exact round-off ledger name")
+        if "godown" in context and not settings.godown_name.strip():
+            missing_fields.append("Godown/location name, or confirmation that no godown is used")
+        if str(settings.posting_mode or "").lower() == "item_invoice":
+            if not settings.stock_item_name.strip() and not settings.item_mappings:
+                missing_fields.append("Exact Tally stock item or item mapping")
+            if not settings.stock_item_uom.strip():
+                missing_fields.append("Exact Tally UOM")
+            if settings.country_code == "IN" and not settings.stock_item_hsn.strip():
+                missing_fields.append("HSN/SAC for the mapped stock item")
+        if settings.tax_mode == "gst_igst" and not (
+            _profile_tax_setting(tax_settings, "igst_ledger", "input_igst_ledger")
+            or settings.tax_ledger
+        ):
+            missing_fields.append("Exact IGST ledger name")
+        if settings.tax_mode == "gst_cgst_sgst":
+            if not _profile_tax_setting(tax_settings, "cgst_ledger", "input_cgst_ledger"):
+                missing_fields.append("Exact CGST ledger name")
+            if not _profile_tax_setting(tax_settings, "sgst_ledger", "input_sgst_ledger"):
+                missing_fields.append("Exact SGST ledger name")
+
+    if system == AccountingSystem.QUICKBOOKS.value:
+        settings.posting_mode = "supplier_bill"
+        recommendations.append("Recommended QuickBooks Supplier Bill posting.")
+    elif system == AccountingSystem.ZOHO_BOOKS.value:
+        settings.posting_mode = "supplier_bill"
+        recommendations.append("Recommended Zoho Books Bill posting.")
+    elif system in {
+        AccountingSystem.COUPA.value,
+        AccountingSystem.NETSUITE.value,
+        AccountingSystem.SAP.value,
+        AccountingSystem.EXCEL.value,
+    }:
+        settings.posting_mode = "export_package"
+
+    training_profile.onboarding_status = (
+        "active"
+        if training_profile.onboarding_status == "active"
+        else "recommendations_generated"
+    )
+    settings.training_profile = training_profile
+    settings.tax_settings = tax_settings
+    metadata = dict(settings.metadata or {})
+    metadata["recommendations_generated_at"] = datetime.now(timezone.utc).isoformat()
+    metadata["recommendations_generated_by"] = actor_email
+    metadata["recommendation_summary"] = recommendations or [
+        "No strong country or tax pattern detected. Kept current settings."
+    ]
+    metadata["recommendation_missing_fields"] = list(dict.fromkeys(missing_fields))
+    metadata["activation_readiness"] = _client_profile_activation_issues(
+        profile.model_copy(update={"settings": settings})
+    )
+    settings.metadata = metadata
+    return settings
+
+
 def _redact_secrets(value: Any) -> Any:
     if isinstance(value, dict):
         output: Dict[str, Any] = {}
@@ -1526,6 +2139,30 @@ def _resolve_posting_profile(
             )
             if matched_profile:
                 return matched_profile
+    return next((profile for profile in profiles if profile.is_default), None) or (
+        profiles[0] if profiles else None
+    )
+
+
+def _resolve_parser_profile(
+    request: Request,
+    organization_id: str,
+    profile_id: Optional[str],
+    parser_mode: str,
+    current_user: AuthenticatedUser,
+) -> Optional[ClientProfile]:
+    if profile_id:
+        return _require_client_profile(
+            request,
+            organization_id,
+            profile_id,
+            current_user,
+            READ_ROLES,
+        )
+    if not is_ai_parser_mode(parser_mode):
+        return None
+
+    profiles = _repo(request).list_client_profiles(organization_id)
     return next((profile for profile in profiles if profile.is_default), None) or (
         profiles[0] if profiles else None
     )

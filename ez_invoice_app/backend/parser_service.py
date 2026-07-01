@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from ..accounting_routing import apply_accounting_route
 from ..gst_invoice_parser import looks_like_gst_invoice, parse_gst_invoice
 from ..universal_parser import parse_generic_invoice
+from .ai_parser import AiExtractorConfig, apply_ai_parser_context
 from .domain import legacy_payload_to_invoice
-from .models import InvoiceCreate
+from .models import ClientProfile, CorrectionLearningSignal, InvoiceCreate
 
 
 def extract_pdf_text(pdf_bytes: bytes) -> Tuple[str, str, int]:
@@ -51,14 +52,20 @@ def parse_pdf_invoice(
     legal_names: List[str],
     source_path: str = "",
     parser_mode: str = "auto",
+    client_profile: Optional[ClientProfile] = None,
+    correction_signals: Optional[List[CorrectionLearningSignal]] = None,
+    ai_config: Optional[AiExtractorConfig] = None,
 ) -> InvoiceCreate:
     text, engine, pages = extract_pdf_text(pdf_bytes)
     extracted_at = datetime.now().astimezone().isoformat(timespec="seconds")
     normalized_mode = parser_mode.strip().lower()
 
-    use_gst = normalized_mode in {"gst", "gst/e-invoice", "gst/e-invoice adapter"} or (
-        normalized_mode == "auto" and looks_like_gst_invoice(text)
-    )
+    use_gst = normalized_mode in {
+        "gst",
+        "gst/e-invoice",
+        "gst/e-invoice adapter",
+        "gst_einvoice",
+    } or (normalized_mode == "auto" and looks_like_gst_invoice(text))
     payload = None
     if use_gst:
         payload = parse_gst_invoice(
@@ -80,6 +87,13 @@ def parse_pdf_invoice(
         )
 
     apply_accounting_route(payload, homes=legal_names)
+    apply_ai_parser_context(
+        payload,
+        parser_mode=parser_mode,
+        client_profile=client_profile,
+        correction_signals=correction_signals or [],
+        ai_config=ai_config,
+    )
     return legacy_payload_to_invoice(
         payload,
         organization_id=organization_id,

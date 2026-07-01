@@ -13,16 +13,27 @@ application is developed alongside it.
 
 ```text
 apps/
-  web/                    Next.js customer application
+  web/                    Next.js customer-facing SaaS app
 ez_invoice_app/
-  app.py                  Existing Streamlit pilot
-  backend/                FastAPI API, authentication, and tenant isolation
-  *_integration.py        Accounting-system connectors
-tests/                    Python API, repository, domain, and isolation tests
+  app.py                  Preserved Streamlit pilot/demo app
+  backend/                FastAPI API, auth, tenant isolation, profiles, posting
+  *_integration.py        Accounting-system adapters and connector clients
+  data/                   Local runtime database/uploads, ignored except .gitkeep
+tests/                    Python API, repository, parser, adapter, and isolation tests
 docs/
   decisions/              Architecture decision records
-scripts/                  Development and release helpers
+  *.md                    Runbooks, roadmap, deployment, connector notes
+brand/                    SiftEntry logo, color, and UI reference assets
+packaging/
+  windows/                Windows connector packaging assets
+Makefile                  Common local development commands
+PROJECT_MAP.md            Repo ownership map, roadmap status, and run checklist
 ```
+
+Generated folders such as `.pnpm-store/`, `.pytest_cache/`,
+`apps/web/.next/`, `apps/web/node_modules/`, `__pycache__/`, local SQLite
+databases, upload folders, ZIP packages, and connector build outputs are local
+runtime artifacts. They are intentionally ignored and should not be committed.
 
 ## Current Capabilities
 
@@ -41,6 +52,10 @@ scripts/                  Development and release helpers
   correction, and line-item review
 - Client profile management with import/export, profile-owned posting, posting
   logs, and retry history
+- Client onboarding wizard for accounting setup, training samples, parser
+  recommendations, and admin activation
+- Profile-controlled Tally posting for purchase vouchers and item invoices,
+  including GST/IGST/CGST/SGST, TCS, round-off, godown, and stock item rules
 - Team invite UI, member visibility, password change, and correction-learning
   visibility for parser/vendor improvements
 - Same-origin web API boundary with secure HTTP-only session cookies
@@ -81,6 +96,13 @@ pnpm install
 pnpm dev
 ```
 
+If you installed Node through `nvm`, make sure the active shell can find Node
+before running the web app:
+
+```bash
+export PATH="$HOME/.nvm/versions/node/v26.4.0/bin:$PATH"
+```
+
 Open:
 
 - Next.js application: `http://127.0.0.1:3000`
@@ -104,7 +126,8 @@ artifacts and are intentionally excluded from source control.
 
 See [CHANGELOG.md](CHANGELOG.md) and
 [docs/decisions](docs/decisions) for development history and architectural
-decisions. See [docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md) for the current
-demo and client handoff flow, and
-[docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) for the
-production infrastructure path.
+decisions. See [docs/INDEX.md](docs/INDEX.md) for the documentation index,
+[docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md) for the current demo and client
+handoff flow, [PROJECT_MAP.md](PROJECT_MAP.md) for file ownership and roadmap
+tracking, and [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) for
+the production infrastructure path.

@@ -1,8 +1,13 @@
-# EZ-Invoice
+# SiftEntry Streamlit Pilot
 
-EZ-Invoice is a Streamlit invoice intake platform built from the provided reference app.
-It uses dynamic document extraction adapters plus a generic supplier invoice parser,
-then routes validated invoices into QuickBooks, TallyPrime, Coupa, NetSuite, and SAP.
+This folder preserves the original EZ-Invoice Streamlit pilot while SiftEntry
+moves into the Next.js + FastAPI product architecture. It uses dynamic document
+extraction adapters plus a generic supplier invoice parser, then routes
+validated invoices into QuickBooks, TallyPrime, Zoho Books, and export-package
+workflows.
+
+For the full repository map, current roadmap, and file ownership rules, start
+at `../PROJECT_MAP.md`.
 
 ## Client Workspace Model
 
@@ -11,9 +16,9 @@ logs in, saves its legal entity aliases, connects its accounting system, uploads
 supplier invoices, reviews extracted data, and posts approved inbound bills into
 its own Tally company.
 
-The local prototype stores a single client workspace profile. The SaaS version
-should move this into a tenant database with users, roles, connector secrets,
-ledger mappings, approval status, and posting history.
+The Streamlit pilot can still run locally for demos. The SaaS backend now owns
+the tenant database, users, roles, connector/profile settings, ledger mappings,
+approval status, posting logs, retry history, and PDF retention metadata.
 
 ## Run
 
@@ -100,6 +105,8 @@ export EZ_APP_BASE_URL="https://app.siftentry.com"
 export EZ_API_CORS_ORIGINS="https://app.siftentry.com"
 export EZ_API_DATABASE_URL="sqlite:////var/lib/siftentry/siftentry.db"
 export EZ_API_UPLOAD_DIRECTORY="/var/lib/siftentry/uploads"
+export SIFTENTRY_PDF_RETENTION_POLICY="review_window"
+export SIFTENTRY_PDF_RETENTION_DAYS="3"
 export EZ_EMAIL_PROVIDER="smtp"
 export EZ_EMAIL_FROM="SiftEntry <no-reply@siftentry.com>"
 export EZ_SMTP_HOST="smtp.example.com"
