@@ -36,6 +36,8 @@ from .models import (
     HealthResponse,
     Invitation,
     InvitationAcceptRequest,
+    Job,
+    JobEnqueueResult,
     InvitationCreate,
     Invoice,
     InvoiceCreate,
@@ -127,7 +129,9 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.settings = resolved
-        app.state.repository = InvoiceRepository(resolved.database_path)
+        app.state.repository = InvoiceRepository(
+            resolved.database_path, database_url=resolved.database_url
+        )
         app.state.storage = LocalDocumentStorage(resolved.upload_directory)
         app.state.adapters = default_adapters()
         app.state.email = EmailService(resolved)
@@ -1269,6 +1273,64 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             if stored
             else OrganizationSettings()
         )
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/jobs/post-ready",
+        response_model=JobEnqueueResult,
+        tags=["workflow"],
+        status_code=202,
+    )
+    def enqueue_post_ready(
+        request: Request,
+        organization_id: str,
+        body: BatchPostRequest,
+        current_user: CurrentUser,
+    ) -> JobEnqueueResult:
+        """Async batch posting: returns immediately with a job to poll.
+
+        The synchronous /invoices/post-ready endpoint remains for small
+        batches; this is the path for slow/flaky accounting APIs — a hung
+        QuickBooks call never holds an HTTP request open.
+        """
+        _require_membership(request, current_user, organization_id, EDIT_ROLES)
+        job = _repo(request).enqueue_job(
+            organization_id,
+            "batch_post_ready",
+            {
+                "target": body.target.value if body.target else None,
+                "client_profile_id": body.client_profile_id,
+                "dry_run": body.dry_run,
+                "status": body.status,
+            },
+            actor_id=current_user.id,
+        )
+        return JobEnqueueResult(job=job, poll_url=f"/api/v1/jobs/{job.id}")
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/jobs",
+        response_model=List[Job],
+        tags=["workflow"],
+    )
+    def list_organization_jobs(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+        limit: int = Query(default=50, ge=1, le=200),
+    ) -> List[Job]:
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        return _repo(request).list_jobs(organization_id, limit=limit)
+
+    @app.get("/api/v1/jobs/{job_id}", response_model=Job, tags=["workflow"])
+    def get_job_status(
+        request: Request,
+        job_id: str,
+        current_user: CurrentUser,
+    ) -> Job:
+        job = _repo(request).get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found.")
+        _require_membership(request, current_user, job.organization_id, READ_ROLES)
+        return job
 
     @app.get(
         "/api/v1/organizations/{organization_id}/learning/export",

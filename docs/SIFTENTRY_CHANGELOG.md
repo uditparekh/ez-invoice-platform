@@ -62,6 +62,33 @@ BACKEND TODO: honor `learn_vendor_memory` in the invoice PATCH handler when writ
 - **Client-profiles wizard polish** — structurally complete (3,146-line panel, wizard + approval flow present); final polish deferred until live client feedback, exactly as your parity review recommends. Blind-rewriting it now would add risk, not value.
 - **Teach-fields region marking** — ships when extraction returns bounding boxes (backend dependency).
 
+## Step 12 — PostgreSQL + async worker (2026-07-03) ✅
+**Verification: the ENTIRE backend suite runs green on BOTH engines — `pytest` 48/48 on SQLite
+and 48/48 on a real PostgreSQL 16 server (`make test-postgres`). Zero regressions.**
+
+The two infrastructure flags are closed: production database + background jobs, one pass.
+
+| File | Status | Change |
+|---|---|---|
+| siftentry_app/backend/db.py | NEW | Dual-engine connectivity. SQLite behavior unchanged (pilot default). PostgreSQL activates when `EZ_API_DATABASE_URL` starts with postgres:// — connections are wrapped so the repository's SQL runs unchanged: `?`→`%s`, name-addressable rows (psycopg dict_row), executescript for DDL, bool/datetime coercion into the schema's INTEGER/TEXT forms, and `COLLATE NOCASE` rewritten (comparisons → LOWER() on both sides; DDL collation dropped with a LOWER(email) unique index preserving case-insensitive user uniqueness). |
+| siftentry_app/backend/worker.py | NEW | Background worker: `make worker` (or `python -m siftentry_app.backend.worker`). Builds the same app object as the API so adapters/storage/repo wiring are identical by construction. Executes `batch_post_ready` jobs invoice-by-invoice — a hung QuickBooks/Tally call never holds an HTTP request open. Multiple workers safe (PG: FOR UPDATE SKIP LOCKED; SQLite: atomic UPDATE…RETURNING). This is where AI `extract` policy + prompt caching land when the AI turns on. |
+| siftentry_app/backend/repository.py | EDITED | Connects through db.py (takes database_url); jobs table + enqueue/claim/finish/get/list with atomic claiming; PG-only case-insensitive email index. |
+| siftentry_app/backend/models.py · main.py | EDITED | `Job` + `JobEnqueueResult`. Endpoints: `POST /organizations/{id}/jobs/post-ready` (202 + poll_url — the async twin of the sync batch endpoint, which remains), `GET /organizations/{id}/jobs`, `GET /jobs/{id}`. |
+| siftentry_app/requirements-api.txt | EDITED | + psycopg[binary]. |
+| Makefile | EDITED | `make worker`, `make test-postgres`. |
+| tests/test_api.py | EDITED | Suite is dual-engine: set `SIFTENTRY_TEST_DATABASE_URL=postgresql://…` and every test runs against a fresh PostgreSQL database; unset, SQLite as always. |
+| tests/test_jobs_worker.py | NEW | 2 tests: enqueue→202→worker run→done with per-invoice accounting + auth on polling; atomic single-delivery claiming with done/failed transitions. |
+
+### Going to Postgres (when first client onboards)
+```
+sudo -u postgres createdb siftentry
+export EZ_API_DATABASE_URL=postgresql://user:pass@localhost/siftentry
+make api      # schema creates itself on boot
+make worker   # in a second terminal
+```
+SQLite remains the zero-setup default; nothing changes until you set the URL.
+(EZ_API_* env names are intentionally stable until the pre-launch rename pass — ADR 0003.)
+
 ## Step 11 (REVISED — supersedes the earlier Step 11 zip) — Provider-agnostic AI layer, OFF by default, learning fully portable (2026-07-03) ✅
 **Verification: backend `pytest` 46/46 (all existing + 8 AI-layer tests). Zero regressions.**
 

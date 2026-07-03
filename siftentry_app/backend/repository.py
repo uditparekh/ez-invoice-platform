@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+
+from . import db
 import threading
 import uuid
 from dataclasses import dataclass
@@ -12,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .models import (
+    Job,
     ClientProfile,
     ClientProfileCreate,
     ClientProfilePatch,
@@ -112,18 +115,18 @@ class InvoiceFileRecord:
 
 
 class InvoiceRepository:
-    def __init__(self, database_path: Path):
+    def __init__(self, database_path: Path, database_url: str = ""):
         self.database_path = Path(database_path)
-        self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self.database_url = (database_url or "").strip()
+        if not db.is_postgres_url(self.database_url):
+            self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            db.create_database_if_missing(self.database_url)
         self._schema_lock = threading.Lock()
         self.initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA journal_mode = WAL")
-        return connection
+    def _connect(self):
+        return db.connect(self.database_url, self.database_path)
 
     def initialize(self) -> None:
         with self._schema_lock, self._connect() as connection:
@@ -137,6 +140,23 @@ class InvoiceRepository:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id TEXT PRIMARY KEY,
+                    organization_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    result_json TEXT NOT NULL DEFAULT '{}',
+                    error TEXT NOT NULL DEFAULT '',
+                    actor_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS jobs_status_created_idx
+                ON jobs(status, created_at);
 
                 CREATE TABLE IF NOT EXISTS organization_settings (
                     organization_id TEXT PRIMARY KEY,
@@ -370,6 +390,13 @@ class InvoiceRepository:
                 );
                 """
             )
+            if db.is_postgres_url(self.database_url):
+                connection.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS users_email_nocase_idx
+                    ON users (LOWER(email))
+                    """
+                )
             self._migrate_posting_attempts(connection)
             connection.execute(
                 """
@@ -379,10 +406,7 @@ class InvoiceRepository:
             )
 
     def _migrate_posting_attempts(self, connection: sqlite3.Connection) -> None:
-        columns = {
-            str(row["name"])
-            for row in connection.execute("PRAGMA table_info(posting_attempts)").fetchall()
-        }
+        columns = db.table_columns(connection, "posting_attempts")
         required_columns = {
             "organization_id": "organization_id TEXT NOT NULL DEFAULT ''",
             "status": "status TEXT NOT NULL DEFAULT 'failed'",
@@ -1628,6 +1652,127 @@ class InvoiceRepository:
             )
         return self.get_invoice(invoice_id)
 
+    def enqueue_job(
+        self,
+        organization_id: str,
+        kind: str,
+        payload: Dict[str, Any],
+        actor_id: str = "api-user",
+    ) -> "Job":
+        job = Job(
+            id=str(uuid.uuid4()),
+            organization_id=organization_id,
+            kind=kind,
+            payload=payload,
+            status="queued",
+            attempts=0,
+            result={},
+            error="",
+            actor_id=actor_id,
+            created_at=utc_now(),
+            updated_at=utc_now(),
+        )
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO jobs (
+                    id, organization_id, kind, payload_json, status, attempts,
+                    result_json, error, actor_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job.id,
+                    job.organization_id,
+                    job.kind,
+                    _json(job.payload),
+                    job.status,
+                    job.attempts,
+                    _json(job.result),
+                    job.error,
+                    job.actor_id,
+                    job.created_at.isoformat(),
+                    job.updated_at.isoformat(),
+                ),
+            )
+        return job
+
+    def claim_next_job(self) -> Optional["Job"]:
+        """Atomically claim the oldest queued job (safe for multiple workers)."""
+        skip_locked = (
+            " FOR UPDATE SKIP LOCKED" if db.is_postgres_url(self.database_url) else ""
+        )
+        with self._connect() as connection:
+            row = connection.execute(
+                f"""
+                UPDATE jobs SET status = 'running',
+                    attempts = attempts + 1, updated_at = ?
+                WHERE id = (
+                    SELECT id FROM jobs WHERE status = 'queued'
+                    ORDER BY created_at LIMIT 1{skip_locked}
+                ) AND status = 'queued'
+                RETURNING *
+                """,
+                (utc_now().isoformat(),),
+            ).fetchone()
+        return self._job_from_row(row) if row else None
+
+    def finish_job(
+        self,
+        job_id: str,
+        *,
+        result: Optional[Dict[str, Any]] = None,
+        error: str = "",
+    ) -> Optional["Job"]:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                UPDATE jobs SET status = ?, result_json = ?, error = ?, updated_at = ?
+                WHERE id = ?
+                RETURNING *
+                """,
+                (
+                    "failed" if error else "done",
+                    _json(result or {}),
+                    error,
+                    utc_now().isoformat(),
+                    job_id,
+                ),
+            ).fetchone()
+        return self._job_from_row(row) if row else None
+
+    def get_job(self, job_id: str) -> Optional["Job"]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+        return self._job_from_row(row) if row else None
+
+    def list_jobs(self, organization_id: str, limit: int = 50) -> List["Job"]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM jobs WHERE organization_id = ?
+                ORDER BY created_at DESC LIMIT ?
+                """,
+                (organization_id, limit),
+            ).fetchall()
+        return [self._job_from_row(row) for row in rows]
+
+    def _job_from_row(self, row) -> "Job":
+        return Job(
+            id=row["id"],
+            organization_id=row["organization_id"],
+            kind=row["kind"],
+            payload=_loads(row["payload_json"], {}),
+            status=row["status"],
+            attempts=int(row["attempts"]),
+            result=_loads(row["result_json"], {}),
+            error=row["error"],
+            actor_id=row["actor_id"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
     def get_organization_settings(self, organization_id: str) -> Dict[str, Any]:
         with self._connect() as connection:
             row = connection.execute(
@@ -1639,7 +1784,7 @@ class InvoiceRepository:
             ).fetchone()
         if not row:
             return {}
-        loaded = _loads(row[0], {})
+        loaded = _loads(row["settings_json"], {})
         return loaded if isinstance(loaded, dict) else {}
 
     def upsert_organization_settings(

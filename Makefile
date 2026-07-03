@@ -10,7 +10,7 @@ DEMO_EMAIL ?= udit@example.com
 DEMO_PASSWORD ?= local-demo-password-123
 DEMO_ORG ?= SiftEntry Demo Workspace
 
-.PHONY: help install-python install-web api web streamlit bootstrap test build-web check status clean-cache
+.PHONY: help install-python install-web api web streamlit bootstrap worker test-postgres test build-web check status clean-cache
 
 help:
 	@echo "SiftEntry local commands"
@@ -54,6 +54,12 @@ bootstrap:
 		-H "Content-Type: application/json" \
 		-d '{"email":"$(DEMO_EMAIL)","password":"$(DEMO_PASSWORD)","full_name":"Demo Owner","organization_name":"$(DEMO_ORG)","legal_names":["$(DEMO_ORG)"],"default_currency":"USD"}' \
 		| $(PYTHON) -m json.tool
+
+worker:
+	$(PYTHON) -m siftentry_app.backend.worker
+
+test-postgres:
+	SIFTENTRY_TEST_DATABASE_URL=postgresql://root@/postgres $(PYTHON) -m pytest tests/ -q
 
 test:
 	$(PYTHON) -m pytest -q

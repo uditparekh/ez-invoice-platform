@@ -13,10 +13,27 @@ from siftentry_app.backend.settings import ApiSettings
 from .test_domain import sample_legacy_payload
 
 
+def _database_url_for(tmp_path: Path) -> str:
+    """SQLite per tmp_path by default; a fresh PostgreSQL database per test
+    when SIFTENTRY_TEST_DATABASE_URL is set (e.g. postgresql://root@/postgres).
+    Lets the ENTIRE suite run against both engines."""
+    import os
+    import uuid
+
+    base = os.environ.get("SIFTENTRY_TEST_DATABASE_URL", "").strip()
+    if not base:
+        return f"sqlite:///{tmp_path / 'api.db'}"
+    dbname = f"siftentry_test_{uuid.uuid4().hex[:12]}"
+    from urllib.parse import urlparse
+
+    parsed = urlparse(base)
+    return base.replace(parsed.path or "/postgres", f"/{dbname}", 1)
+
+
 def make_client(tmp_path: Path) -> TestClient:
     app = create_app(
         ApiSettings(
-            database_url=f"sqlite:///{tmp_path / 'api.db'}",
+            database_url=_database_url_for(tmp_path),
             database_path=tmp_path / "api.db",
             upload_directory=tmp_path / "uploads",
             max_upload_bytes=2 * 1024 * 1024,
@@ -1147,11 +1164,25 @@ def test_expired_pdf_cleanup_keeps_invoice_history(tmp_path: Path):
         stored_path = Path(payload["source_path"])
         assert stored_path.exists()
 
-        with sqlite3.connect(tmp_path / "api.db") as connection:
-            connection.execute(
-                "UPDATE invoice_files SET retention_until = ? WHERE id = ?",
-                (datetime(2000, 1, 1, tzinfo=timezone.utc).isoformat(), file_id),
-            )
+        # Force-expire the retained file directly in whichever engine is active.
+        from siftentry_app.backend import db as _db
+
+        expired_at = datetime(2000, 1, 1, tzinfo=timezone.utc).isoformat()
+        test_pg_url = __import__("os").environ.get("SIFTENTRY_TEST_DATABASE_URL", "")
+        if test_pg_url:
+            repo = client.app.state.repository
+            with repo._connect() as connection:
+                connection.execute(
+                    "UPDATE invoice_files SET retention_until = ? WHERE id = ?",
+                    (expired_at, file_id),
+                )
+        else:
+            with sqlite3.connect(tmp_path / "api.db") as connection:
+                connection.execute(
+                    "UPDATE invoice_files SET retention_until = ? WHERE id = ?",
+                    (expired_at, file_id),
+                )
+        assert _db  # imported for engine-awareness documentation
 
         cleanup = client.post(
             f"/api/v1/organizations/{org_id}/storage/cleanup",

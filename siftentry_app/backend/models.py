@@ -584,6 +584,28 @@ class BatchPostSkip(BaseModel):
     reason: str
 
 
+class Job(BaseModel):
+    """Background job record — the seam where slow work (posting to
+    accounting APIs, LLM extraction) leaves the request path."""
+
+    id: str
+    organization_id: str
+    kind: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    status: str = "queued"  # queued | running | done | failed
+    attempts: int = 0
+    result: Dict[str, Any] = Field(default_factory=dict)
+    error: str = ""
+    actor_id: str = ""
+    created_at: datetime
+    updated_at: datetime
+
+
+class JobEnqueueResult(BaseModel):
+    job: Job
+    poll_url: str
+
+
 class LearningExportBundle(BaseModel):
     """Portable backup of everything the AI learns from — provider-independent.
 
