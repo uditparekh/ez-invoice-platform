@@ -46,6 +46,7 @@ from .models import (
     Membership,
     Organization,
     OrganizationCreate,
+    OrganizationSettings,
     OrganizationMember,
     OrganizationRole,
     PasswordChangeRequest,
@@ -53,6 +54,9 @@ from .models import (
     PasswordResetRequest,
     PasswordResetResponse,
     PdfRetentionPolicy,
+    BatchPostRequest,
+    BatchPostResult,
+    BatchPostSkip,
     PostingRequest,
     PostingRetryRequest,
     PostingResult,
@@ -1175,6 +1179,101 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             client_profile_id=body.client_profile_id,
             dry_run=body.dry_run,
         )
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/invoices/post-ready",
+        response_model=BatchPostResult,
+        tags=["workflow"],
+    )
+    def post_ready_invoices(
+        request: Request,
+        organization_id: str,
+        body: BatchPostRequest,
+        current_user: CurrentUser,
+    ) -> BatchPostResult:
+        """Batch-post every invoice in the given status (default: approved).
+
+        Individual posting failures are recorded as failed PostingResults by the
+        posting pipeline itself; configuration errors (e.g. missing profile) are
+        collected into `skipped` so one bad invoice never blocks the batch.
+        """
+        _require_membership(request, current_user, organization_id, EDIT_ROLES)
+        candidates = [
+            invoice
+            for invoice in _repo(request).list_invoices(
+                organization_id=organization_id,
+                limit=100_000,
+                offset=0,
+            )
+            if (
+                invoice.status.value
+                if hasattr(invoice.status, "value")
+                else str(invoice.status)
+            )
+            == body.status
+        ]
+        results: List[PostingResult] = []
+        skipped: List[BatchPostSkip] = []
+        for invoice in candidates:
+            try:
+                results.append(
+                    _execute_posting(
+                        request,
+                        current_user,
+                        invoice,
+                        target=body.target,
+                        client_profile_id=body.client_profile_id,
+                        dry_run=body.dry_run,
+                    )
+                )
+            except HTTPException as exc:
+                skipped.append(
+                    BatchPostSkip(invoice_id=invoice.id, reason=str(exc.detail))
+                )
+        succeeded = sum(1 for result in results if result.success)
+        return BatchPostResult(
+            attempted=len(candidates),
+            succeeded=succeeded,
+            failed=len(results) - succeeded,
+            results=results,
+            skipped=skipped,
+        )
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/settings",
+        response_model=OrganizationSettings,
+        tags=["organizations"],
+    )
+    def get_organization_settings(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+    ) -> OrganizationSettings:
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        stored = _repo(request).get_organization_settings(organization_id)
+        return (
+            OrganizationSettings.model_validate(stored)
+            if stored
+            else OrganizationSettings()
+        )
+
+    @app.put(
+        "/api/v1/organizations/{organization_id}/settings",
+        response_model=OrganizationSettings,
+        tags=["organizations"],
+    )
+    def put_organization_settings(
+        request: Request,
+        organization_id: str,
+        body: OrganizationSettings,
+        current_user: CurrentUser,
+    ) -> OrganizationSettings:
+        _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        saved = _repo(request).upsert_organization_settings(
+            organization_id,
+            body.model_dump(),
+        )
+        return OrganizationSettings.model_validate(saved)
 
     @app.get(
         "/api/v1/invoices/{invoice_id}/postings",

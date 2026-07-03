@@ -62,6 +62,37 @@ BACKEND TODO: honor `learn_vendor_memory` in the invoice PATCH handler when writ
 - **Client-profiles wizard polish** — structurally complete (3,146-line panel, wizard + approval flow present); final polish deferred until live client feedback, exactly as your parity review recommends. Blind-rewriting it now would add risk, not value.
 - **Teach-fields region marking** — ships when extraction returns bounding boxes (backend dependency).
 
+## Step 10 — Full-stack pass: backend TODOs live + batch posting + E2E scaffold (2026-07-03) ✅
+
+**Verification: backend `pytest` 36/36 passed (incl. 3 new feature tests) · web `tsc` 0 errors ·
+`eslint` 0 errors · `next build` 41/41 routes.** No existing test regressed; all changes additive.
+
+### Backend (FastAPI · siftentry_app/backend)
+| File | Change |
+|---|---|
+| repository.py | New `organization_settings` table (CREATE IF NOT EXISTS — no migration needed, applies on next boot). New `get_organization_settings` / `upsert_organization_settings`. **`learn_vendor_memory` gate in `patch_invoice`**: flag is popped from the patch (never touches invoice fields); when False, corrections from that save are NOT recorded as learning signals; audit log still records the edit. Default remains learning-on. |
+| models.py | `InvoicePatch.learn_vendor_memory` (optional — the Review Workspace toggle now works end-to-end). `OrganizationSettings` (currency/country/system/retention/notifications, currency normalized to uppercase). `BatchPostRequest/Result/Skip`. |
+| main.py | 3 new endpoints: `GET/PUT /api/v1/organizations/{id}/settings` (GET any member, PUT owner/admin only) and `POST /api/v1/organizations/{id}/invoices/post-ready` — batch-posts every invoice in a status (default approved); per-invoice: pipeline failures are recorded as failed PostingResults, config errors collected into `skipped`, one bad invoice never blocks the batch. |
+| tests/test_workspace_features.py | NEW — settings roundtrip + auth, learning-gate on/off proof, batch-post accounting. |
+
+### Web (apps/web)
+| File | Change |
+|---|---|
+| src/app/api/organizations/[organizationId]/settings/route.ts | NEW proxy (GET/PUT). |
+| src/app/api/organizations/[organizationId]/invoices/post-ready/route.ts | NEW proxy (POST). |
+| src/app/(product)/app/settings/page.tsx | Organization / Data retention / Notifications panes now read & save through the **live org-settings API** (optimistic save, "✓ Saved — synced to every workspace member", 403 explains owner/admin requirement, error reverts). localStorage shim (`usePrefs`) removed. Appearance stays device-local by design; Profile stays auth-sourced. |
+| src/components/command-center.tsx | ⌘K gains **"Post all approved invoices (N)"** — appears only when approved invoices exist; browser-confirm, fires the batch endpoint, lands you in History › Posting log to watch results. |
+| playwright.config.ts + e2e/smoke.spec.ts + package.json | E2E scaffold: login → Home → ⌘K palette → "?" overlay → Invoices. Run: `make api` + `make bootstrap` + `make web`, then `pnpm exec playwright install chromium` once, then `pnpm e2e`. Creds default to the make-bootstrap demo owner (override via SIFT_E2E_EMAIL/PASSWORD). |
+
+### How it works (team notes)
+- **Settings** now change the whole workspace: an admin flipping retention or currency updates every member. Non-admins get a clear "owners and admins only" message on save.
+- **Vendor memory toggle** (Review Workspace save row) is real: off = that save teaches nothing; on = corrections feed /corrections/learning and the Rules › Vendor memory tab.
+- **Batch post**: ⌘K → type "post" → confirm. Or call the endpoint directly for automation.
+
+### Deferred (scoped, honest)
+- **Extraction bounding boxes** (→ teach-fields + true PDF coordinate highlight): requires ai_parser + extraction-model coordinate output — a self-contained next project, not a patch.
+- Accessibility deep-audit + phone-width sweep: spot-checked healthy; formal pass pending.
+
 ## Step 9 — Saved views + queue keyboard nav (2026-07-03) ✅ COMPILE-VERIFIED
 Closes the last two open items on the wow shortlist.
 

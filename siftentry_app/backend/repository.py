@@ -138,6 +138,12 @@ class InvoiceRepository:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS organization_settings (
+                    organization_id TEXT PRIMARY KEY,
+                    settings_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -986,6 +992,8 @@ class InvoiceRepository:
             return None
 
         updates = patch.model_dump(exclude_unset=True)
+        learn_vendor_memory = updates.pop("learn_vendor_memory", None)
+        learn = True if learn_vendor_memory is None else bool(learn_vendor_memory)
         if not updates:
             return current
 
@@ -1551,6 +1559,8 @@ class InvoiceRepository:
             return None
 
         updates = patch.model_dump(exclude_unset=True)
+        learn_vendor_memory = updates.pop("learn_vendor_memory", None)
+        learn = True if learn_vendor_memory is None else bool(learn_vendor_memory)
         if not updates:
             return current
 
@@ -1598,16 +1608,19 @@ class InvoiceRepository:
             )
             if "lines" in updates:
                 self._replace_lines(connection, invoice_id, updated.lines)
-            for field_path, new_value in updates.items():
-                self._insert_correction(
-                    connection,
-                    updated.organization_id,
-                    invoice_id,
-                    field_path,
-                    old_values[field_path],
-                    new_value,
-                    actor_id,
-                )
+            if learn:
+                # Vendor-memory learning is opt-out via learn_vendor_memory=False
+                # on the PATCH body (Review Workspace toggle).
+                for field_path, new_value in updates.items():
+                    self._insert_correction(
+                        connection,
+                        updated.organization_id,
+                        invoice_id,
+                        field_path,
+                        old_values[field_path],
+                        new_value,
+                        actor_id,
+                    )
             self._insert_audit(
                 connection,
                 updated.organization_id,
@@ -1616,6 +1629,38 @@ class InvoiceRepository:
                 {"fields": list(updates)},
             )
         return self.get_invoice(invoice_id)
+
+    def get_organization_settings(self, organization_id: str) -> Dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT settings_json FROM organization_settings
+                WHERE organization_id = ?
+                """,
+                (organization_id,),
+            ).fetchone()
+        if not row:
+            return {}
+        loaded = _loads(row[0], {})
+        return loaded if isinstance(loaded, dict) else {}
+
+    def upsert_organization_settings(
+        self,
+        organization_id: str,
+        settings: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO organization_settings (organization_id, settings_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(organization_id) DO UPDATE SET
+                    settings_json = excluded.settings_json,
+                    updated_at = excluded.updated_at
+                """,
+                (organization_id, _json(settings), utc_now().isoformat()),
+            )
+        return settings
 
     def update_validation(
         self,

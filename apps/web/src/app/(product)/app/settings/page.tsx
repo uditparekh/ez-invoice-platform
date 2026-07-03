@@ -11,7 +11,7 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -51,6 +51,7 @@ const sections: {
 
 export default function SettingsPage() {
   const [section, setSection] = useState<Section>("organization");
+  const org = useOrgSettings();
 
   return (
     <div className="min-h-[calc(100vh-68px)] bg-canvas">
@@ -94,12 +95,12 @@ export default function SettingsPage() {
 
           {/* pane */}
           <div className="min-w-0 space-y-4">
-            {section === "organization" && <OrganizationPane />}
+            {section === "organization" && <OrganizationPane org={org} />}
             {section === "team" && <TeamManagementPanel />}
-            {section === "retention" && <RetentionPane />}
+            {section === "retention" && <RetentionPane org={org} />}
             {section === "profile" && <ProfilePane />}
             {section === "security" && <PasswordChangeCard />}
-            {section === "notifications" && <NotificationsPane />}
+            {section === "notifications" && <NotificationsPane org={org} />}
             {section === "appearance" && <AppearancePane />}
           </div>
         </div>
@@ -108,20 +109,120 @@ export default function SettingsPage() {
   );
 }
 
+/* ================= org settings (live API) ================= */
+
+type OrgSettings = {
+  default_currency: string;
+  default_country: string;
+  primary_accounting_system: string;
+  data_retention: string;
+  notifications: Record<string, boolean>;
+};
+
+type OrgSettingsState = {
+  settings: OrgSettings | null;
+  status: "loading" | "ready" | "saving" | "saved" | "error";
+  error: string;
+  save: (next: OrgSettings) => void;
+};
+
+function useOrgSettings(): OrgSettingsState {
+  const { activeOrganizationId } = useAuth();
+  const [settings, setSettings] = useState<OrgSettings | null>(null);
+  const [status, setStatus] =
+    useState<OrgSettingsState["status"]>("loading");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!activeOrganizationId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(
+          `/api/organizations/${activeOrganizationId}/settings`,
+        );
+        if (!response.ok) throw new Error("Could not load workspace settings.");
+        const payload = (await response.json()) as OrgSettings;
+        if (!cancelled) {
+          setSettings(payload);
+          setStatus("ready");
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setStatus("error");
+          setError((loadError as Error).message);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrganizationId]);
+
+  function save(next: OrgSettings) {
+    const previous = settings;
+    setSettings(next); // optimistic
+    setStatus("saving");
+    setError("");
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/organizations/${activeOrganizationId}/settings`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(next),
+          },
+        );
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as {
+            detail?: string;
+          } | null;
+          throw new Error(
+            response.status === 403
+              ? "Only workspace owners and admins can change these settings."
+              : (payload?.detail ?? "Could not save workspace settings."),
+          );
+        }
+        setSettings((await response.json()) as OrgSettings);
+        setStatus("saved");
+      } catch (saveError) {
+        setSettings(previous);
+        setStatus("error");
+        setError((saveError as Error).message);
+      }
+    })();
+  }
+
+  return { settings, status, error, save };
+}
+
+function SyncState({ org }: { org: OrgSettingsState }) {
+  if (org.status === "error")
+    return (
+      <p className="text-xs font-bold text-danger">{org.error}</p>
+    );
+  return (
+    <p className="text-xs font-semibold text-ink-muted">
+      {org.status === "saving"
+        ? "Saving to workspace…"
+        : org.status === "saved"
+          ? "✓ Saved — synced to every workspace member."
+          : "Synced to the workspace — changes apply to every member."}
+    </p>
+  );
+}
+
 /* ================= workspace panes ================= */
 
-function OrganizationPane() {
+function OrganizationPane({ org }: { org: OrgSettingsState }) {
   const { user, activeOrganizationId } = useAuth();
   const membership =
     user?.memberships.find(
       (candidate) => candidate.organization_id === activeOrganizationId,
     ) ?? user?.memberships[0];
   const orgName = membership?.organization_name ?? "Your workspace";
-  const [prefs, setPrefs] = usePrefs("siftentry.org.defaults", {
-    currency: "USD",
-    country: "auto",
-    system: "tally",
-  });
+  const settings = org.settings;
 
   return (
     <Pane
@@ -137,8 +238,10 @@ function OrganizationPane() {
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Default currency">
           <Select
-            value={prefs.currency}
-            onChange={(currency) => setPrefs({ ...prefs, currency })}
+            value={settings?.default_currency ?? "USD"}
+            onChange={(currency) =>
+              settings && org.save({ ...settings, default_currency: currency })
+            }
             options={[
               ["INR", "INR ₹ — Indian Rupee"],
               ["USD", "USD $ — US Dollar"],
@@ -150,8 +253,10 @@ function OrganizationPane() {
         </Field>
         <Field label="Default country / tax">
           <Select
-            value={prefs.country}
-            onChange={(country) => setPrefs({ ...prefs, country })}
+            value={settings?.default_country ?? "auto"}
+            onChange={(country) =>
+              settings && org.save({ ...settings, default_country: country })
+            }
             options={[
               ["auto", "Auto-detect from invoice"],
               ["IN", "India · GST"],
@@ -163,8 +268,11 @@ function OrganizationPane() {
       </div>
       <Field label="Primary accounting system">
         <Select
-          value={prefs.system}
-          onChange={(system) => setPrefs({ ...prefs, system })}
+          value={settings?.primary_accounting_system ?? "tally"}
+          onChange={(system) =>
+            settings &&
+            org.save({ ...settings, primary_accounting_system: system })
+          }
           options={[
             ["tally", "Tally"],
             ["quickbooks", "QuickBooks"],
@@ -176,15 +284,14 @@ function OrganizationPane() {
           Client profiles.
         </Hint>
       </Field>
-      <SyncNote />
+      <SyncState org={org} />
     </Pane>
   );
 }
 
-function RetentionPane() {
-  const [policy, setPolicy] = usePrefs("siftentry.org.retention", {
-    mode: "review_window",
-  });
+function RetentionPane({ org }: { org: OrgSettingsState }) {
+  const settings = org.settings;
+  const mode = settings?.data_retention ?? "review_window";
   const options: [string, string, string][] = [
     [
       "review_window",
@@ -212,10 +319,12 @@ function RetentionPane() {
           <button
             key={value}
             type="button"
-            onClick={() => setPolicy({ mode: value })}
+            onClick={() =>
+              settings && org.save({ ...settings, data_retention: value })
+            }
             className={cn(
               "w-full rounded-2xl border bg-surface p-4 text-left transition-all",
-              policy.mode === value
+              mode === value
                 ? "border-accent shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_15%,transparent)]"
                 : "border-line hover:border-line-strong",
             )}
@@ -232,7 +341,7 @@ function RetentionPane() {
         profiles are isolated per organization · retention events are logged to
         History.
       </p>
-      <SyncNote />
+      <SyncState org={org} />
     </Pane>
   );
 }
@@ -267,13 +376,14 @@ function ProfilePane() {
   );
 }
 
-function NotificationsPane() {
-  const [prefs, setPrefs] = usePrefs("siftentry.notifications", {
+function NotificationsPane({ org }: { org: OrgSettingsState }) {
+  const settings = org.settings;
+  const prefs = settings?.notifications ?? {
     approvals: true,
     failures: true,
     digest: false,
-  });
-  const rows: [keyof typeof prefs, string, string][] = [
+  };
+  const rows: [string, string, string][] = [
     ["approvals", "Approval requests", "When an invoice is routed to you by an approval rule."],
     ["failures", "Posting failures", "When a posting attempt fails and needs a retry or mapping fix."],
     ["digest", "Weekly digest", "Your week: posted count, value processed, what needs you Monday."],
@@ -294,16 +404,20 @@ function NotificationsPane() {
             </span>
             <input
               type="checkbox"
-              checked={prefs[key]}
+              checked={prefs[key] ?? false}
               onChange={(event) =>
-                setPrefs({ ...prefs, [key]: event.target.checked })
+                settings &&
+                org.save({
+                  ...settings,
+                  notifications: { ...prefs, [key]: event.target.checked },
+                })
               }
               className="mt-1 size-5 shrink-0 accent-[var(--accent)]"
             />
           </label>
         ))}
       </div>
-      <SyncNote />
+      <SyncState org={org} />
     </Pane>
   );
 }
@@ -362,27 +476,6 @@ function AppearancePane() {
 
 /* ================= shared ================= */
 
-function usePrefs<T extends Record<string, unknown>>(
-  key: string,
-  initial: T,
-): [T, (next: T) => void] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === "undefined") return initial;
-    try {
-      const stored = JSON.parse(window.localStorage.getItem(key) || "null");
-      if (stored && typeof stored === "object")
-        return { ...initial, ...stored };
-    } catch {
-      /* defaults */
-    }
-    return initial;
-  });
-  function update(next: T) {
-    setValue(next);
-    window.localStorage.setItem(key, JSON.stringify(next));
-  }
-  return [value, update];
-}
 
 function Pane({
   title,
@@ -441,15 +534,6 @@ function Hint({ children }: { children: ReactNode }) {
   return (
     <p className="mt-2 text-xs font-semibold leading-5 text-ink-muted">
       {children}
-    </p>
-  );
-}
-
-function SyncNote() {
-  return (
-    <p className="text-xs font-semibold text-ink-muted">
-      Saved as a workspace preference on this device — syncs to the backend when
-      the organization-settings API lands.
     </p>
   );
 }

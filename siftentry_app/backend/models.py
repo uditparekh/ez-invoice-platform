@@ -516,6 +516,9 @@ class InvoiceDocumentRetention(BaseModel):
 
 class InvoicePatch(BaseModel):
     invoice_number: Optional[str] = None
+    # Review Workspace vendor-memory toggle: when False, corrections from this
+    # patch are NOT recorded as learning signals. Defaults to learning on.
+    learn_vendor_memory: Optional[bool] = None
     invoice_date: Optional[str] = None
     due_date: Optional[str] = None
     purchase_order: Optional[str] = None
@@ -549,6 +552,44 @@ class PostingRequest(BaseModel):
 
 class PostingRetryRequest(BaseModel):
     dry_run: Optional[bool] = None
+
+
+class OrganizationSettings(BaseModel):
+    """Workspace-level defaults surfaced in Settings (org-scoped, admin-managed)."""
+
+    default_currency: str = Field(default="USD", min_length=3, max_length=3)
+    default_country: str = "auto"
+    primary_accounting_system: str = "tally"
+    data_retention: str = "review_window"
+    notifications: Dict[str, bool] = Field(
+        default_factory=lambda: {"approvals": True, "failures": True, "digest": False}
+    )
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("default_currency")
+    @classmethod
+    def upper_currency(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class BatchPostRequest(BaseModel):
+    target: Optional[PostingTarget] = None
+    client_profile_id: Optional[str] = None
+    dry_run: bool = False
+    status: str = "approved"
+
+
+class BatchPostSkip(BaseModel):
+    invoice_id: str
+    reason: str
+
+
+class BatchPostResult(BaseModel):
+    attempted: int
+    succeeded: int
+    failed: int
+    results: List[PostingResult] = Field(default_factory=list)
+    skipped: List[BatchPostSkip] = Field(default_factory=list)
 
 
 class PostingResultCreate(BaseModel):

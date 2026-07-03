@@ -3,6 +3,7 @@
 import {
   ArrowUpRight,
   BadgeCheck,
+  BadgeDollarSign,
   BarChart3,
   FileClock,
   FileText,
@@ -28,6 +29,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 
+import { useAuth } from "@/components/auth-provider";
 import { useWorkspaceInvoices } from "@/hooks/use-workspace-invoices";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -159,6 +161,7 @@ export function CommandCenter() {
 
 function Palette({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const { activeOrganizationId } = useAuth();
   const { invoices } = useWorkspaceInvoices();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -175,15 +178,49 @@ function Palette({ onClose }: { onClose: () => void }) {
 
   const q = query.trim().toLowerCase();
 
+  const approvedCount = useMemo(
+    () => invoices.filter((invoice) => invoice.status === "approved").length,
+    [invoices],
+  );
+
+  const allCommands = useMemo<Command[]>(() => {
+    if (!approvedCount || !activeOrganizationId) return commands;
+    const batch: Command = {
+      id: "act-batch-post",
+      group: "Actions",
+      label: `Post all approved invoices (${approvedCount})`,
+      hint: "batch → books",
+      keywords: "post all ready approved batch tally books push",
+      icon: <BadgeDollarSign size={16} />,
+      run: (nav) => {
+        if (
+          !window.confirm(
+            `Post ${approvedCount} approved invoice${approvedCount === 1 ? "" : "s"} to the accounting system now? Results land in History › Posting log.`,
+          )
+        )
+          return;
+        void fetch(
+          `/api/organizations/${activeOrganizationId}/invoices/post-ready`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          },
+        ).finally(() => nav.push("/app/history"));
+      },
+    };
+    return [batch, ...commands];
+  }, [approvedCount, activeOrganizationId]);
+
   const matchedCommands = useMemo(
     () =>
-      commands.filter(
+      allCommands.filter(
         (command) =>
           !q ||
           command.label.toLowerCase().includes(q) ||
           command.keywords.includes(q),
       ),
-    [q],
+    [allCommands, q],
   );
 
   const matchedInvoices = useMemo(() => {
