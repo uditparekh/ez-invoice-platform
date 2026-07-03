@@ -1,4 +1,4 @@
-from ez_invoice_app.universal_parser import parse_generic_invoice
+from siftentry_app.universal_parser import parse_generic_invoice
 
 
 STRUCTURED_COLUMN_TEXT = """

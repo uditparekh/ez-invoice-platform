@@ -1,4 +1,4 @@
-"""Platform-side client for the local EZ-Invoice Tally Connector."""
+"""Platform-side client for the local SiftEntry Tally Connector."""
 
 from __future__ import annotations
 

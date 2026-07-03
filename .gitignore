@@ -29,16 +29,16 @@ coverage/
 **/secrets.toml
 
 # Runtime databases, uploads, and client data
-ez_invoice_app/data/*
-!ez_invoice_app/data/.gitkeep
+siftentry_app/data/*
+!siftentry_app/data/.gitkeep
 *.db-shm
 *.db-wal
-ez_invoice_app/qb_account_mappings.json
-ez_invoice_app/qb_client_settings.json
-ez_invoice_app/zoho_client_settings.json
-ez_invoice_app/tally_settings.json
-ez_invoice_app/tally_connector_settings.json
-ez_invoice_app/NEEL_TALLY_DEMO_SETTINGS.md
+siftentry_app/qb_account_mappings.json
+siftentry_app/qb_client_settings.json
+siftentry_app/zoho_client_settings.json
+siftentry_app/tally_settings.json
+siftentry_app/tally_connector_settings.json
+siftentry_app/NEEL_TALLY_DEMO_SETTINGS.md
 
 # Generated client packages and historical snapshots
 *.zip

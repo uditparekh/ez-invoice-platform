@@ -14,7 +14,7 @@ application is developed alongside it.
 ```text
 apps/
   web/                    Next.js customer-facing SaaS app
-ez_invoice_app/
+siftentry_app/
   app.py                  Preserved Streamlit pilot/demo app
   backend/                FastAPI API, auth, tenant isolation, profiles, posting
   *_integration.py        Accounting-system adapters and connector clients
@@ -65,7 +65,7 @@ runtime artifacts. They are intentionally ignored and should not be committed.
 Install Python dependencies:
 
 ```bash
-python3 -m pip install -r ez_invoice_app/requirements.txt
+python3 -m pip install -r siftentry_app/requirements.txt
 ```
 
 Copy `.env.example` values into your shell or a private `.env` file. Never
@@ -75,16 +75,16 @@ Start FastAPI:
 
 ```bash
 export EZ_API_JWT_SECRET="replace-with-a-long-random-secret"
-python3 -m uvicorn ez_invoice_app.backend.main:app --reload --port 8000
+python3 -m uvicorn siftentry_app.backend.main:app --reload --port 8000
 ```
 
 Start the Streamlit pilot in a second terminal:
 
 ```bash
-export EZ_INVOICE_BACKEND="api"
-export EZ_API_EMAIL="owner@ezinvoice.local"
+export SIFTENTRY_BACKEND="api"
+export EZ_API_EMAIL="owner@siftentry.local"
 export EZ_API_PASSWORD="replace-with-your-local-password"
-python3 -m streamlit run ez_invoice_app/app.py --server.port 8506
+python3 -m streamlit run siftentry_app/app.py --server.port 8506
 ```
 
 Start the Next.js application in another terminal:

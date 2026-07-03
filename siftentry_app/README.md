@@ -1,6 +1,6 @@
 # SiftEntry Streamlit Pilot
 
-This folder preserves the original EZ-Invoice Streamlit pilot while SiftEntry
+This folder preserves the original SiftEntry Streamlit pilot while SiftEntry
 moves into the Next.js + FastAPI product architecture. It uses dynamic document
 extraction adapters plus a generic supplier invoice parser, then routes
 validated invoices into QuickBooks, TallyPrime, Zoho Books, and export-package
@@ -11,7 +11,7 @@ at `../PROJECT_MAP.md`.
 
 ## Client Workspace Model
 
-Each customer should operate inside its own EZ-Invoice workspace. The client
+Each customer should operate inside its own SiftEntry workspace. The client
 logs in, saves its legal entity aliases, connects its accounting system, uploads
 supplier invoices, reviews extracted data, and posts approved inbound bills into
 its own Tally company.
@@ -32,7 +32,7 @@ py -m streamlit run app.py --server.port 8506 --server.address 127.0.0.1
 Then open `http://127.0.0.1:8506` in Chrome or Edge.
 
 You can also double-click `INSTALL_PACKAGES_WINDOWS.bat`, then
-`RUN_EZ_INVOICE_WINDOWS.bat`.
+`RUN_SIFTENTRY_WINDOWS.bat`.
 
 ## FastAPI Backend
 
@@ -40,11 +40,11 @@ The first SaaS backend slice now lives in `backend/`. It adds a universal
 invoice model, SQLite persistence, local PDF storage, validation, corrections,
 audit events, and posting adapters for QuickBooks, Tally, and Zoho Books.
 
-From the folder containing `ez_invoice_app`, run:
+From the folder containing `siftentry_app`, run:
 
 ```bash
-python3 -m pip install -r ez_invoice_app/requirements.txt
-python3 -m uvicorn ez_invoice_app.backend.main:app --reload --port 8000
+python3 -m pip install -r siftentry_app/requirements.txt
+python3 -m uvicorn siftentry_app.backend.main:app --reload --port 8000
 ```
 
 Open `http://127.0.0.1:8000/docs` for the interactive API documentation.
@@ -53,10 +53,10 @@ frontend migration:
 
 ```bash
 # Terminal 1
-python3 -m uvicorn ez_invoice_app.backend.main:app --reload --port 8000
+python3 -m uvicorn siftentry_app.backend.main:app --reload --port 8000
 
 # Terminal 2
-python3 -m streamlit run ez_invoice_app/app.py --server.port 8506
+python3 -m streamlit run siftentry_app/app.py --server.port 8506
 ```
 
 With FastAPI available, Streamlit automatically uses it for organization
@@ -67,16 +67,17 @@ temporarily falls back to the legacy in-memory workflow.
 Optional bridge settings:
 
 ```bash
-export EZ_INVOICE_BACKEND="api"       # api, auto, or legacy
+export SIFTENTRY_BACKEND="api"        # api, auto, or legacy
 export EZ_API_BASE_URL="http://127.0.0.1:8000"
 export EZ_ORGANIZATION_NAME="Client Workspace"
-export EZ_API_EMAIL="owner@ezinvoice.local"
+export EZ_API_EMAIL="owner@siftentry.local"
 export EZ_API_PASSWORD="local-development-password"
 ```
 
-Use `EZ_INVOICE_BACKEND=api` while testing the backend contract because it
+Use `SIFTENTRY_BACKEND=api` while testing the backend contract because it
 shows a visible error instead of silently using the legacy workflow. See
-`API_ARCHITECTURE.md` for the migration boundary and next milestones.
+`../PROJECT_MAP.md` and `../docs/ROADMAP_STATUS.md` for the current migration
+boundary and next milestones.
 
 ## Authentication And Client Isolation
 
@@ -148,7 +149,7 @@ QB_USE_LOCAL_CALLBACK=true
 The redirect URI must exactly match a redirect URI registered in the Intuit
 developer app. For production, use `QB_ENVIRONMENT=production`, register an
 HTTPS callback URL, and set `QB_USE_LOCAL_CALLBACK=false`. `QB_BASE_URL` is an
-optional override; EZ-Invoice selects the correct sandbox or production API
+optional override; SiftEntry selects the correct sandbox or production API
 host from `QB_ENVIRONMENT`.
 
 Port `8000` is reserved for FastAPI. Register and use
@@ -156,7 +157,7 @@ Port `8000` is reserved for FastAPI. Register and use
 
 After connecting, refresh the Chart of Accounts and map the generic invoice
 categories (`materials`, `services`, `freight`, `fees`, `tax`, and `general`)
-to the client's own QuickBooks expense or cost-of-goods accounts. EZ-Invoice
+to the client's own QuickBooks expense or cost-of-goods accounts. SiftEntry
 creates supplier invoices as QuickBooks Bills and prevents the same invoice
 number from being posted twice to the connected company.
 
@@ -169,7 +170,7 @@ redirect URI:
 http://localhost:8001/zoho/callback
 ```
 
-For an Indian Zoho Books organization, start EZ-Invoice with:
+For an Indian Zoho Books organization, start SiftEntry with:
 
 ```bash
 export ZOHO_CLIENT_ID="YOUR_ZOHO_CLIENT_ID"
@@ -180,10 +181,10 @@ export ZOHO_API_BASE_URL="https://www.zohoapis.in/books/v3"
 export ZOHO_USE_LOCAL_CALLBACK="true"
 ```
 
-Open **Zoho Books** in EZ-Invoice, connect the account, select the client
+Open **Zoho Books** in SiftEntry, connect the account, select the client
 organization, refresh the Chart of Accounts, and map each universal category.
 Select a default purchase tax only when extracted invoice lines contain tax.
-EZ-Invoice resolves or creates the vendor, creates a Zoho Books Bill, stores
+SiftEntry resolves or creates the vendor, creates a Zoho Books Bill, stores
 the returned Bill ID, and prevents the same supplier invoice from being posted
 twice to that organization.
 
@@ -194,14 +195,14 @@ regional domains assigned to the client's Zoho account.
 
 1. Open TallyPrime and load the company.
 2. Enable the HTTP Server in TallyPrime advanced configuration. The default endpoint is `http://localhost:9000`.
-3. In EZ-Invoice, open **Tally**, save the client workspace, connector, and voucher settings, then test the connector.
+3. In SiftEntry, open **Tally**, save the client workspace, connector, and voucher settings, then test the connector.
 4. Make sure the vendor and purchase/expense/tax ledgers used by the generated XML exist in TallyPrime before importing.
 
 The app generates accounting purchase vouchers as Tally XML and can either download them or POST them to the TallyPrime HTTP gateway.
 
 For production SaaS, the cloud app should not try to call a client's
-`localhost:9000` directly. Run a small client-side EZ-Invoice Tally Connector
-beside TallyPrime; it authenticates to EZ-Invoice, receives approved posting
+`localhost:9000` directly. Run a small client-side SiftEntry Tally Connector
+beside TallyPrime; it authenticates to SiftEntry, receives approved posting
 jobs, sends XML to Tally, and returns success/error responses.
 
 ## SAP Business One Next
@@ -224,7 +225,7 @@ py tally_connector_agent.py --workspace-id local-workspace --tally-url http://lo
 
 Or double-click `RUN_TALLY_CONNECTOR_WINDOWS.bat`.
 
-In EZ-Invoice, open **Tally** and use:
+In SiftEntry, open **Tally** and use:
 
 ```text
 Connector URL: http://127.0.0.1:8765

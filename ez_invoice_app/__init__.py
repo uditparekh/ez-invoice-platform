@@ -1,1 +1,0 @@
-"""EZ-Invoice application package."""

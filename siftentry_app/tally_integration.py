@@ -1,4 +1,4 @@
-"""TallyPrime XML integration for EZ-Invoice."""
+"""TallyPrime XML integration for SiftEntry."""
 
 from __future__ import annotations
 
@@ -529,7 +529,7 @@ def _build_ledger_entries(
         <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
         <AMOUNT>{vendor_amount:.2f}</AMOUNT>
         <BILLALLOCATIONS.LIST>
-          <NAME>{_xml(inv_no or "EZ-Invoice")}</NAME>
+          <NAME>{_xml(inv_no or "SiftEntry")}</NAME>
           <BILLTYPE>New Ref</BILLTYPE>
           <AMOUNT>{vendor_amount:.2f}</AMOUNT>
         </BILLALLOCATIONS.LIST>
@@ -560,12 +560,12 @@ def build_tally_xml(payload: Dict[str, Any], settings: Optional[Dict[str, Any]] 
     settings = settings or current_settings()
     parts = _invoice_parts(payload)
     header = parts["header"]
-    invoice_no = str(header.get("INVOICE NO.", "") or "EZ-Invoice")
+    invoice_no = str(header.get("INVOICE NO.", "") or "SiftEntry")
     invoice_date = _to_tally_date(header.get("INVOICE DATE", ""))
     voucher_type = settings.get("voucher_type") or "Purchase"
     company = settings.get("company") or ""
     static_company = f"<SVCURRENTCOMPANY>{_xml(company)}</SVCURRENTCOMPANY>" if company else ""
-    narration = "Imported by EZ-Invoice"
+    narration = "Imported by SiftEntry"
     po_no = header.get("PO NO./CONTRACT NO.", "")
     if po_no and po_no != "N/A":
         narration += " | PO: " + str(po_no)

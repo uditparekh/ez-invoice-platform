@@ -1,4 +1,4 @@
-"""SQLite persistence for the first EZ-Invoice SaaS backend slice."""
+"""SQLite persistence for the first SiftEntry SaaS backend slice."""
 
 from __future__ import annotations
 

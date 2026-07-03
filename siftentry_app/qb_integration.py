@@ -778,7 +778,7 @@ def _quickbooks_bill_payload(payload, vendor_ref, accounts, mapping, rules, fall
     bill = {
         "VendorRef": vendor_ref,
         "DocNumber": inv_no,
-        "PrivateNote": "Imported by EZ-Invoice",
+        "PrivateNote": "Imported by SiftEntry",
         "Line": [],
     }
     txn_date = _to_qb_date(header.get("INVOICE DATE", ""))

@@ -5,7 +5,7 @@ from pathlib import Path
 
 SPEC_DIR = Path(SPECPATH)
 ROOT = SPEC_DIR.parents[2]
-APP_DIR = ROOT / "ez_invoice_app"
+APP_DIR = ROOT / "siftentry_app"
 ICON = ROOT / "apps" / "web" / "src" / "app" / "favicon.ico"
 
 

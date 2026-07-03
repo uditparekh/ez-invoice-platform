@@ -27,7 +27,7 @@ help:
 	@echo "  make status           Show git and project file status"
 
 install-python:
-	$(PYTHON) -m pip install -r ez_invoice_app/requirements.txt
+	$(PYTHON) -m pip install -r siftentry_app/requirements.txt
 
 install-web:
 	cd apps/web && $(PNPM) install
@@ -37,17 +37,17 @@ api:
 	EZ_API_ALLOW_DEV_BOOTSTRAP=true \
 	EZ_API_JWT_SECRET="local-development-secret-change-before-hosting" \
 	PYTHONDONTWRITEBYTECODE=1 \
-	$(PYTHON) -m uvicorn ez_invoice_app.backend.main:app --reload --host 127.0.0.1 --port $(API_PORT)
+	$(PYTHON) -m uvicorn siftentry_app.backend.main:app --reload --host 127.0.0.1 --port $(API_PORT)
 
 web:
 	cd apps/web && PATH="$(NODE_PATH)" EZ_WEB_API_BASE_URL=http://127.0.0.1:$(API_PORT) NEXT_PUBLIC_APP_NAME=SiftEntry $(PNPM) dev --hostname 127.0.0.1 --port $(WEB_PORT)
 
 streamlit:
-	EZ_INVOICE_BACKEND=api \
+	SIFTENTRY_BACKEND=api \
 	EZ_API_BASE_URL=http://127.0.0.1:$(API_PORT) \
 	EZ_API_EMAIL="$(DEMO_EMAIL)" \
 	EZ_API_PASSWORD="$(DEMO_PASSWORD)" \
-	$(PYTHON) -m streamlit run ez_invoice_app/app.py --server.port $(STREAMLIT_PORT)
+	$(PYTHON) -m streamlit run siftentry_app/app.py --server.port $(STREAMLIT_PORT)
 
 bootstrap:
 	@curl -sS -X POST http://127.0.0.1:$(API_PORT)/api/v1/auth/bootstrap \
@@ -67,7 +67,7 @@ status:
 	@git status --short
 	@echo ""
 	@echo "Python files:"
-	@find . -path './.git' -prune -o -path './apps/web/node_modules' -prune -o -path './ez_invoice_app/.venv' -prune -o -name '*.py' -print | wc -l
+	@find . -path './.git' -prune -o -path './apps/web/node_modules' -prune -o -path './siftentry_app/.venv' -prune -o -name '*.py' -print | wc -l
 	@echo "Next.js TypeScript files:"
 	@find apps/web/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
 

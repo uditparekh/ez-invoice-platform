@@ -1,4 +1,4 @@
-"""Accounting routing helpers for normalized EZ-Invoice payloads."""
+"""Accounting routing helpers for normalized SiftEntry payloads."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def home_company_names(extra: Optional[Iterable[str]] = None) -> List[str]:
     if extra:
         values.extend(str(part).strip() for part in extra)
     else:
-        env_value = os.environ.get("EZ_INVOICE_HOME_COMPANY", "")
+        env_value = os.environ.get("SIFTENTRY_HOME_COMPANY", "")
         if env_value:
             values.extend(part.strip() for part in env_value.split(","))
         values.extend(DEFAULT_HOME_COMPANIES)

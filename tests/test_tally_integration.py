@@ -1,4 +1,4 @@
-from ez_invoice_app.tally_integration import (
+from siftentry_app.tally_integration import (
     _friendly_tally_message,
     _tally_preflight_issues,
 )

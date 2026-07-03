@@ -1,5 +1,5 @@
 @echo off
-echo Installing EZ-Invoice Python packages...
+echo Installing SiftEntry Python packages...
 py -m pip install --upgrade streamlit pandas pymupdf pypdf openpyxl requests flask pdfplumber
 if errorlevel 1 (
   echo.
@@ -7,5 +7,5 @@ if errorlevel 1 (
   python -m pip install --upgrade streamlit pandas pymupdf pypdf openpyxl requests flask pdfplumber
 )
 echo.
-echo Done. If there were no errors, run RUN_EZ_INVOICE_WINDOWS.bat next.
+echo Done. If there were no errors, run RUN_SIFTENTRY_WINDOWS.bat next.
 pause

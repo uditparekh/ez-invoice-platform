@@ -1,16 +1,16 @@
-from ez_invoice_app.backend.domain import (
+from siftentry_app.backend.domain import (
     invoice_to_legacy_payload,
     legacy_payload_to_invoice,
 )
-from ez_invoice_app.backend.adapters import _profiled_legacy_payload
-from ez_invoice_app.backend.models import (
+from siftentry_app.backend.adapters import _profiled_legacy_payload
+from siftentry_app.backend.models import (
     AccountingSystem,
     ClientProfile,
     ClientProfileItemMapping,
     ClientProfileSettings,
     Invoice,
 )
-from ez_invoice_app.backend.repository import utc_now
+from siftentry_app.backend.repository import utc_now
 
 
 def sample_legacy_payload():

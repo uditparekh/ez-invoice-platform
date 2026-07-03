@@ -1,4 +1,4 @@
-from ez_invoice_app.api_client import (
+from siftentry_app.api_client import (
     invoice_to_legacy_payload,
     invoice_to_session_data,
     parser_mode_for_api,

@@ -1,6 +1,6 @@
 import json
 
-from ez_invoice_app.backend.ai_parser import (
+from siftentry_app.backend.ai_parser import (
     AI_PROVIDER_DISABLED,
     AI_PROVIDER_PROFILE_CONTEXT,
     AI_PROVIDER_WEBHOOK,
@@ -59,7 +59,7 @@ def test_webhook_ai_provider_normalizes_result(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(
-        "ez_invoice_app.backend.ai_parser.urlrequest.urlopen",
+        "siftentry_app.backend.ai_parser.urlrequest.urlopen",
         fake_urlopen,
     )
 

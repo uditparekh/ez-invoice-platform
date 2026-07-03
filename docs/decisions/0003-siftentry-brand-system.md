@@ -5,7 +5,7 @@
 
 ## Context
 
-The platform started under the EZ-Invoice working name while the Streamlit
+The platform started under the SiftEntry working name while the Streamlit
 pilot, FastAPI backend, and accounting connectors were being proven. As the
 customer-facing Next.js application becomes the product surface, the brand needs
 to feel more like a modern SaaS and fintech platform than a single-purpose
@@ -40,7 +40,7 @@ failed, cyan for posted/synced, and indigo for active workflow states.
 ## Consequences
 
 - The Next.js app presents a sharper SaaS/fintech identity.
-- Existing backend paths such as `ez_invoice_app/` remain stable for the working
+- Existing backend paths such as `siftentry_app/` remain stable for the working
   pilot and client scripts.
 - Future UI work should use semantic tokens from `globals.css` rather than
   one-off hex values.

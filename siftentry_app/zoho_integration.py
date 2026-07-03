@@ -153,7 +153,7 @@ def _start_callback_server() -> None:
         if _callback_data["code"]:
             return (
                 "<h2 style='font-family:system-ui;color:#4A6741;text-align:center;padding:64px'>"
-                "Zoho Books connected. Return to EZ-Invoice.</h2>"
+                "Zoho Books connected. Return to SiftEntry.</h2>"
             )
         return (
             "<h2 style='font-family:system-ui;color:#B33A2B;text-align:center;padding:64px'>"
@@ -588,7 +588,7 @@ def build_zoho_bill_payload(
         "due_date": _to_api_date(header.get("DUE DATE", "")),
         "currency_code": parts["currency"],
         "reference_number": str(header.get("PO NO./CONTRACT NO.", "") or "").strip(),
-        "notes": "Imported by EZ-Invoice",
+        "notes": "Imported by SiftEntry",
         "line_items": [],
     }
     bill = {key: value for key, value in bill.items() if value != "" and value is not None}

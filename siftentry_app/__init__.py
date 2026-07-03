@@ -1,0 +1,1 @@
+"""SiftEntry application package."""

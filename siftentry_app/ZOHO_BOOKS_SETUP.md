@@ -7,10 +7,10 @@
 3. Add `http://localhost:8001/zoho/callback` as an authorized redirect URI.
 4. Keep the Client ID and Client Secret private.
 
-## 2. Start EZ-Invoice on macOS
+## 2. Start SiftEntry on macOS
 
 ```bash
-cd "/PATH/TO/ez_invoice_app"
+cd "/PATH/TO/siftentry_app"
 
 export ZOHO_CLIENT_ID="YOUR_ZOHO_CLIENT_ID"
 export ZOHO_CLIENT_SECRET="YOUR_ZOHO_CLIENT_SECRET"
@@ -40,5 +40,5 @@ python3 -m streamlit run app.py --server.port 8506
 4. Click **Send to Zoho Books**.
 5. Confirm the returned Bill ID, then verify the Bill inside Zoho Books.
 
-Do not post the same supplier invoice twice. EZ-Invoice also keeps a local
+Do not post the same supplier invoice twice. SiftEntry also keeps a local
 supplier-plus-invoice duplicate record for the selected organization.

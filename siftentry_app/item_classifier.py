@@ -1,5 +1,5 @@
 """
-Item Classifier Module for EZ-Invoice
+Item Classifier Module for SiftEntry
 =====================================
 Maps extracted invoice line descriptions into generic platform categories and
 client-specific accounting codes:
@@ -57,7 +57,7 @@ class ItemClassifier:
     Classifies invoice line item descriptions into platform subcategories, then
     maps those categories to client-specific GL codes.
     
-    1. Exact match against subcat.csv (ITEM_DESC + SOURCE)
+    1. Optional client/industry seed CSV, when explicitly provided
     2. Keyword-based fallback rules
     3. Client GL code mapping from their worksheet
     """
@@ -72,7 +72,7 @@ class ItemClassifier:
             self.load_subcat(subcat_path)
 
     def load_subcat(self, path):
-        """Load subcat.csv mapping file."""
+        """Load an optional client/industry seed mapping CSV."""
         with open(path, encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -325,11 +325,7 @@ if __name__ == "__main__":
     import sys
     
     # Optional seed CSV is disabled by default for new client workspaces.
-    subcat_path = "subcat.csv"
-    if not os.path.exists(subcat_path):
-        subcat_path = os.path.join(os.path.dirname(__file__), "subcat.csv")
-    
-    c = ItemClassifier(subcat_path if os.path.exists(subcat_path) else None, use_seed_mappings=False)
+    c = ItemClassifier(use_seed_mappings=False)
     
     # Test classifications
     test_items = [

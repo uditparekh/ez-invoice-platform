@@ -6,9 +6,9 @@ Streamlit demo into the Next.js + FastAPI SaaS foundation.
 ## Repository Layout
 
 - `apps/web/` - Next.js product UI.
-- `ez_invoice_app/backend/` - FastAPI API, auth, profiles, invoices, posting logs.
-- `ez_invoice_app/` - Streamlit demo app and local connector utilities.
-- `ez_invoice_app/data/` - Local SQLite database and uploaded pilot PDFs.
+- `siftentry_app/backend/` - FastAPI API, auth, profiles, invoices, posting logs.
+- `siftentry_app/` - Streamlit demo app and local connector utilities.
+- `siftentry_app/data/` - Local SQLite database and uploaded pilot PDFs.
 - `docs/decisions/` - Architecture and branding decisions.
 
 ## Local Development
@@ -129,8 +129,8 @@ PostgreSQL with migrations, backups, and encrypted secret storage.
 For client handoff, send:
 
 - The clean project folder.
-- `ez_invoice_app/CLIENT_WINDOWS_SETUP.md`.
-- `ez_invoice_app/TALLY_DEMO_CHECKLIST.md`.
+- `siftentry_app/CLIENT_WINDOWS_SETUP.md`.
+- `siftentry_app/TALLY_DEMO_CHECKLIST.md`.
 - A client profile export JSON when the profile is ready.
 - Only non-secret sample PDFs.
 

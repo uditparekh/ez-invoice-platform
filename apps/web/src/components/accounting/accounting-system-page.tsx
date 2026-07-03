@@ -117,7 +117,7 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
           <SystemSetupCard config={config} />
           <ContentCard
             title={`${config.name} posting workflow`}
-            subtitle="The same operational steps from the working EZ-Invoice pilot, organized for a multi-client SaaS workspace."
+            subtitle="The same operational steps from the working SiftEntry pilot, organized for a multi-client SaaS workspace."
             action={<Link2 size={18} className="text-cyan" />}
           >
             <div className="space-y-4">
@@ -132,7 +132,7 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
                   <div>
                     <p className="text-sm font-black text-ink">{item}</p>
                     <p className="mt-1 text-sm leading-6 text-ink-secondary">
-                      Designed to match the proven EZ-Invoice pilot steps before
+                      Designed to match the proven SiftEntry pilot steps before
                       enabling production posting from this console.
                     </p>
                   </div>

@@ -1,4 +1,4 @@
-"""Generic invoice parsing helpers for EZ-Invoice.
+"""Generic invoice parsing helpers for SiftEntry.
 
 This module provides a conservative fallback that normalizes supplier PDFs into
 the same payload shape used by the accounting exports.

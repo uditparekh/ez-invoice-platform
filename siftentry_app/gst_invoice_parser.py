@@ -1,4 +1,4 @@
-"""GST/e-invoice parsing helpers for EZ-Invoice.
+"""GST/e-invoice parsing helpers for SiftEntry.
 
 This adapter handles table-heavy Indian GST invoice PDFs that expose readable
 text but need table extraction for accurate line items.

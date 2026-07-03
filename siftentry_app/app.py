@@ -22,8 +22,8 @@ from zoho_integration import (
     zoho_sidebar,
 )
 from api_client import (
-    EzInvoiceApiClient,
-    EzInvoiceApiError,
+    SiftEntryApiClient,
+    SiftEntryApiError,
     invoice_to_session_data,
     parser_mode_for_api,
     session_key_for_invoice,
@@ -52,7 +52,7 @@ DEFAULT_CLIENT_PROFILE = {
     "tally_url": "http://localhost:9000",
     "tally_company": "",
 }
-classifier = ItemClassifier(str(APP_DIR / "subcat.csv"), use_seed_mappings=False)
+classifier = ItemClassifier(use_seed_mappings=False)
 
 # =========================
 # Utilities
@@ -126,13 +126,13 @@ def _api_bridge_active() -> bool:
     return bool(st.session_state.get("ez_api_bridge_active"))
 
 
-def _api_bridge_client() -> Optional[EzInvoiceApiClient]:
+def _api_bridge_client() -> Optional[SiftEntryApiClient]:
     client = st.session_state.get("ez_api_client")
-    return client if isinstance(client, EzInvoiceApiClient) else None
+    return client if isinstance(client, SiftEntryApiClient) else None
 
 
 def _initialize_api_bridge() -> None:
-    requested_mode = os.environ.get("EZ_INVOICE_BACKEND", "auto").strip().lower()
+    requested_mode = os.environ.get("SIFTENTRY_BACKEND", "auto").strip().lower()
     if requested_mode not in {"auto", "api", "legacy"}:
         requested_mode = "auto"
     st.session_state["ez_backend_mode_requested"] = requested_mode
@@ -141,14 +141,14 @@ def _initialize_api_bridge() -> None:
     if requested_mode == "legacy":
         return
 
-    client = EzInvoiceApiClient(
+    client = SiftEntryApiClient(
         base_url=os.environ.get("EZ_API_BASE_URL", "http://127.0.0.1:8000"),
         timeout=float(os.environ.get("EZ_API_TIMEOUT_SECONDS", "30")),
     )
     try:
         health = client.health()
         if health.get("status") != "ok":
-            raise EzInvoiceApiError("EZ-Invoice API health check did not return OK.")
+            raise SiftEntryApiError("SiftEntry API health check did not return OK.")
         profile = current_client_profile()
         client_name = (
             os.environ.get("EZ_ORGANIZATION_NAME")
@@ -157,7 +157,7 @@ def _initialize_api_bridge() -> None:
         )
         legal_names = current_home_company_names() or [str(client_name)]
         client.authenticate_for_pilot(
-            email=os.environ.get("EZ_API_EMAIL", "owner@ezinvoice.local").strip(),
+            email=os.environ.get("EZ_API_EMAIL", "owner@siftentry.local").strip(),
             password=os.environ.get(
                 "EZ_API_PASSWORD",
                 "local-development-password",
@@ -173,12 +173,12 @@ def _initialize_api_bridge() -> None:
             default_currency=str(profile.get("default_currency") or "USD"),
             organization_id=os.environ.get("EZ_ORGANIZATION_ID", "").strip(),
         )
-    except EzInvoiceApiError as exc:
+    except SiftEntryApiError as exc:
         st.session_state["ez_api_bridge_error"] = str(exc)
         if requested_mode == "api":
             st.error(
                 "FastAPI mode is enabled but the backend is unavailable. "
-                "Start FastAPI on port 8000 or set EZ_INVOICE_BACKEND=legacy. "
+                "Start FastAPI on port 8000 or set SIFTENTRY_BACKEND=legacy. "
                 + str(exc)
             )
         return
@@ -268,7 +268,7 @@ def _record_api_posting_result(
         if not dry_run:
             payload_data["api_status"] = "posted" if result.get("success") else "failed"
             payload_data["ok"] = bool(result.get("success"))
-    except EzInvoiceApiError as exc:
+    except SiftEntryApiError as exc:
         st.warning("Posting completed, but FastAPI could not save its audit result: " + str(exc))
 
 
@@ -1762,14 +1762,14 @@ def make_zip(payloads: Dict[str, Dict[str, Any]], converter, label: str) -> io.B
     return buf
 
 def make_einvoice_excel(payloads, classifier=None):
-    """Generate a normalized EZ-Invoice accounting workbook."""
+    """Generate a normalized SiftEntry accounting workbook."""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "EZ-Invoice"
+    ws.title = "SiftEntry"
 
     hdr_font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
     hdr_fill = PatternFill(start_color="0e7490", end_color="0e7490", fill_type="solid")
@@ -2464,7 +2464,7 @@ def render_history_page() -> None:
             <tbody>{''.join(table_rows)}</tbody>
           </table>
         </div>
-        <div class="history-foot">Showing {len(view)} of {len(df)} records · EZ-Invoice workspace</div>
+        <div class="history-foot">Showing {len(view)} of {len(df)} records · SiftEntry workspace</div>
         </div>""",
         unsafe_allow_html=True,
     )
@@ -2922,11 +2922,11 @@ def render_integrations_page() -> None:
 
 def render_roadmap_page() -> None:
     _page_heading("Roadmap", "From local prototype to B2B SaaS product")
-    roadmap_path = APP_DIR / "ROADMAP.md"
+    roadmap_path = APP_DIR.parent / "docs" / "ROADMAP_STATUS.md"
     if roadmap_path.exists():
         st.markdown(roadmap_path.read_text(encoding="utf-8"))
     else:
-        st.info("ROADMAP.md is not available.")
+        st.info("Roadmap status is not available.")
 
 
 def _ui_escape(value: Any) -> str:
@@ -3275,7 +3275,7 @@ textColor = "#1A1A18"
 font = "sans serif"
 """)
 
-st.set_page_config(page_title="EZ-Invoice", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="SiftEntry", page_icon="⚡", layout="wide")
 complete_qb_auth_if_ready()
 complete_zoho_auth_if_ready()
 
@@ -7288,7 +7288,7 @@ div[data-testid="stPopoverBody"]:has(.ez-export-package-menu) div[data-testid="s
     }}
 }}
 
-/* EZ-Invoice demo polish system: one final visual pass for shell, rhythm,
+/* SiftEntry demo polish system: one final visual pass for shell, rhythm,
    controls, panels, and dark-mode parity. */
 :root {{
     --ez-sidebar-w: 260px;
@@ -8530,7 +8530,7 @@ def render_shell_sidebar() -> str:
     with st.sidebar:
         st.markdown(
             '<div class="ez-brand"><div class="ez-brand-mark">EZ</div>'
-            '<div><div class="ez-brand-name">EZ-Invoice</div><div class="ez-brand-ver">v1.0 platform</div></div></div>',
+            '<div><div class="ez-brand-name">SiftEntry</div><div class="ez-brand-ver">v1.0 platform</div></div></div>',
             unsafe_allow_html=True,
         )
         with st.container(key="ez_nav_shell"):
@@ -8765,7 +8765,7 @@ _initialize_api_bridge()
 if _api_bridge_active():
     try:
         _sync_api_queue()
-    except EzInvoiceApiError as exc:
+    except SiftEntryApiError as exc:
         st.session_state["ez_api_bridge_active"] = False
         st.session_state["ez_api_bridge_error"] = str(exc)
         if st.session_state.get("ez_backend_mode_requested") == "api":
@@ -8782,7 +8782,7 @@ if clear_queue:
         try:
             if client and organization.get("id"):
                 client.clear_invoices(str(organization["id"]))
-        except EzInvoiceApiError as exc:
+        except SiftEntryApiError as exc:
             st.error("The FastAPI invoice queue could not be cleared: " + str(exc))
             st.stop()
     st.session_state.payloads = {}
@@ -8803,7 +8803,7 @@ if run and uploaded:
         uploaded_invoice_ids: List[str] = []
         try:
             if not client or not organization.get("id"):
-                raise EzInvoiceApiError("FastAPI organization is not initialized.")
+                raise SiftEntryApiError("FastAPI organization is not initialized.")
             for i, f in enumerate(uploaded):
                 t0 = datetime.now()
                 pdf_bytes = f.read()
@@ -8828,7 +8828,7 @@ if run and uploaded:
                 selected_key = id_to_key.get(uploaded_invoice_ids[0])
                 if selected_key:
                     st.session_state["selected_invoice_file"] = selected_key
-        except EzInvoiceApiError as exc:
+        except SiftEntryApiError as exc:
             prog.empty()
             st.error("FastAPI invoice processing failed: " + str(exc))
             st.stop()

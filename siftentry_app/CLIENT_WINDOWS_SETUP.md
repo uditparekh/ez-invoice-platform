@@ -1,6 +1,6 @@
-# EZ-Invoice Windows Client Setup
+# SiftEntry Windows Client Setup
 
-This folder contains the EZ-Invoice local platform prototype.
+This folder contains the SiftEntry local platform prototype.
 
 ## 1. Install Python
 
@@ -40,7 +40,7 @@ If `py` does not work:
 python -m pip install --upgrade streamlit pandas pymupdf pypdf openpyxl requests flask pdfplumber
 ```
 
-## 3. Run EZ-Invoice
+## 3. Run SiftEntry
 
 From this folder:
 
@@ -105,9 +105,9 @@ Running on http://127.0.0.1:8765
 
 Leave that window open.
 
-## 5. Configure Tally In EZ-Invoice
+## 5. Configure Tally In SiftEntry
 
-Inside EZ-Invoice:
+Inside SiftEntry:
 
 1. Go to Tally.
 2. In Client Workspace, enter the client company name and legal aliases, then click Save Client Workspace.

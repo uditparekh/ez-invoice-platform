@@ -33,7 +33,7 @@ class ConnectorResult:
 
 
 class AccountingConnector(Protocol):
-    """Minimum behavior required from an EZ-Invoice posting connector."""
+    """Minimum behavior required from an SiftEntry posting connector."""
 
     def is_connected(self) -> bool:
         ...

@@ -1,4 +1,4 @@
-"""Local EZ-Invoice Tally Connector.
+"""Local SiftEntry Tally Connector.
 
 Run this on the client machine that can reach TallyPrime. The connector exposes
 a small token-protected local API for approved voucher jobs.
@@ -102,7 +102,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return jsonify(
             {
                 "success": True,
-                "connector": "EZ-Invoice Tally Connector",
+                "connector": "SiftEntry Tally Connector",
                 "version": APP_VERSION,
                 "workspace_id": workspace_id,
                 "host": socket.gethostname(),
@@ -151,7 +151,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run the local EZ-Invoice Tally Connector.")
+    parser = argparse.ArgumentParser(description="Run the local SiftEntry Tally Connector.")
     parser.add_argument("--host", default=os.environ.get("EZ_TALLY_CONNECTOR_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("EZ_TALLY_CONNECTOR_PORT", "8765")))
     parser.add_argument("--tally-url", default=os.environ.get("TALLY_URL", "http://localhost:9000"))

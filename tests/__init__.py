@@ -1,1 +1,1 @@
-"""EZ-Invoice backend tests."""
+"""SiftEntry backend tests."""

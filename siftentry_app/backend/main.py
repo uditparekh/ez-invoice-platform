@@ -1,4 +1,4 @@
-"""FastAPI entry point for the EZ-Invoice SaaS foundation."""
+"""FastAPI entry point for the SiftEntry SaaS foundation."""
 
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         yield
 
     app = FastAPI(
-        title="EZ-Invoice API",
+        title="SiftEntry API",
         version=API_VERSION,
         description="Universal invoice intake, review, validation, and accounting posting API.",
         lifespan=lifespan,

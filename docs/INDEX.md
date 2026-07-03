@@ -28,14 +28,12 @@ Use this index to avoid hunting through the repo.
 
 ## Pilot-Specific Docs Kept Beside Scripts
 
-These remain under `ez_invoice_app/` because they are paired with the Streamlit
+These remain under `siftentry_app/` because they are paired with the Streamlit
 pilot, Windows `.bat` launchers, or local client setup flows.
 
 | Document | Use it for |
 |---|---|
-| `../ez_invoice_app/README.md` | Streamlit pilot and local backend bridge details |
-| `../ez_invoice_app/CLIENT_WINDOWS_SETUP.md` | Windows client setup for running the pilot locally |
-| `../ez_invoice_app/TALLY_DEMO_CHECKLIST.md` | Tally pilot checklist |
-| `../ez_invoice_app/API_ARCHITECTURE.md` | Historical migration boundary for the first API slice |
-| `../ez_invoice_app/APP_AUDIT.md` | Historical Streamlit audit notes |
-| `../ez_invoice_app/ZOHO_BOOKS_SETUP.md` | Zoho Books setup notes |
+| `../siftentry_app/README.md` | Streamlit pilot and local backend bridge details |
+| `../siftentry_app/CLIENT_WINDOWS_SETUP.md` | Windows client setup for running the pilot locally |
+| `../siftentry_app/TALLY_DEMO_CHECKLIST.md` | Tally pilot checklist |
+| `../siftentry_app/ZOHO_BOOKS_SETUP.md` | Zoho Books setup notes |

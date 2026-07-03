@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from ez_invoice_app.backend.domain import legacy_payload_to_invoice
-from ez_invoice_app.backend.models import (
+from siftentry_app.backend.domain import legacy_payload_to_invoice
+from siftentry_app.backend.models import (
     InvoicePatch,
     InvoiceStatus,
     OrganizationCreate,
     PostingTarget,
 )
-from ez_invoice_app.backend.repository import InvoiceRepository
+from siftentry_app.backend.repository import InvoiceRepository
 
 from .test_domain import sample_legacy_payload
 

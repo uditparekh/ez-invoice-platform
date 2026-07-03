@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ez_invoice_app import tally_connector_runtime as runtime
-from ez_invoice_app.tally_connector_runtime import ConnectorConfig
+from siftentry_app import tally_connector_runtime as runtime
+from siftentry_app.tally_connector_runtime import ConnectorConfig
 
 
 def test_parse_tally_response_extracts_success_counts():

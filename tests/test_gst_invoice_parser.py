@@ -1,4 +1,4 @@
-from ez_invoice_app.gst_invoice_parser import _seller_name, looks_like_gst_invoice
+from siftentry_app.gst_invoice_parser import _seller_name, looks_like_gst_invoice
 
 
 def test_seller_name_skips_irn_acknowledgement_metadata():

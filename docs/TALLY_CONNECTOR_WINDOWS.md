@@ -80,7 +80,7 @@ installation, select:
 Add python.exe to PATH
 ```
 
-Install packages from the `ez_invoice_app` folder:
+Install packages from the `siftentry_app` folder:
 
 ```bat
 py -m pip install --upgrade requests flask streamlit pandas pymupdf pypdf openpyxl pdfplumber

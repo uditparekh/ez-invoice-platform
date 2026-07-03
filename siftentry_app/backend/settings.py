@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlparse
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_JWT_SECRET = "ez-invoice-local-development-secret-change-me"
+DEFAULT_JWT_SECRET = "siftentry-local-development-secret-change-me"
 
 
 def _truthy(value: str) -> bool:
@@ -81,10 +81,10 @@ class ApiSettings:
         jwt_secret = os.environ.get("EZ_API_JWT_SECRET", DEFAULT_JWT_SECRET)
         database_url = os.environ.get(
             "EZ_API_DATABASE_URL",
-            f"sqlite:///{data_dir / 'ez_invoice.db'}",
+            f"sqlite:///{data_dir / 'siftentry.db'}",
         ).strip()
         fallback_database_path = Path(
-            os.environ.get("EZ_API_DATABASE_PATH", data_dir / "ez_invoice.db")
+            os.environ.get("EZ_API_DATABASE_PATH", data_dir / "siftentry.db")
         ).expanduser()
         origins = _split_csv(
             os.environ.get(

@@ -8,13 +8,13 @@ in progress. Keep it short and current.
 | Area | Path | Purpose |
 |---|---|---|
 | Next.js product app | `apps/web/` | Modern SaaS UI, auth screens, invoice queue, analytics, history, settings, integrations |
-| FastAPI backend | `ez_invoice_app/backend/` | Auth, organizations, invoices, client profiles, review, posting logs, API endpoints |
-| Streamlit pilot | `ez_invoice_app/app.py` | Existing demo app kept for client demos while Next.js reaches parity |
-| Parsers | `ez_invoice_app/*parser*.py`, `ez_invoice_app/backend/parser_service.py` | PDF text extraction, GST/e-Invoice parsing, universal parsing, AI/OCR assisted layer |
-| Accounting adapters | `ez_invoice_app/qb_integration.py`, `ez_invoice_app/tally_integration.py`, `ez_invoice_app/zoho_integration.py`, `ez_invoice_app/backend/adapters.py` | QuickBooks, Tally, Zoho posting/export logic |
-| Tally connector | `ez_invoice_app/tally_connector_*.py`, `packaging/windows/tally-connector/` | Local Windows bridge for TallyPrime desktop |
+| FastAPI backend | `siftentry_app/backend/` | Auth, organizations, invoices, client profiles, review, posting logs, API endpoints |
+| Streamlit pilot | `siftentry_app/app.py` | Existing demo app kept for client demos while Next.js reaches parity |
+| Parsers | `siftentry_app/*parser*.py`, `siftentry_app/backend/parser_service.py` | PDF text extraction, GST/e-Invoice parsing, universal parsing, AI/OCR assisted layer |
+| Accounting adapters | `siftentry_app/qb_integration.py`, `siftentry_app/tally_integration.py`, `siftentry_app/zoho_integration.py`, `siftentry_app/backend/adapters.py` | QuickBooks, Tally, Zoho posting/export logic |
+| Tally connector | `siftentry_app/tally_connector_*.py`, `packaging/windows/tally-connector/` | Local Windows bridge for TallyPrime desktop |
 | Tests | `tests/` | API, parser, repository, Tally connector, and adapter verification |
-| Docs | `docs/`, `ez_invoice_app/*.md` | Runbooks, production notes, connector setup, architecture decisions; start with `docs/INDEX.md` |
+| Docs | `docs/`, `siftentry_app/*.md` | Runbooks, production notes, connector setup, architecture decisions; start with `docs/INDEX.md` |
 | Brand/UI assets | `brand/` | SiftEntry logo, color, and visual system references |
 | Packaging | `packaging/windows/` | Windows Tally connector packaging and release assets |
 
@@ -25,14 +25,14 @@ Use these rules before adding new files:
 | New work | Put it here | Notes |
 |---|---|---|
 | Product UI screens, shared UI components, hooks, and browser API wrappers | `apps/web/src/` | Keep the Next.js app independent from Streamlit UI code. |
-| FastAPI routes, auth, persistence, storage, review, posting orchestration | `ez_invoice_app/backend/` | Backend owns tenant boundaries, profile-owned posting, logs, and retention. |
-| Streamlit demo-only UI and legacy pilot helpers | `ez_invoice_app/app.py` and nearby Streamlit helpers | Preserve the pilot while Next.js reaches complete feature parity. |
-| Reusable accounting-system logic | `ez_invoice_app/*_integration.py`, `ez_invoice_app/backend/adapters.py` | Avoid client-specific hardcoding; use client profiles for names, ledgers, and tax behavior. |
-| PDF parsing and AI/OCR extraction logic | `ez_invoice_app/*parser*.py`, `ez_invoice_app/backend/parser_service.py`, `ez_invoice_app/backend/ai_parser.py` | Parser output should stay universal and feed profile recommendation/corrections. |
-| Tally desktop connector runtime | `ez_invoice_app/tally_connector_*.py` | Runtime source stays with the Python app because clients run it locally. |
+| FastAPI routes, auth, persistence, storage, review, posting orchestration | `siftentry_app/backend/` | Backend owns tenant boundaries, profile-owned posting, logs, and retention. |
+| Streamlit demo-only UI and legacy pilot helpers | `siftentry_app/app.py` and nearby Streamlit helpers | Preserve the pilot while Next.js reaches complete feature parity. |
+| Reusable accounting-system logic | `siftentry_app/*_integration.py`, `siftentry_app/backend/adapters.py` | Avoid client-specific hardcoding; use client profiles for names, ledgers, and tax behavior. |
+| PDF parsing and AI/OCR extraction logic | `siftentry_app/*parser*.py`, `siftentry_app/backend/parser_service.py`, `siftentry_app/backend/ai_parser.py` | Parser output should stay universal and feed profile recommendation/corrections. |
+| Tally desktop connector runtime | `siftentry_app/tally_connector_*.py` | Runtime source stays with the Python app because clients run it locally. |
 | Windows installer/build files | `packaging/windows/tally-connector/` | Keep packaging separate from runtime connector code. |
 | Cross-project runbooks and roadmap docs | `docs/` | Put production, deployment, connector, and roadmap docs here. |
-| Pilot-specific client setup docs | `ez_invoice_app/*.md` | Keep these beside the Windows `.bat` scripts they reference. |
+| Pilot-specific client setup docs | `siftentry_app/*.md` | Keep these beside the Windows `.bat` scripts they reference. |
 | Brand and visual references | `brand/` | Source of truth for SiftEntry logo/color examples; not runtime app code. |
 | Tests | `tests/` | Add regression tests with every backend/parser/accounting behavior change. |
 
@@ -44,7 +44,7 @@ pytest caches, generated ZIPs, connector build folders, or packaged binaries.
 
 - Python files: 33
 - Next.js TypeScript/TSX source files: 95
-- Python app dependency file: `ez_invoice_app/requirements.txt`
+- Python app dependency file: `siftentry_app/requirements.txt`
 - Next.js dependency file: `apps/web/package.json`
 - Windows connector dependency file: `packaging/windows/tally-connector/requirements.txt`
 

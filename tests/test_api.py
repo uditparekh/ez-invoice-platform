@@ -5,10 +5,10 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
-from ez_invoice_app.backend.domain import legacy_payload_to_invoice
-from ez_invoice_app.backend.main import create_app
-from ez_invoice_app.backend.models import InvoiceStatus
-from ez_invoice_app.backend.settings import ApiSettings
+from siftentry_app.backend.domain import legacy_payload_to_invoice
+from siftentry_app.backend.main import create_app
+from siftentry_app.backend.models import InvoiceStatus
+from siftentry_app.backend.settings import ApiSettings
 
 from .test_domain import sample_legacy_payload
 

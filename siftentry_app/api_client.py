@@ -9,8 +9,8 @@ from typing import Any, Dict, Iterable, List, Optional
 import requests
 
 
-class EzInvoiceApiError(RuntimeError):
-    """Raised when the EZ-Invoice API cannot complete a request."""
+class SiftEntryApiError(RuntimeError):
+    """Raised when the SiftEntry API cannot complete a request."""
 
     def __init__(self, message: str, status_code: Optional[int] = None):
         super().__init__(message)
@@ -18,7 +18,7 @@ class EzInvoiceApiError(RuntimeError):
 
 
 @dataclass
-class EzInvoiceApiClient:
+class SiftEntryApiClient:
     base_url: str = "http://127.0.0.1:8000"
     timeout: float = 30.0
     access_token: str = ""
@@ -49,7 +49,7 @@ class EzInvoiceApiClient:
                 **kwargs,
             )
         except requests.RequestException as exc:
-            raise EzInvoiceApiError(f"EZ-Invoice API is unavailable: {exc}") from exc
+            raise SiftEntryApiError(f"SiftEntry API is unavailable: {exc}") from exc
 
         if (
             response.status_code == 401
@@ -73,14 +73,14 @@ class EzInvoiceApiClient:
             except ValueError:
                 detail = response.text
             message = str(detail or f"API request failed with HTTP {response.status_code}.")
-            raise EzInvoiceApiError(message, status_code=response.status_code)
+            raise SiftEntryApiError(message, status_code=response.status_code)
 
         if response.status_code == 204 or not response.content:
             return None
         try:
             return response.json()
         except ValueError as exc:
-            raise EzInvoiceApiError("EZ-Invoice API returned an invalid response.") from exc
+            raise SiftEntryApiError("SiftEntry API returned an invalid response.") from exc
 
     def health(self) -> Dict[str, Any]:
         return self._request("GET", "/health", authenticated=False, timeout=1.5)
@@ -131,7 +131,7 @@ class EzInvoiceApiClient:
     ) -> Dict[str, Any]:
         try:
             return self.login(email, password)
-        except EzInvoiceApiError as login_error:
+        except SiftEntryApiError as login_error:
             if login_error.status_code != 401:
                 raise
         try:
@@ -143,9 +143,9 @@ class EzInvoiceApiClient:
                 legal_names=legal_names,
                 default_currency=default_currency,
             )
-        except EzInvoiceApiError as bootstrap_error:
+        except SiftEntryApiError as bootstrap_error:
             if bootstrap_error.status_code == 409:
-                raise EzInvoiceApiError(
+                raise SiftEntryApiError(
                     "FastAPI authentication failed. Check EZ_API_EMAIL and "
                     "EZ_API_PASSWORD for the existing owner account.",
                     status_code=401,
@@ -154,7 +154,7 @@ class EzInvoiceApiClient:
 
     def refresh(self) -> Dict[str, Any]:
         if not self.refresh_token:
-            raise EzInvoiceApiError("No refresh token is available.", status_code=401)
+            raise SiftEntryApiError("No refresh token is available.", status_code=401)
         tokens = self._request(
             "POST",
             "/api/v1/auth/refresh",
@@ -193,7 +193,7 @@ class EzInvoiceApiClient:
             )
             if match:
                 return match
-            raise EzInvoiceApiError("The configured EZ-Invoice organization was not found.")
+            raise SiftEntryApiError("The configured SiftEntry organization was not found.")
 
         normalized_name = name.strip().casefold()
         match = next(

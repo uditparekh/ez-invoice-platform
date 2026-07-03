@@ -19,7 +19,7 @@ Start FastAPI from the repository root:
 
 ```bash
 export EZ_API_JWT_SECRET="replace-with-a-long-random-secret"
-python3 -m uvicorn ez_invoice_app.backend.main:app --reload --port 8000
+python3 -m uvicorn siftentry_app.backend.main:app --reload --port 8000
 ```
 
 Start the web app:

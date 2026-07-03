@@ -1,4 +1,4 @@
-# EZ-Invoice Tally Demo Checklist
+# SiftEntry Tally Demo Checklist
 
 Use this checklist on the Windows computer where TallyPrime is installed.
 
@@ -11,12 +11,12 @@ Use this checklist on the Windows computer where TallyPrime is installed.
 
 Do not expose port `9000` to the internet. It should only be used locally on the Tally computer.
 
-## 2. Start EZ-Invoice
+## 2. Start SiftEntry
 
-In the `ez_invoice_app` folder, double-click:
+In the `siftentry_app` folder, double-click:
 
 ```text
-RUN_EZ_INVOICE_WINDOWS.bat
+RUN_SIFTENTRY_WINDOWS.bat
 ```
 
 Open this URL in Chrome or Edge:
@@ -41,9 +41,9 @@ Running on http://127.0.0.1:8765
 
 Leave this connector window open.
 
-## 4. Configure EZ-Invoice Tally Page
+## 4. Configure SiftEntry Tally Page
 
-In EZ-Invoice, open `Tally`.
+In SiftEntry, open `Tally`.
 
 Use these connector values:
 
