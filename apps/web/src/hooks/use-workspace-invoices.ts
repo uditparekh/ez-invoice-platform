@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { mergePreviewInvoices } from "@/lib/preview-invoices";
 import type { Invoice, InvoiceStatus } from "@/lib/types";
 
 interface UseWorkspaceInvoicesOptions {
@@ -40,7 +41,7 @@ export function useWorkspaceInvoices({
           signal,
         });
         if (!response.ok) throw new Error("Unable to load invoice workspace.");
-        setInvoices((await response.json()) as Invoice[]);
+        setInvoices(mergePreviewInvoices((await response.json()) as Invoice[]));
       } catch (loadError) {
         if ((loadError as Error).name !== "AbortError") {
           setError((loadError as Error).message);

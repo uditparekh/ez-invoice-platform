@@ -1,17 +1,20 @@
 "use client";
 
 import {
-  Check,
   ChevronDown,
   FileArchive,
   FileText,
   LoaderCircle,
+  Mail,
+  PlayCircle,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   Upload,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
@@ -21,6 +24,10 @@ import { InvoiceList } from "@/components/invoices/invoice-list";
 import { QueueMetrics } from "@/components/invoices/queue-metrics";
 import { Button } from "@/components/ui/button";
 import { useClientProfiles } from "@/hooks/use-client-profiles";
+import {
+  clearPreviewInvoices,
+  prependPreviewInvoices,
+} from "@/lib/preview-invoices";
 import type {
   AccountingSystem,
   ApiErrorPayload,
@@ -62,6 +69,16 @@ const targetSystems = [
   "NetSuite",
   "SAP",
 ];
+
+function isSiftableInvoice(invoice: Invoice) {
+  return (
+    invoice.status === "extracted" ||
+    invoice.status === "needs_review" ||
+    invoice.status === "validated" ||
+    invoice.status === "failed" ||
+    invoice.validation_issues.length > 0
+  );
+}
 
 type ExportKind =
   | "quickbooks"
@@ -170,15 +187,12 @@ export function InvoiceWorkspace() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InvoiceStatus | undefined>();
-  const [parserMode, setParserMode] = useState("auto");
+  const parserMode = "auto";
   const [targetSystem, setTargetSystem] = useState("QuickBooks");
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [manualProfileOverride, setManualProfileOverride] = useState(false);
   const [profileRecommendation, setProfileRecommendation] =
     useState<ProfileRecommendationResult | null>(null);
-  const [showRaw, setShowRaw] = useState(false);
-  const [showEvidence, setShowEvidence] = useState(true);
-  const [showAnalytics, setShowAnalytics] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -187,10 +201,22 @@ export function InvoiceWorkspace() {
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState("");
 
+  function changeDetailMode(nextMode: "detail" | "review") {
+    setFilterOpen(false);
+    setUploadOpen(false);
+    setExportOpen(false);
+    setDetailMode(nextMode);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
   useEffect(() => {
     if (!filterOpen && !uploadOpen && !exportOpen) return;
 
-    function closeMenusOnOutsidePointer(event: PointerEvent) {
+    function closeMenusOnOutsideInteraction(
+      event: PointerEvent | MouseEvent | TouchEvent,
+    ) {
       const target = event.target as Node | null;
       if (
         target &&
@@ -213,10 +239,28 @@ export function InvoiceWorkspace() {
       }
     }
 
-    document.addEventListener("pointerdown", closeMenusOnOutsidePointer);
+    document.addEventListener("pointerdown", closeMenusOnOutsideInteraction, true);
+    document.addEventListener("mousedown", closeMenusOnOutsideInteraction, true);
+    document.addEventListener("touchstart", closeMenusOnOutsideInteraction, true);
+    document.addEventListener("click", closeMenusOnOutsideInteraction, true);
     document.addEventListener("keydown", closeMenusOnEscape);
     return () => {
-      document.removeEventListener("pointerdown", closeMenusOnOutsidePointer);
+      document.removeEventListener(
+        "pointerdown",
+        closeMenusOnOutsideInteraction,
+        true,
+      );
+      document.removeEventListener(
+        "mousedown",
+        closeMenusOnOutsideInteraction,
+        true,
+      );
+      document.removeEventListener(
+        "touchstart",
+        closeMenusOnOutsideInteraction,
+        true,
+      );
+      document.removeEventListener("click", closeMenusOnOutsideInteraction, true);
       document.removeEventListener("keydown", closeMenusOnEscape);
     };
   }, [filterOpen, uploadOpen, exportOpen]);
@@ -344,6 +388,10 @@ export function InvoiceWorkspace() {
       ),
     [invoices],
   );
+  const siftCount = useMemo(
+    () => invoices.filter(isSiftableInvoice).length,
+    [invoices],
+  );
 
   useEffect(() => {
     if (!selected) {
@@ -405,8 +453,10 @@ export function InvoiceWorkspace() {
         uploadedInvoices.push((await response.json()) as Invoice);
       }
 
-      setInvoices((current) => [...uploadedInvoices.reverse(), ...current]);
-      setSelectedId(uploadedInvoices.at(-1)?.id ?? null);
+      const newestFirst = [...uploadedInvoices].reverse();
+      if (previewOnlyUploads) prependPreviewInvoices(newestFirst);
+      setInvoices((current) => [...newestFirst, ...current]);
+      setSelectedId(newestFirst[0]?.id ?? null);
       setDetailMode("detail");
       setManualProfileOverride(false);
       setSelectedFiles([]);
@@ -438,6 +488,7 @@ export function InvoiceWorkspace() {
       setProfileRecommendation(null);
       setSelectedFiles([]);
       setUploadOpen(false);
+      clearPreviewInvoices();
     } catch (clearError) {
       setError((clearError as Error).message);
     } finally {
@@ -477,11 +528,143 @@ export function InvoiceWorkspace() {
     );
   }
 
+  function addSampleInvoice() {
+    const now = new Date().toISOString();
+    const sampleId = "sample-neel-gst-2620002662";
+    const sampleInvoice: Invoice = {
+      id: sampleId,
+      organization_id: organizationId ?? "demo-workspace",
+      source_file: "sample-india-gst-invoice.pdf",
+      source_path: "",
+      parser: "demo_sample",
+      extraction_engine: "sample",
+      page_count: 1,
+      status: "validated",
+      invoice_number: "2620002662",
+      invoice_date: "2026-06-10",
+      due_date: "2026-06-10",
+      purchase_order: "",
+      currency: "INR",
+      subtotal: 526680,
+      tax_total: 107232,
+      total: 633912,
+      supplier: {
+        name: "MADELIN ENTERPRISES PRIVATE LIMITED",
+        tax_id: "24AAPCM0954R1ZR",
+        address: ["Gujarat, India"],
+        email: "",
+        phone: "",
+      },
+      customer: {
+        name: "NEEL ENTERPRISE",
+        tax_id: "27AEDPG3704Q1ZC",
+        address: ["Maharashtra, India"],
+        email: "",
+        phone: "",
+      },
+      direction: "inbound",
+      lines: [
+        {
+          line_number: 1,
+          description: "PTA SWEEP",
+          quantity: 23940,
+          uom: "KG",
+          unit_price: 22,
+          net_amount: 526680,
+          tax_amount: 107232,
+          total_amount: 633912,
+          hsn_sac: "29173600",
+          category: "Materials",
+          gl_code: "",
+          confidence: 0.96,
+        },
+      ],
+      confidence: 0.97,
+      evidence: [
+        {
+          field: "invoice_number",
+          value: "2620002662",
+          page: 1,
+          snippet: "Supplier Invoice No. & Date: 2620002662 dt. 10-Jun-26",
+          confidence: 0.99,
+        },
+        {
+          field: "supplier",
+          value: "MADELIN ENTERPRISES PRIVATE LIMITED",
+          page: 1,
+          snippet: "Supplier (Bill from) MADELIN ENTERPRISES PRIVATE LIMITED",
+          confidence: 0.96,
+        },
+      ],
+      validation_issues: [],
+      created_at: now,
+      updated_at: now,
+    };
+
+    prependPreviewInvoices([sampleInvoice]);
+    setInvoices((current) => [
+      sampleInvoice,
+      ...current.filter((invoice) => invoice.id !== sampleId),
+    ]);
+    setSelectedId(sampleId);
+    setDetailMode("detail");
+    setUploadOpen(false);
+    setError("");
+  }
+
+  // Deep link: /app/invoices?invoice={id}&mode=review (used by Sift mode "E" escalation)
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current || loading || !invoices.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get("invoice");
+    if (!target) return;
+    deepLinkHandled.current = true;
+    if (!invoices.some((invoice) => invoice.id === target)) return;
+    const shouldOpenReview = params.get("mode") === "review";
+    params.delete("invoice");
+    params.delete("mode");
+    const query = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname + (query ? `?${query}` : ""),
+    );
+    const timer = window.setTimeout(() => {
+      setSelectedId(target);
+      if (shouldOpenReview) changeDetailMode("review");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loading, invoices]);
+
+  if (detailMode === "review" && selected) {
+    return (
+      <div className="min-h-[calc(100vh-64px)] bg-canvas">
+        {error && (
+          <div className="border-b border-danger/25 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger sm:px-6 lg:px-8">
+            {error}
+          </div>
+        )}
+        <InvoiceDetailPanel
+          invoice={selected}
+          targetSystem={targetSystem}
+          clientProfile={selectedClientProfile}
+          mode="review"
+          onOpenReview={() => changeDetailMode("review")}
+          onCloseReview={() => changeDetailMode("detail")}
+          onPostingComplete={handlePostingComplete}
+          onInvoiceUpdate={updateInvoice}
+          onInvoicePatch={patchInvoice}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[calc(100vh-64px)] bg-canvas">
       <section className="border-b border-line bg-canvas px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-[1440px] flex-col gap-4 xl:flex-row xl:items-center">
-          <div className="min-w-[250px]">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <div className="min-w-0">
             <h1 className="flex flex-wrap items-baseline gap-x-1 text-3xl font-black leading-tight text-ink">
               <span>Invoices</span>
               <span className="text-ink-secondary">/</span>
@@ -489,10 +672,13 @@ export function InvoiceWorkspace() {
                 Queue
               </span>
             </h1>
+            <p className="mt-1 text-sm font-semibold text-ink-secondary">
+              Review extracted supplier bills before ledger posting.
+            </p>
           </div>
 
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center xl:justify-end">
-            <label className="flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line-strong bg-surface px-3.5 xl:max-w-[520px]">
+          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center 2xl:max-w-[1080px] 2xl:justify-end">
+            <label className="flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line-strong bg-surface px-3.5 2xl:max-w-[410px]">
               <Search size={17} className="shrink-0 text-ink-muted" />
               <input
                 aria-label="Search invoices"
@@ -512,7 +698,7 @@ export function InvoiceWorkspace() {
               )}
             </label>
 
-            <div ref={filterMenuRef} className="relative sm:w-[160px]">
+            <div ref={filterMenuRef} className="relative w-full shrink-0 sm:w-[128px]">
               <ControlButton
                 label="Filter"
                 icon={<SlidersHorizontal size={15} />}
@@ -525,24 +711,10 @@ export function InvoiceWorkspace() {
               />
               {filterOpen && (
                 <DropdownPanel align="right" width="w-[340px]">
-                  <PanelTitle title="Filter workspace" detail="Review controls" />
-                  <SectionLabel>Display options</SectionLabel>
-                  <CheckRow
-                    label="Show raw text"
-                    checked={showRaw}
-                    onChange={setShowRaw}
+                  <PanelTitle
+                    title="Filter queue"
+                    detail="Status, target system, and profile routing."
                   />
-                  <CheckRow
-                    label="Show extraction evidence"
-                    checked={showEvidence}
-                    onChange={setShowEvidence}
-                  />
-                  <CheckRow
-                    label="Show spend analytics"
-                    checked={showAnalytics}
-                    onChange={setShowAnalytics}
-                  />
-                  <Divider />
                   <SectionLabel>Invoice status</SectionLabel>
                   {statusOptions.map((option) => (
                     <RadioRow
@@ -550,16 +722,6 @@ export function InvoiceWorkspace() {
                       label={option.label}
                       checked={status === option.status}
                       onClick={() => setStatus(option.status)}
-                    />
-                  ))}
-                  <Divider />
-                  <SectionLabel>Invoice parser</SectionLabel>
-                  {parserOptions.map((option) => (
-                    <RadioRow
-                      key={option.value}
-                      label={option.label}
-                      checked={parserMode === option.value}
-                      onClick={() => setParserMode(option.value)}
                     />
                   ))}
                   <Divider />
@@ -612,14 +774,38 @@ export function InvoiceWorkspace() {
                     />
                   ) : (
                     <p className="mt-2 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-bold text-ink-secondary">
-                      No saved profile yet. Add one in Workspace Settings.
+                      No saved profile yet. Add one in{" "}
+                      <a
+                        href="/app/client-profiles"
+                        className="font-black text-accent hover:text-accent-hover"
+                      >
+                        Client profiles
+                      </a>
+                      .
                     </p>
                   )}
                 </DropdownPanel>
               )}
             </div>
 
-            <div ref={uploadMenuRef} className="relative sm:w-[178px]">
+            <ExportPackageMenu
+              invoices={readyInvoices}
+              targetSystem={targetSystem}
+              profileLabel={selectedProfileLabel}
+              tallyProfile={selectedTallyProfile}
+              clientProfileId={selectedClientProfile?.id ?? null}
+              open={exportOpen}
+              menuRef={exportMenuRef}
+              onPostingComplete={handlePostingComplete}
+              onClose={() => setExportOpen(false)}
+              onToggle={() => {
+                setExportOpen((current) => !current);
+                setFilterOpen(false);
+                setUploadOpen(false);
+              }}
+            />
+
+            <div ref={uploadMenuRef} className="relative w-full shrink-0 sm:w-[172px]">
               <ControlButton
                 label="Upload PDFs"
                 open={uploadOpen}
@@ -691,8 +877,8 @@ export function InvoiceWorkspace() {
 
                   {previewOnlyUploads && (
                     <p className="mt-3 rounded-xl border border-cyan/25 bg-cyan-soft px-3 py-2 text-xs font-bold text-cyan">
-                      Demo mode: processed invoices stay only in this browser
-                      session and disappear after refresh or Clear queue.
+                      Demo mode: processed invoices stay local to this browser
+                      and are removed by Clear queue.
                     </p>
                   )}
 
@@ -723,9 +909,40 @@ export function InvoiceWorkspace() {
                       Clear queue
                     </Button>
                   </div>
+
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <a
+                      href="/app/integrations"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                    >
+                      <Mail size={15} />
+                      Import from email
+                    </a>
+                    <button
+                      type="button"
+                      onClick={addSampleInvoice}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                    >
+                      <PlayCircle size={15} />
+                      Try sample invoice
+                    </button>
+                  </div>
                 </DropdownPanel>
               )}
             </div>
+
+            <Link
+              href="/app/sift"
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent to-cyan px-4 text-sm font-black text-white shadow-glow transition-transform hover:scale-[1.02] sm:w-[124px]"
+            >
+              <Sparkles size={16} />
+              Sift
+              {siftCount > 0 && (
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-black tabular-nums">
+                  {siftCount}
+                </span>
+              )}
+            </Link>
           </div>
         </div>
       </section>
@@ -733,23 +950,17 @@ export function InvoiceWorkspace() {
       {detailMode !== "review" && (
         <>
           <QueueMetrics counts={counts} />
-
-          <ExportPackagePanel
-            invoices={readyInvoices}
+          <QueueTabsStrip
+            status={status}
+            invoices={invoices}
+            readyCount={readyInvoices.length}
+            onStatusChange={(nextStatus) => setStatus(nextStatus)}
+          />
+          <QueueReadinessStrip
+            readyCount={readyInvoices.length}
             targetSystem={targetSystem}
             profileLabel={selectedProfileLabel}
             detectedProfile={activeProfileRecommendation?.detected ?? null}
-            tallyProfile={selectedTallyProfile}
-            clientProfileId={selectedClientProfile?.id ?? null}
-            open={exportOpen}
-            menuRef={exportMenuRef}
-            onPostingComplete={handlePostingComplete}
-            onClose={() => setExportOpen(false)}
-            onToggle={() => {
-              setExportOpen((current) => !current);
-              setFilterOpen(false);
-              setUploadOpen(false);
-            }}
           />
         </>
       )}
@@ -775,7 +986,7 @@ export function InvoiceWorkspace() {
             loading={loading}
             onSelect={(invoiceId) => {
               setSelectedId(invoiceId);
-              setDetailMode("detail");
+              changeDetailMode("detail");
               setManualProfileOverride(false);
             }}
           />
@@ -785,8 +996,8 @@ export function InvoiceWorkspace() {
           targetSystem={targetSystem}
           clientProfile={selectedClientProfile}
           mode={detailMode}
-          onOpenReview={() => setDetailMode("review")}
-          onCloseReview={() => setDetailMode("detail")}
+          onOpenReview={() => changeDetailMode("review")}
+          onCloseReview={() => changeDetailMode("detail")}
           onPostingComplete={handlePostingComplete}
           onInvoiceUpdate={updateInvoice}
           onInvoicePatch={patchInvoice}
@@ -796,11 +1007,10 @@ export function InvoiceWorkspace() {
   );
 }
 
-function ExportPackagePanel({
+function ExportPackageMenu({
   invoices,
   targetSystem,
   profileLabel,
-  detectedProfile,
   tallyProfile,
   clientProfileId,
   open,
@@ -812,7 +1022,6 @@ function ExportPackagePanel({
   invoices: Invoice[];
   targetSystem: string;
   profileLabel: string;
-  detectedProfile: DetectedInvoiceProfile | null;
   tallyProfile: TallyExportProfile;
   clientProfileId: string | null;
   open: boolean;
@@ -872,144 +1081,208 @@ function ExportPackagePanel({
   }
 
   return (
-    <section className="border-b border-line bg-canvas px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-[1440px] gap-3 xl:grid-cols-[230px_minmax(0,1fr)] xl:items-stretch">
-        <div ref={menuRef} className="relative w-full">
-          <ControlButton
-            label="Export Package"
-            open={open}
-            variant="primary"
-            icon={<FileArchive size={16} />}
-            onClick={onToggle}
+    <div ref={menuRef} className="relative w-full shrink-0 sm:w-[132px]">
+      <ControlButton
+        label="Export"
+        open={open}
+        icon={<FileArchive size={16} />}
+        onClick={onToggle}
+      />
+      {open && (
+        <DropdownPanel align="right" width="w-[min(520px,calc(100vw-32px))]">
+          <PanelTitle
+            title="Export package"
+            detail={`${invoiceCount} ${noun} ready for ${targetSystem}.`}
           />
-          {open && (
-            <DropdownPanel width="w-[min(560px,calc(100vw-32px))]">
-              <PanelTitle
-                title="Export package"
-                detail={`${invoiceCount} ${noun} ready for ${targetSystem}.`}
-              />
-              <div className="mt-4 overflow-hidden rounded-xl border border-line bg-surface">
-                <ExportFact label="Package" value={`${invoiceCount} ${noun}`} />
-                <ExportFact label="Target" value={targetSystem} />
-                <ExportFact
-                  label="Mapping"
-                  value={profileLabel || "Generic category mapping"}
-                />
-                <ExportFact
-                  label="Total"
-                  value={
-                    invoiceCount
-                      ? formatCurrency(total, currency)
-                      : "No ready invoices"
-                  }
-                />
-              </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                <ExportButton
-                  label={targetExport.label}
-                  disabled={!invoiceCount}
-                  onClick={() => {
-                    downloadExport(targetExport.kind, invoices, tallyProfile);
-                    onClose();
-                  }}
-                />
-                <ExportButton
-                  label="Excel CSV"
-                  disabled={!invoiceCount}
-                  onClick={() => {
-                    downloadExport("excel", invoices);
-                    onClose();
-                  }}
-                />
-                <ExportButton
-                  label="Universal JSON"
-                  disabled={!invoiceCount}
-                  onClick={() => {
-                    downloadExport("universal", invoices);
-                    onClose();
-                  }}
-                />
-                {postingTarget && (
-                  <ExportButton
-                    label={bulkPosting ? "Posting..." : `Post to ${targetSystem}`}
-                    disabled={!invoiceCount || bulkPosting}
-                    onClick={() => void postReadyInvoices()}
-                  />
-                )}
-              </div>
-              {(bulkMessage || bulkError) && (
-                <p
-                  className={cn(
-                    "mt-3 rounded-xl border px-3 py-2 text-xs font-extrabold",
-                    bulkError
-                      ? "border-danger/25 bg-danger-soft text-danger"
-                      : "border-success/25 bg-success-soft text-success",
-                  )}
-                >
-                  {bulkError || bulkMessage}
-                </p>
-              )}
-            </DropdownPanel>
-          )}
-        </div>
-
-        <div className="min-w-0 rounded-2xl border border-line bg-surface px-4 py-3 shadow-sm shadow-black/[0.03]">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_190px] lg:items-center">
-            <div className="min-w-0">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-ink-muted">
-                Export readiness
-              </p>
-              <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-                <p className="text-lg font-black leading-7 text-ink">
-                  {invoiceCount
-                    ? `${invoiceCount} ${noun} ready`
-                    : "No invoices ready"}
-                </p>
-                <span className="text-sm font-bold text-ink-muted">for</span>
-                <p className="text-lg font-black leading-7 text-accent-ink dark:text-cyan">
-                  {targetSystem}
-                </p>
-              </div>
-              <p className="mt-1 truncate text-sm font-semibold text-ink-secondary">
-                {profileLabel || "Generic category mapping"}
-                {detectedProfile
-                  ? ` · Detected ${detectedProfile.country_code} ${humanize(
-                      detectedProfile.tax_mode,
-                    )}`
-                  : ""}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-line bg-canvas px-3 py-2">
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-                Total
-              </p>
-              <p className="mt-1 truncate text-sm font-black text-ink">
-                {invoiceCount ? formatCurrency(total, currency) : "No total"}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-3 grid gap-2 border-t border-line pt-3 sm:grid-cols-3">
-            <ExportReadinessMeta
-              label="Ready"
-              value={invoiceCount ? `${invoiceCount} ${noun}` : "0"}
+          <div className="mt-4 overflow-hidden rounded-2xl border border-line bg-surface-subtle">
+            <ExportFact label="Package" value={`${invoiceCount} ${noun}`} />
+            <ExportFact label="Target" value={targetSystem} />
+            <ExportFact
+              label="Mapping"
+              value={profileLabel || "Generic category mapping"}
             />
-            <ExportReadinessMeta label="Target" value={targetSystem} />
-            <ExportReadinessMeta
+            <ExportFact
+              label="Total"
+              value={
+                invoiceCount ? formatCurrency(total, currency) : "No ready invoices"
+              }
+            />
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <ExportButton
+              label={targetExport.label}
+              disabled={!invoiceCount}
+              onClick={() => {
+                downloadExport(targetExport.kind, invoices, tallyProfile);
+                onClose();
+              }}
+            />
+            <ExportButton
+              label="Excel CSV"
+              disabled={!invoiceCount}
+              onClick={() => {
+                downloadExport("excel", invoices);
+                onClose();
+              }}
+            />
+            <ExportButton
+              label="Universal JSON"
+              disabled={!invoiceCount}
+              onClick={() => {
+                downloadExport("universal", invoices);
+                onClose();
+              }}
+            />
+            {postingTarget && (
+              <ExportButton
+                label={bulkPosting ? "Posting..." : `Post to ${targetSystem}`}
+                disabled={!invoiceCount || bulkPosting}
+                onClick={() => void postReadyInvoices()}
+              />
+            )}
+          </div>
+          {(bulkMessage || bulkError) && (
+            <p
+              className={cn(
+                "mt-3 rounded-xl border px-3 py-2 text-xs font-extrabold",
+                bulkError
+                  ? "border-danger/25 bg-danger-soft text-danger"
+                  : "border-success/25 bg-success-soft text-success",
+              )}
+            >
+              {bulkError || bulkMessage}
+            </p>
+          )}
+        </DropdownPanel>
+      )}
+    </div>
+  );
+}
+
+function QueueTabsStrip({
+  status,
+  invoices,
+  readyCount,
+  onStatusChange,
+}: {
+  status?: InvoiceStatus;
+  invoices: Invoice[];
+  readyCount: number;
+  onStatusChange: (status?: InvoiceStatus) => void;
+}) {
+  const needsReview = invoices.filter(
+    (invoice) =>
+      invoice.status === "needs_review" ||
+      invoice.status === "failed" ||
+      invoice.validation_issues.length > 0,
+  ).length;
+  const tabs: {
+    label: string;
+    count: number;
+    status?: InvoiceStatus;
+    tone?: "default" | "warning" | "danger" | "success";
+  }[] = [
+    { label: "All", count: invoices.length },
+    { label: "Needs review", count: needsReview, status: "needs_review", tone: "warning" },
+    { label: "Ready", count: readyCount, status: "validated", tone: "success" },
+    {
+      label: "Posted",
+      count: invoices.filter((invoice) => invoice.status === "posted").length,
+      status: "posted",
+    },
+    {
+      label: "Failed",
+      count: invoices.filter((invoice) => invoice.status === "failed").length,
+      status: "failed",
+      tone: "danger",
+    },
+  ];
+  return (
+    <section className="border-b border-line bg-canvas px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-[1440px] min-w-0 gap-2 overflow-x-auto py-4">
+        {tabs.map((tab) => (
+          <button
+            key={tab.label}
+            type="button"
+            onClick={() => onStatusChange(tab.status)}
+            className={cn(
+              "relative h-11 shrink-0 rounded-xl px-3 text-sm font-black text-ink-secondary transition-colors hover:bg-surface hover:text-ink",
+              status === tab.status && "bg-accent-soft text-accent-ink",
+            )}
+          >
+            {tab.label}{" "}
+            <span
+              className={cn(
+                "tabular-nums",
+                tab.tone === "warning" && "text-gold",
+                tab.tone === "danger" && "text-danger",
+                tab.tone === "success" && "text-success",
+                !tab.tone && "text-accent",
+              )}
+            >
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function QueueReadinessStrip({
+  readyCount,
+  targetSystem,
+  profileLabel,
+  detectedProfile,
+}: {
+  readyCount: number;
+  targetSystem: string;
+  profileLabel: string;
+  detectedProfile: DetectedInvoiceProfile | null;
+}) {
+  return (
+    <section className="border-b border-line bg-canvas px-4 pb-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1440px]">
+        <div className="flex min-h-20 flex-col gap-4 rounded-[24px] border border-line bg-surface px-5 py-4 shadow-card xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-ink-muted">
+              Export readiness
+            </p>
+            <p className="mt-1 truncate text-xl font-black text-ink">
+              {readyCount
+                ? `${readyCount} invoice${readyCount === 1 ? "" : "s"} ready for export`
+                : "No invoices ready for export"}
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:justify-end">
+            <ReadinessInline label="Target" value={targetSystem} />
+            <ReadinessInline
+              label="Mapping"
+              value={profileLabel || "Generic categories"}
+            />
+            <ReadinessInline
               label="Detected"
               value={
                 detectedProfile
-                  ? `${detectedProfile.country_code} · ${humanize(
-                      detectedProfile.tax_mode,
-                    )}`
-                  : "Not detected"
+                  ? `${detectedProfile.country_code} · ${humanize(detectedProfile.tax_mode)}`
+                  : "Auto-detect"
               }
             />
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+function ReadinessInline({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-line bg-canvas px-3 py-2">
+      <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.16em] text-ink-muted">
+        {label}
+      </span>
+      <span className="truncate text-sm font-black text-ink">{value}</span>
+    </div>
   );
 }
 
@@ -1075,18 +1348,20 @@ function ControlButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition-colors",
+        "inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-xl border px-3.5 text-sm font-black transition-colors",
         variant === "primary"
           ? "border-accent bg-accent text-white shadow-sm shadow-accent/15 hover:bg-accent-hover"
           : "border-line-strong bg-surface text-ink-secondary hover:border-accent hover:text-ink",
       )}
       aria-expanded={open}
     >
-      {icon}
-      <span>{label}</span>
+      {icon && <span className="shrink-0">{icon}</span>}
+      <span className="min-w-0 shrink-0 whitespace-nowrap leading-none">
+        {label}
+      </span>
       <ChevronDown
         size={16}
-        className={cn("transition-transform", open && "rotate-180")}
+        className={cn("shrink-0 transition-transform", open && "rotate-180")}
       />
     </button>
   );
@@ -1104,7 +1379,7 @@ function DropdownPanel({
   return (
     <div
       className={cn(
-        "absolute top-[calc(100%+10px)] z-50 rounded-2xl border border-line bg-surface-subtle p-4 shadow-2xl shadow-black/15 dark:shadow-black/50",
+        "absolute top-[calc(100%+10px)] z-50 rounded-2xl border border-line bg-surface p-4 shadow-pop dark:bg-surface-strong",
         width,
         align === "right" ? "right-0" : "left-0",
       )}
@@ -1133,34 +1408,6 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 function Divider() {
   return <div className="mt-4 border-t border-line" />;
-}
-
-function CheckRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className="mt-2 flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm font-bold text-ink-secondary hover:bg-surface"
-    >
-      <span
-        className={cn(
-          "grid size-5 place-items-center rounded-md border border-line-strong",
-          checked && "border-accent bg-accent text-white",
-        )}
-      >
-        {checked && <Check size={13} />}
-      </span>
-      {label}
-    </button>
-  );
 }
 
 function RadioRow({
@@ -1198,23 +1445,6 @@ function ExportFact({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="truncate text-right text-sm font-black text-ink">{value}</p>
-    </div>
-  );
-}
-
-function ExportReadinessMeta({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-        {label}
-      </p>
-      <p className="mt-1 truncate text-sm font-black text-ink">{value}</p>
     </div>
   );
 }

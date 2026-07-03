@@ -3,9 +3,11 @@
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   CircleDashed,
   FileText,
   Link2,
+  RotateCcw,
   ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
@@ -108,6 +110,8 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
             </section>
           </>
         )}
+
+        <SetupStepper config={config} />
 
         <section className="grid gap-6 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)]">
           <SystemSetupCard config={config} />
@@ -290,6 +294,178 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
             </div>
           ))}
         </div>
+      </div>
+    </ContentCard>
+  );
+}
+
+const stepperSteps: Record<string, { title: string; detail: string }[]> = {
+  tally: [
+    {
+      title: "Download the local connector",
+      detail:
+        "SiftEntry-Bridge for Windows — runs beside TallyPrime on the client machine.",
+    },
+    {
+      title: "Enable HTTP/XML in TallyPrime",
+      detail: "F1 › Settings › Connectivity — allow local XML requests (port 9000).",
+    },
+    {
+      title: "Enter connector URL & token",
+      detail:
+        "Use the Local connector card below — defaults to http://127.0.0.1:8765.",
+    },
+    {
+      title: "Test the connection",
+      detail: "Run \"Test connector\" below — a healthy bridge answers in milliseconds.",
+    },
+    {
+      title: "Post a sample voucher (sandbox)",
+      detail:
+        "Run the sample-voucher test below — proves the pipe without touching real books.",
+    },
+  ],
+  cloud: [
+    {
+      title: "Authorize the workspace",
+      detail: "Connect via OAuth — secrets stay server-side, never in the browser.",
+    },
+    {
+      title: "Pick the company / organization",
+      detail: "Choose which books this workspace posts into.",
+    },
+    {
+      title: "Map default ledgers & taxes",
+      detail: "Set purchase and tax accounts on the client profile.",
+    },
+    {
+      title: "Post a sample bill (sandbox)",
+      detail: "Dry-run a bill to confirm accounts resolve before live posting.",
+    },
+  ],
+  export: [
+    {
+      title: "Choose the export template",
+      detail: "Bill package with attachments, mapped to this system's import format.",
+    },
+    {
+      title: "Map fields on the client profile",
+      detail: "Vendor, GL, tax, and item columns aligned to the import sheet.",
+    },
+    {
+      title: "Run a sample export",
+      detail: "Download one package and validate it in the target system.",
+    },
+  ],
+};
+
+function SetupStepper({ config }: { config: AccountingSystemConfig }) {
+  const steps =
+    config.system === "tally"
+      ? stepperSteps.tally
+      : config.system === "quickbooks" || config.system === "zoho_books"
+        ? stepperSteps.cloud
+        : stepperSteps.export;
+  const storageKey = `siftentry.setup.${config.system}`;
+  function readStoredSteps() {
+    if (typeof window === "undefined") {
+      return { done: steps.map(() => false), collapsed: false };
+    }
+    try {
+      const stored = JSON.parse(
+        window.localStorage.getItem(storageKey) || "[]",
+      ) as boolean[];
+      if (Array.isArray(stored) && stored.length === steps.length) {
+        return { done: stored, collapsed: stored.every(Boolean) };
+      }
+    } catch {
+      /* fresh setup */
+    }
+    return { done: steps.map(() => false), collapsed: false };
+  }
+  const initialSteps = readStoredSteps();
+  const [done, setDone] = useState<boolean[]>(initialSteps.done);
+  const [collapsed, setCollapsed] = useState(initialSteps.collapsed);
+
+  function toggle(index: number) {
+    setDone((current) => {
+      const next = current.map((value, i) => (i === index ? !value : value));
+      window.localStorage.setItem(storageKey, JSON.stringify(next));
+      if (next.every(Boolean)) setCollapsed(true);
+      return next;
+    });
+  }
+
+  const completed = done.filter(Boolean).length;
+
+  if (collapsed && completed === steps.length) {
+    return (
+      <section className="flex flex-col gap-3 rounded-2xl border border-success/30 bg-success-soft/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-black text-success">
+          <CheckCircle2 size={16} className="mr-1.5 inline" />
+          Setup complete — all {steps.length} steps verified. This page now leads
+          with live status and client profiles.
+        </p>
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+        >
+          <RotateCcw size={13} />
+          Re-run setup steps
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <ContentCard
+      title={`${config.name} setup guide`}
+      subtitle={`${completed} of ${steps.length} steps complete — check off each step as you finish it. Re-runnable anytime.`}
+      action={
+        completed === steps.length ? (
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+          >
+            <ChevronDown size={13} />
+            Collapse
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="space-y-0">
+        {steps.map((step, index) => (
+          <button
+            key={step.title}
+            type="button"
+            onClick={() => toggle(index)}
+            className="flex w-full gap-4 border-b border-line py-4 text-left transition-colors last:border-b-0 hover:bg-surface-subtle first:pt-0 last:pb-0"
+          >
+            <span
+              className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-black transition-colors ${
+                done[index]
+                  ? "bg-success text-white"
+                  : index === done.findIndex((value) => !value)
+                    ? "bg-accent text-white"
+                    : "bg-surface-strong text-ink-muted"
+              }`}
+            >
+              {done[index] ? "✓" : index + 1}
+            </span>
+            <span className="min-w-0">
+              <span
+                className={`block text-sm font-black ${done[index] ? "text-ink-muted line-through" : "text-ink"}`}
+              >
+                {step.title}
+              </span>
+              <span className="mt-0.5 block text-sm leading-5 text-ink-secondary">
+                {step.detail}
+              </span>
+            </span>
+          </button>
+        ))}
       </div>
     </ContentCard>
   );

@@ -3,22 +3,15 @@
 import {
   BarChart3,
   Building2,
-  CircleAlert,
-  Database,
-  Diamond,
+  Grid2X2,
   FileClock,
-  FileCog,
-  FileSpreadsheet,
   FileText,
-  Landmark,
   LogOut,
-  Map,
   Menu,
-  Network,
-  Settings2,
-  ShieldCheck,
-  Table2,
+  PlugZap,
+  SlidersHorizontal,
   Users,
+  Workflow,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -34,41 +27,21 @@ import { cn } from "@/lib/utils";
 
 const navGroups = [
   {
-    label: "Workflow",
+    label: "Work",
     items: [
+      { href: "/app", label: "Home", icon: Grid2X2 },
       { href: "/app/invoices", label: "Invoices", icon: FileText },
       { href: "/app/history", label: "History", icon: FileClock },
-      { href: "/app/analytics", label: "Analytics", icon: BarChart3 },
-      { href: "/app/exceptions", label: "Exceptions", icon: CircleAlert },
+      { href: "/app/analytics", label: "Insights", icon: BarChart3 },
     ],
   },
   {
-    label: "Send to ERP",
+    label: "Configure",
     items: [
-      {
-        href: "/app/accounting/quickbooks",
-        label: "QuickBooks",
-        icon: Network,
-      },
-      { href: "/app/accounting/tally", label: "Tally", icon: Table2 },
-      {
-        href: "/app/accounting/zoho-books",
-        label: "Zoho Books",
-        icon: FileSpreadsheet,
-      },
-      { href: "/app/accounting/coupa", label: "Coupa", icon: Database },
-      { href: "/app/accounting/netsuite", label: "NetSuite", icon: Landmark },
-      { href: "/app/accounting/sap", label: "SAP", icon: FileCog },
-    ],
-  },
-  {
-    label: "Settings",
-    items: [
-      { href: "/app/gl-mapping", label: "GL Mapping", icon: Diamond },
-      { href: "/app/rules", label: "Rules", icon: ShieldCheck },
-      { href: "/app/vendors", label: "Vendors", icon: Users },
-      { href: "/app/roadmap", label: "Roadmap", icon: Map },
-      { href: "/app/settings", label: "Workspace", icon: Settings2 },
+      { href: "/app/integrations", label: "Integrations", icon: PlugZap },
+      { href: "/app/rules", label: "Rules & mapping", icon: Workflow },
+      { href: "/app/client-profiles", label: "Client profiles", icon: Users },
+      { href: "/app/settings", label: "Settings", icon: SlidersHorizontal },
     ],
   },
 ];
@@ -96,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 overflow-y-auto px-3 py-6">
         {navGroups.map((group, groupIndex) => (
           <div key={group.label} className={groupIndex ? "mt-8" : ""}>
-            <p className="px-3 text-[10px] font-extrabold uppercase text-ink-muted">
+            <p className="px-3 text-[11px] font-extrabold uppercase tracking-[0.18em] text-ink-muted">
               {group.label}
             </p>
             <nav className="mt-3 space-y-1">
@@ -146,7 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-canvas">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] flex-col border-r border-line bg-surface lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] flex-col border-r border-line bg-shell lg:flex">
         {nav}
       </aside>
 
@@ -157,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation"
           />
-          <aside className="relative flex h-full w-[286px] flex-col border-r border-line bg-surface shadow-2xl">
+          <aside className="relative flex h-full w-[286px] flex-col border-r border-line bg-shell shadow-pop">
             <Button
               variant="ghost"
               size="sm"
@@ -173,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="lg:pl-[260px]">
-        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-surface/95 px-4 backdrop-blur sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-shell/95 px-4 backdrop-blur sm:px-6 lg:px-8">
           <Button
             variant="ghost"
             size="sm"
@@ -211,7 +184,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {membership?.role ?? "member"}
             </span>
           </div>
-          <div className="ml-auto">
+          <label className="ml-auto mr-3 hidden h-10 w-[min(34vw,360px)] items-center gap-2 rounded-full border border-line bg-surface-subtle px-3 text-sm font-semibold text-ink-muted xl:flex">
+            <span className="size-2 rounded-full bg-cyan" />
+            <input
+              aria-label="Global search"
+              placeholder="Search invoices, vendors, profiles"
+              className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-muted"
+            />
+          </label>
+          <div>
             <ThemeToggle />
           </div>
         </header>
@@ -241,7 +222,7 @@ function NavLink({
       className={cn(
         "flex h-11 items-center gap-3 rounded-xl border-l-[3px] px-3 text-sm font-bold transition-colors",
         active
-          ? "border-accent bg-accent-soft text-accent-ink dark:border-cyan dark:bg-surface-strong dark:text-cyan"
+          ? "border-accent bg-accent-soft text-accent-ink"
           : "border-transparent text-ink-secondary hover:bg-surface-subtle hover:text-ink",
       )}
     >
@@ -252,5 +233,6 @@ function NavLink({
 }
 
 function isActivePath(pathname: string, href: string) {
+  if (href === "/app") return pathname === "/app";
   return pathname === href || pathname.startsWith(`${href}/`);
 }

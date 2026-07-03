@@ -42,8 +42,8 @@ pytest caches, generated ZIPs, connector build folders, or packaged binaries.
 
 ## File Count Snapshot
 
-- Python files: 44
-- Next.js TypeScript/TSX source files: 87
+- Python files: 33
+- Next.js TypeScript/TSX source files: 95
 - Python app dependency file: `ez_invoice_app/requirements.txt`
 - Next.js dependency file: `apps/web/package.json`
 - Windows connector dependency file: `packaging/windows/tally-connector/requirements.txt`

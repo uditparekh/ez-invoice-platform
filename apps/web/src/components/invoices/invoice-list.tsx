@@ -25,7 +25,7 @@ export function InvoiceList({
           Newest first
         </span>
       </div>
-      <div className="max-h-[540px] overflow-y-auto lg:max-h-[calc(100vh-286px)]">
+      <div className="max-h-[540px] overflow-y-auto lg:max-h-[calc(100vh-304px)]">
         {loading ? (
           <EmptyQueue loading />
         ) : invoices.length ? (
@@ -46,7 +46,7 @@ export function InvoiceList({
               <span className="truncate text-right font-mono text-sm font-black text-ink">
                 {formatCurrency(invoice.total, invoice.currency)}
               </span>
-              <span className="mt-2 truncate text-sm font-semibold text-ink-secondary">
+              <span className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-ink-secondary">
                 {invoice.supplier.name || "Supplier pending"}
               </span>
               <span className="mt-3 row-span-2 justify-self-end">

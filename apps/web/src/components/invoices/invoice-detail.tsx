@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { ResizableSplit } from "@/components/review/resizable-split";
 import { StatusBadge } from "@/components/status-badge";
 import type {
   ApiErrorPayload,
@@ -348,7 +349,9 @@ function InvoiceDetail({
     }
   }
 
-  async function saveInvoiceCorrections() {
+  async function saveInvoiceCorrections(
+    options: { learnVendor: boolean } = { learnVendor: true },
+  ) {
     setSavingReview(true);
     setWorkflowError("");
     setReviewNotice("");
@@ -357,15 +360,15 @@ function InvoiceDetail({
       const response = await fetch(`/api/invoices/${invoice.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
+        body: JSON.stringify({
+          ...patch,
+          learn_vendor_memory: options.learnVendor,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(
-          apiErrorMessage(
-            payload as ApiErrorPayload,
-            "Could not save corrections.",
-          ),
+          apiErrorMessage(payload as ApiErrorPayload, "Could not save corrections."),
         );
       }
       onInvoiceUpdate?.(payload as Invoice);
@@ -379,26 +382,96 @@ function InvoiceDetail({
 
   if (mode === "review") {
     return (
-      <article className="mx-auto w-full max-w-[1440px] px-4 py-7 sm:px-6 lg:px-8">
-        <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-line bg-surface px-5 py-5 shadow-sm shadow-black/[0.03] sm:flex-row sm:items-center sm:justify-between">
+      <article className="mx-auto w-full max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mb-4 flex flex-col gap-4 border-b border-line pb-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-              Review workspace
+            <p className="text-sm font-black text-ink-secondary">
+              <button
+                type="button"
+                onClick={onCloseReview}
+                className="text-ink-muted transition-colors hover:text-accent"
+              >
+                Invoices
+              </button>{" "}
+              /{" "}
+              <span className="text-ink">
+                {invoice.supplier.name || "Supplier pending"} ·{" "}
+                {invoice.invoice_number || "Number pending"}
+              </span>
             </p>
-            <h2 className="mt-2 break-words text-2xl font-black leading-tight text-ink sm:text-3xl">
-              {invoice.invoice_number || "Number pending"}
+            <h2 className="mt-2 text-2xl font-black leading-tight text-ink sm:text-3xl">
+              Review Workspace
             </h2>
-            <p className="mt-1 max-w-[760px] break-words text-sm font-bold leading-6 text-ink-secondary">
-              {invoice.supplier.name || "Supplier pending"}
-            </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
             <StatusBadge status={invoice.status} />
             {confidence != null && (
               <span className="inline-flex h-9 items-center rounded-full border border-line-strong bg-canvas px-3 text-xs font-extrabold text-ink-secondary">
                 {confidence}% confidence
               </span>
             )}
+            <button
+              type="button"
+              disabled={!canValidate || validating}
+              onClick={() => void validateInvoice()}
+              className={cn(
+                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition-colors",
+                canValidate
+                  ? "border-line-strong bg-canvas text-ink hover:border-accent hover:bg-accent-soft"
+                  : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
+              )}
+            >
+              {validating ? (
+                <LoaderCircle size={16} className="animate-spin" />
+              ) : (
+                <CheckCircle2 size={16} />
+              )}
+              {validating ? "Validating" : "Validate"}
+            </button>
+            <button
+              type="button"
+              disabled={!canApprove || approving}
+              onClick={() => void approveInvoice()}
+              className={cn(
+                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition-colors",
+                canApprove
+                  ? "border-success/30 bg-success-soft text-success hover:border-success"
+                  : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
+              )}
+              title="Approve becomes available after validation passes."
+            >
+              {approving ? (
+                <LoaderCircle size={16} className="animate-spin" />
+              ) : (
+                <ShieldCheck size={16} />
+              )}
+              {approving ? "Approving" : "Approve"}
+            </button>
+            <button
+              type="button"
+              disabled={!canPost || posting}
+              onClick={() => void postInvoice()}
+              className={cn(
+                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition-colors",
+                canPost
+                  ? "border-accent bg-accent text-white shadow-sm shadow-accent/20 hover:bg-accent-strong"
+                  : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
+              )}
+              title={
+                isPreviewOnly
+                  ? "Preview-only invoices are not saved to the queue."
+                  : resolvedPostingTarget
+                    ? "Invoice must be validated before posting."
+                    : "Posting is available for QuickBooks, Tally, and Zoho Books."
+              }
+            >
+              {posting ? (
+                <LoaderCircle size={16} className="animate-spin" />
+              ) : (
+                <SendHorizontal size={16} />
+              )}
+              {posting ? "Posting" : `Post to ${targetSystem}`}
+            </button>
             <button
               type="button"
               onClick={onCloseReview}
@@ -408,6 +481,23 @@ function InvoiceDetail({
             </button>
           </div>
         </div>
+
+        {(workflowError || postingError) && (
+          <div className="mb-4 flex gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">
+            <AlertCircle size={18} className="mt-0.5 shrink-0" />
+            <span>{workflowError || postingError}</span>
+          </div>
+        )}
+
+        {isPreviewOnly && (
+          <div className="mb-4 flex gap-3 rounded-xl border border-cyan/25 bg-cyan-soft px-4 py-3 text-sm font-semibold text-cyan">
+            <FileSearch size={18} className="mt-0.5 shrink-0" />
+            <span>
+              Preview only. This invoice was parsed for demo review and was not
+              saved to the backend queue.
+            </span>
+          </div>
+        )}
 
         <ReviewWorkspace
           invoice={invoice}
@@ -419,7 +509,7 @@ function InvoiceDetail({
           notice={reviewNotice}
           previewOnly={isPreviewOnly}
           onDraftChange={setReviewDraft}
-          onSave={() => void saveInvoiceCorrections()}
+          onSave={(options) => void saveInvoiceCorrections(options)}
         />
       </article>
     );
@@ -598,78 +688,30 @@ function InvoiceDetail({
         />
       )}
 
-      <div className="mt-10 flex flex-col gap-3 border-t border-line pt-7 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-2xl font-black text-ink">
-            Line items
-          </h3>
-          <p className="mt-1 text-xs text-ink-muted">
-            Extracted purchase detail ready for review and mapping.
-          </p>
+      <section className="mt-8 rounded-2xl border border-line bg-surface px-4 py-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+              Line items
+            </p>
+            <h3 className="mt-1 text-xl font-black text-ink">
+              {invoice.lines.length} extracted for review and mapping
+            </h3>
+            <p className="mt-1 max-w-3xl text-sm font-semibold leading-5 text-ink-secondary">
+              Review quantities, tax treatment, ledger mapping, and evidence in
+              the dedicated workspace before posting.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenReview}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line-strong bg-canvas px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+          >
+            <FileSearch size={16} />
+            Open review workspace
+          </button>
         </div>
-        <div className="flex items-center gap-2 text-xs font-extrabold text-cyan">
-          <CheckCircle2 size={16} />
-          {invoice.lines.length} extracted
-        </div>
-      </div>
-
-      <div className="mt-6 overflow-hidden rounded-xl border border-line bg-surface">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] table-fixed border-collapse text-left">
-            <thead className="bg-surface-subtle">
-              <tr className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-                <th className="w-[34%] px-4 py-3">Description</th>
-                <th className="w-[12%] px-4 py-3 text-right">Quantity</th>
-                <th className="w-[8%] px-4 py-3">UOM</th>
-                <th className="w-[16%] px-4 py-3 text-right">Unit price</th>
-                <th className="w-[16%] px-4 py-3 text-right">Amount</th>
-                <th className="w-[14%] px-4 py-3">Category</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.lines.length ? (
-                invoice.lines.map((line) => (
-                  <tr
-                    key={line.id ?? line.line_number}
-                    className="border-t border-line text-sm text-ink"
-                  >
-                    <td className="px-4 py-4 font-bold leading-5">
-                      {line.description || "Description pending"}
-                    </td>
-                    <td className="px-4 py-4 text-right font-mono">
-                      {line.quantity.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-4 py-4 text-ink-secondary">
-                      {line.uom || "—"}
-                    </td>
-                    <td className="px-4 py-4 text-right font-mono">
-                      {formatCurrency(line.unit_price, invoice.currency)}
-                    </td>
-                    <td className="px-4 py-4 text-right font-mono font-bold">
-                      {formatCurrency(
-                        line.net_amount ?? line.total_amount,
-                        invoice.currency,
-                      )}
-                    </td>
-                    <td className="px-4 py-4 text-ink-secondary">
-                      {line.category || "Unmapped"}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-12 text-center text-sm text-ink-muted"
-                  >
-                    No line items were extracted.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </section>
     </article>
   );
 }
@@ -775,23 +817,7 @@ type ReviewDraft = {
   tax_total: string;
   total: string;
   direction: string;
-  lines: ReviewLineDraft[];
-};
-
-type ReviewLineDraft = {
-  key: string;
-  line_number: string;
-  description: string;
-  quantity: string;
-  uom: string;
-  unit_price: string;
-  net_amount: string;
-  tax_amount: string;
-  total_amount: string;
-  hsn_sac: string;
-  category: string;
-  gl_code: string;
-  removed: boolean;
+  lines: InvoiceLine[];
 };
 
 function reviewDraftFromInvoice(invoice: Invoice): ReviewDraft {
@@ -806,7 +832,7 @@ function reviewDraftFromInvoice(invoice: Invoice): ReviewDraft {
     tax_total: amountDraft(invoice.tax_total),
     total: amountDraft(invoice.total),
     direction: invoice.direction || "inbound",
-    lines: lineDraftsFromInvoice(invoice.lines),
+    lines: invoice.lines.map((line) => ({ ...line })),
   };
 }
 
@@ -821,76 +847,10 @@ function amountFromDraft(value: string, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function lineDraftsFromInvoice(lines: InvoiceLine[]): ReviewLineDraft[] {
-  return lines.map((line, index) => ({
-    key: line.id ?? `line-${line.line_number || index + 1}`,
-    line_number: String(line.line_number || index + 1),
-    description: line.description ?? "",
-    quantity: amountDraft(line.quantity),
-    uom: line.uom ?? "",
-    unit_price: amountDraft(line.unit_price),
-    net_amount: amountDraft(line.net_amount),
-    tax_amount: amountDraft(line.tax_amount),
-    total_amount: amountDraft(line.total_amount),
-    hsn_sac: line.hsn_sac ?? "",
-    category: line.category ?? "",
-    gl_code: line.gl_code ?? "",
-    removed: false,
-  }));
-}
-
-function blankLineDraft(nextLineNumber: number): ReviewLineDraft {
-  return {
-    key: `new-line-${Date.now()}-${nextLineNumber}`,
-    line_number: String(nextLineNumber),
-    description: "",
-    quantity: "1",
-    uom: "",
-    unit_price: "0",
-    net_amount: "0",
-    tax_amount: "0",
-    total_amount: "0",
-    hsn_sac: "",
-    category: "",
-    gl_code: "",
-    removed: false,
-  };
-}
-
 function invoicePatchFromReviewDraft(
   invoice: Invoice,
   draft: ReviewDraft,
 ): InvoicePatch {
-  const originalLinesByKey = new Map(
-    invoice.lines.map((line, index) => [
-      line.id ?? `line-${line.line_number || index + 1}`,
-      line,
-    ]),
-  );
-  const lines = draft.lines
-    .filter((line) => !line.removed)
-    .map((line, index): InvoiceLine => {
-      const original = originalLinesByKey.get(line.key);
-      return {
-        id: original?.id,
-        line_number: index + 1,
-        description: line.description.trim(),
-        quantity: amountFromDraft(line.quantity, original?.quantity ?? 0),
-        uom: line.uom.trim(),
-        unit_price: amountFromDraft(line.unit_price, original?.unit_price ?? 0),
-        net_amount: amountFromDraft(line.net_amount, original?.net_amount ?? 0),
-        tax_amount: amountFromDraft(line.tax_amount, original?.tax_amount ?? 0),
-        total_amount: amountFromDraft(
-          line.total_amount,
-          original?.total_amount ?? original?.net_amount ?? 0,
-        ),
-        hsn_sac: line.hsn_sac.trim(),
-        category: line.category.trim(),
-        gl_code: line.gl_code.trim(),
-        confidence: original?.confidence ?? null,
-      };
-    });
-
   return {
     invoice_number: draft.invoice_number.trim(),
     invoice_date: draft.invoice_date.trim(),
@@ -905,7 +865,10 @@ function invoicePatchFromReviewDraft(
       ...invoice.supplier,
       name: draft.supplier_name.trim() || invoice.supplier.name,
     },
-    lines,
+    lines: draft.lines.map((line, index) => ({
+      ...line,
+      line_number: index + 1,
+    })),
   };
 }
 
@@ -938,42 +901,13 @@ function ReviewWorkspace({
   notice: string;
   previewOnly: boolean;
   onDraftChange: (draft: ReviewDraft) => void;
-  onSave: () => void;
+  onSave: (options: { learnVendor: boolean }) => void;
 }) {
   function updateDraft<Key extends keyof ReviewDraft>(
     key: Key,
     value: ReviewDraft[Key],
   ) {
     onDraftChange({ ...draft, [key]: value });
-  }
-
-  function updateLineDraft<Key extends keyof ReviewLineDraft>(
-    index: number,
-    key: Key,
-    value: ReviewLineDraft[Key],
-  ) {
-    onDraftChange({
-      ...draft,
-      lines: draft.lines.map((line, lineIndex) =>
-        lineIndex === index ? { ...line, [key]: value } : line,
-      ),
-    });
-  }
-
-  function toggleLineRemoved(index: number) {
-    onDraftChange({
-      ...draft,
-      lines: draft.lines.map((line, lineIndex) =>
-        lineIndex === index ? { ...line, removed: !line.removed } : line,
-      ),
-    });
-  }
-
-  function addLineDraft() {
-    onDraftChange({
-      ...draft,
-      lines: [...draft.lines, blankLineDraft(draft.lines.length + 1)],
-    });
   }
 
   const reviewFields = useMemo(() => review?.fields ?? [], [review]);
@@ -1001,6 +935,18 @@ function ReviewWorkspace({
   const selectActiveFieldPath = (path: string) =>
     setActiveFieldState({ signature: reviewFieldSignature, path });
 
+  const [learnVendor, setLearnVendor] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem("siftentry.review.learnVendor");
+    return stored == null ? true : stored !== "false";
+  });
+  function toggleLearnVendor(next: boolean) {
+    setLearnVendor(next);
+    window.localStorage.setItem("siftentry.review.learnVendor", String(next));
+  }
+  const vendorShort =
+    (invoice.supplier.name || "This vendor").split(/\s+/)[0] || "Vendor";
+
   const fieldReviewMap = useMemo(
     () => new Map(reviewFields.map((field) => [field.field_path, field])),
     [reviewFields],
@@ -1010,7 +956,6 @@ function ReviewWorkspace({
     reviewFields.find((field) => field.severity !== "ok") ??
     reviewFields[0] ??
     null;
-  const lineFieldReview = fieldReviewMap.get("lines");
   const activePage =
     activeField?.evidence.find((item) => item.page && item.page > 0)?.page ?? 1;
   const pdfUrl =
@@ -1043,58 +988,53 @@ function ReviewWorkspace({
       }`
     : "No client profile selected";
   const reviewScore = review ? Math.round(review.overall_score * 100) : null;
-  const attentionCount = review?.needs_attention ?? 0;
-  const scoreSeverity: InvoiceReviewSeverity =
-    attentionCount === 0 && (reviewScore ?? 0) >= 82
-      ? "ok"
-      : (reviewScore ?? 0) >= 62
-        ? "review"
-        : "error";
+  const needsAttention = review?.needs_attention ?? 0;
+  const suggestedCount = Object.keys(review?.suggested_patch ?? {}).length;
 
   return (
-    <section className="space-y-5">
-      <div className="rounded-3xl border border-line bg-surface px-5 py-4 shadow-sm shadow-black/[0.03]">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+    <section className="space-y-4">
+      <div className="rounded-2xl border border-line bg-surface px-4 py-3 shadow-sm shadow-black/[0.03]">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink dark:bg-cyan-soft dark:text-cyan">
-                <PencilLine size={18} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-                  AI invoice review
-                </p>
-                <h2 className="mt-0.5 text-2xl font-black tracking-tight text-ink">
-                  Source, fields, and corrections
-                </h2>
-              </div>
+            <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+              <PencilLine size={15} className="text-accent dark:text-cyan" />
+              Extraction review
             </div>
-            <p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-ink-secondary">
-              Compare the source PDF with extracted fields, clean line items,
-              and save accountant corrections before validation and posting.
+            <p className="mt-1 max-w-3xl text-sm font-semibold leading-5 text-ink-secondary">
+              Click any field to focus the source evidence, apply suggested
+              fixes, then save corrections before validation and posting.
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[520px]">
-            <ReviewWorkspaceStat
-              label="Review score"
-              value={reviewScore == null ? "Pending" : `${reviewScore}/100`}
-              tone={scoreSeverity}
+          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
+            <ReviewCommandPill
+              label="Score"
+              value={reviewLoading && reviewScore == null ? "Checking" : reviewScore == null ? "Pending" : `${reviewScore}%`}
             />
-            <ReviewWorkspaceStat
-              label="Needs attention"
-              value={String(attentionCount)}
-              tone={attentionCount ? "review" : "ok"}
+            <ReviewCommandPill
+              label="Attention"
+              value={needsAttention ? `${needsAttention} fields` : "Clean"}
+              tone={needsAttention ? "warning" : "success"}
             />
-            <ReviewWorkspaceStat
+            <ReviewCommandPill
               label="Profile"
-              value={clientProfile?.name ?? "Not selected"}
-              tone={clientProfile ? "ok" : "review"}
+              value={selectedProfileLabel}
+              wide
+            />
+            <ReviewCommandPill
+              label="Fixes"
+              value={suggestedCount ? `${suggestedCount} suggested` : "None"}
+              tone={suggestedCount ? "warning" : "default"}
             />
           </div>
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(330px,0.82fr)_minmax(560px,1.18fr)] 2xl:grid-cols-[minmax(330px,0.72fr)_minmax(560px,1fr)_minmax(300px,0.7fr)]">
+      <ResizableSplit
+        storageKey="siftentry.review.split"
+        defaultLeftPct={38}
+        minLeftPct={24}
+        maxLeftPct={58}
+      >
         <div className="min-w-0 rounded-2xl border border-line bg-surface p-4 shadow-sm shadow-black/[0.03]">
           <div className="flex items-center justify-between gap-3 pb-4">
             <div className="min-w-0">
@@ -1135,28 +1075,70 @@ function ReviewWorkspace({
               </div>
             </div>
           ) : (
-            <object
-              key={pdfUrl}
-              data={pdfUrl}
-              type="application/pdf"
-              className="h-[620px] w-full rounded-xl border border-line bg-surface"
-            >
-              <div className="grid h-[620px] place-items-center rounded-xl border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
-                <div>
-                  <FileSearch className="mx-auto text-ink-muted" size={28} />
-                  <p className="mt-3 text-sm font-black text-ink">
-                    PDF preview is not available in this browser.
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-ink-muted">
-                    Use Open PDF to review the source document.
-                  </p>
+            <div className="relative overflow-hidden rounded-xl">
+              <object
+                key={pdfUrl}
+                data={pdfUrl}
+                type="application/pdf"
+                className="h-[620px] w-full rounded-xl border border-line bg-surface"
+              >
+                <div className="grid h-[620px] place-items-center rounded-xl border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
+                  <div>
+                    <FileSearch className="mx-auto text-ink-muted" size={28} />
+                    <p className="mt-3 text-sm font-black text-ink">
+                      PDF preview is not available in this browser.
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-ink-muted">
+                      Use Open PDF to review the source document.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </object>
+              </object>
+              {activeField && (
+                <span
+                  key={`scan-${activeField.field_path}`}
+                  aria-hidden
+                  className="animate-scanline"
+                  style={{ animationIterationCount: 1 }}
+                />
+              )}
+              {activeField && (
+                <div
+                  key={`beacon-${activeField.field_path}`}
+                  className="pointer-events-none absolute inset-x-3 bottom-3"
+                >
+                  <div className="flex items-center gap-2.5 rounded-xl border border-cyan/60 bg-surface/95 px-3 py-2 shadow-pop backdrop-blur">
+                    <span className="relative flex size-2.5 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-60" />
+                      <span className="relative inline-flex size-2.5 rounded-full bg-cyan" />
+                    </span>
+                    <p className="min-w-0 truncate text-xs font-bold text-ink">
+                      Evidence · p.{activePage}
+                      {activeField.evidence[0]?.snippet ? (
+                        <span className="font-semibold text-ink-secondary">
+                          {" "}
+                          · “{activeField.evidence[0].snippet}”
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
-        <div className="min-w-0 space-y-5">
+        <div className="min-w-0 space-y-4">
+          <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm shadow-black/[0.03]">
+            <ReviewIntelligencePanel
+              review={review}
+              loading={reviewLoading}
+              activeFieldPath={activeField?.field_path ?? ""}
+              onFieldSelect={selectActiveFieldPath}
+              onApplySuggestedPatch={applySuggestedPatch}
+            />
+          </div>
+
           <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm shadow-black/[0.03]">
             <div className="flex flex-col gap-2 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -1175,7 +1157,7 @@ function ReviewWorkspace({
               </p>
             </div>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="mt-4 grid gap-3 2xl:grid-cols-2">
               <ReviewTextField
                 label="Invoice number"
                 value={draft.invoice_number}
@@ -1257,28 +1239,25 @@ function ReviewWorkspace({
                 onChange={(value) => updateDraft("direction", value)}
               />
             </div>
-          </div>
 
-          <ReviewLineItemsEditor
-            lines={draft.lines}
-            currency={draft.currency || invoice.currency}
-            fieldReview={lineFieldReview}
-            active={activeFieldPath === "lines"}
-            onFocus={() => selectActiveFieldPath("lines")}
-            onAddLine={addLineDraft}
-            onUpdateLine={updateLineDraft}
-            onToggleRemoved={toggleLineRemoved}
-          />
-
-          <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm shadow-black/[0.03]">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-semibold text-ink-secondary">
-                Save corrected fields to refresh validation and posting payloads.
-              </p>
+            <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex max-w-xl cursor-pointer items-start gap-2.5 text-sm font-semibold text-ink-secondary">
+                <input
+                  type="checkbox"
+                  checked={learnVendor}
+                  onChange={(event) => toggleLearnVendor(event.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--accent)]"
+                />
+                <span>
+                  Save corrections to vendor memory —{" "}
+                  <span className="font-black text-ink">{vendorShort}</span>{" "}
+                  learns these fixes for future invoices.
+                </span>
+              </label>
               <button
                 type="button"
                 disabled={saving || previewOnly}
-                onClick={onSave}
+                onClick={() => onSave({ learnVendor })}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-black text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
                 title={
                   previewOnly
@@ -1305,315 +1284,49 @@ function ReviewWorkspace({
               </div>
             )}
           </div>
-        </div>
 
-        <aside className="min-w-0 space-y-5 xl:col-span-2 2xl:col-span-1">
-          <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm shadow-black/[0.03] 2xl:sticky 2xl:top-4">
-            <div className="mb-4 rounded-xl border border-line bg-canvas px-4 py-3">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-                Posting context
-              </p>
-              <p className="mt-1 truncate text-sm font-black text-ink">
-                {selectedProfileLabel}
-              </p>
-              <p className="mt-2 text-xs font-bold leading-5 text-ink-secondary">
-                Corrections saved here become the source for validation,
-                export packages, and ERP posting payloads.
-              </p>
-            </div>
-            <ReviewIntelligencePanel
-              review={review}
-              loading={reviewLoading}
-              activeFieldPath={activeField?.field_path ?? ""}
-              onFieldSelect={selectActiveFieldPath}
-              onApplySuggestedPatch={applySuggestedPatch}
-            />
-          </div>
-        </aside>
-      </div>
+          <ReviewLineItemsPanel
+            invoice={invoice}
+            lines={draft.lines}
+            fieldReview={fieldReviewMap.get("lines")}
+            clientProfile={clientProfile}
+            editable={!saving && !previewOnly}
+            onLinesChange={(lines) => updateDraft("lines", lines)}
+          />
+        </div>
+      </ResizableSplit>
     </section>
   );
 }
 
-function ReviewWorkspaceStat({
+function ReviewCommandPill({
   label,
   value,
-  tone,
+  tone = "default",
+  wide = false,
 }: {
   label: string;
   value: string;
-  tone: InvoiceReviewSeverity;
+  tone?: "default" | "success" | "warning";
+  wide?: boolean;
 }) {
   return (
-    <div className={cn("min-w-0 rounded-2xl border bg-canvas px-3 py-2.5", severityBorder(tone))}>
-      <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-        {label}
-      </p>
-      <p className={cn("mt-1 truncate text-sm font-black", severityText(tone))}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function ReviewLineItemsEditor({
-  lines,
-  currency,
-  fieldReview,
-  active,
-  onFocus,
-  onAddLine,
-  onUpdateLine,
-  onToggleRemoved,
-}: {
-  lines: ReviewLineDraft[];
-  currency: string;
-  fieldReview?: InvoiceReviewField;
-  active?: boolean;
-  onFocus?: () => void;
-  onAddLine: () => void;
-  onUpdateLine: <Key extends keyof ReviewLineDraft>(
-    index: number,
-    key: Key,
-    value: ReviewLineDraft[Key],
-  ) => void;
-  onToggleRemoved: (index: number) => void;
-}) {
-  const activeLines = lines.filter((line) => !line.removed);
-  const noisyLines = lines.filter((line) => !line.removed && lineDraftLooksNoisy(line));
-  const severity: InvoiceReviewSeverity =
-    fieldReview?.severity ?? (noisyLines.length ? "review" : "ok");
-
-  return (
-    <div
+    <span
       className={cn(
-        "rounded-2xl border bg-surface p-4 shadow-sm shadow-black/[0.03]",
-        active ? "border-accent" : "border-line",
+        "inline-flex h-10 min-w-0 items-center gap-2 rounded-full border px-3 text-xs font-black",
+        wide ? "max-w-[320px]" : "max-w-[190px]",
+        tone === "success"
+          ? "border-success/25 bg-success-soft text-success"
+          : tone === "warning"
+            ? "border-gold/25 bg-gold-soft text-gold"
+            : "border-line bg-canvas text-ink-secondary",
       )}
-      onFocus={onFocus}
     >
-      <div className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-              Line-item review
-            </p>
-            <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black", severityPill(severity))}>
-              {activeLines.length} active
-            </span>
-            {noisyLines.length > 0 && (
-              <span className="rounded-full bg-gold-soft px-2.5 py-1 text-[11px] font-black text-gold">
-                {noisyLines.length} need cleanup
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-sm font-semibold leading-6 text-ink-secondary">
-            Remove non-item text, correct quantities and taxes, then save the
-            cleaned lines into the invoice record.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onAddLine}
-          className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-line-strong bg-canvas px-3 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
-        >
-          <Plus size={16} />
-          Add line
-        </button>
-      </div>
-
-      {fieldReview?.issue && (
-        <div className="mt-4 rounded-xl border border-gold/30 bg-gold-soft px-4 py-3 text-xs font-bold leading-5 text-gold">
-          {fieldReview.issue}
-          {fieldReview.suggestion ? ` ${fieldReview.suggestion}` : ""}
-        </div>
-      )}
-
-      <div className="mt-4 overflow-x-auto rounded-xl border border-line">
-        <table className="min-w-[1120px] w-full border-collapse text-sm">
-          <thead className="bg-surface-subtle text-left">
-            <tr className="border-b border-line">
-              <th className="px-3 py-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                Description
-              </th>
-              <th className="w-24 px-3 py-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                Qty
-              </th>
-              <th className="w-24 px-3 py-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                UOM
-              </th>
-              <th className="w-32 px-3 py-3 text-right text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                Unit
-              </th>
-              <th className="w-32 px-3 py-3 text-right text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                Net
-              </th>
-              <th className="w-32 px-3 py-3 text-right text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                Tax
-              </th>
-              <th className="w-32 px-3 py-3 text-right text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                Total
-              </th>
-              <th className="w-36 px-3 py-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                Category
-              </th>
-              <th className="w-28 px-3 py-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-                Action
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line bg-surface">
-            {lines.map((line, index) => {
-              const noisy = lineDraftLooksNoisy(line);
-              return (
-                <tr
-                  key={line.key}
-                  className={cn(
-                    "align-top transition-colors",
-                    line.removed && "opacity-45",
-                    !line.removed && noisy && "bg-gold-soft/35",
-                  )}
-                >
-                  <td className="px-3 py-3">
-                    <textarea
-                      value={line.description}
-                      rows={2}
-                      onFocus={onFocus}
-                      onChange={(event) =>
-                        onUpdateLine(index, "description", event.target.value)
-                      }
-                      className={cn(
-                        "min-h-16 w-full resize-y rounded-lg border bg-canvas px-3 py-2 text-sm font-bold leading-5 text-ink outline-none transition-colors focus:border-accent",
-                        noisy ? "border-gold/40" : "border-line-strong",
-                      )}
-                    />
-                    {noisy && !line.removed && (
-                      <p className="mt-1 text-[11px] font-bold leading-4 text-gold">
-                        Looks like source text, not a purchasable line item.
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-3 py-3">
-                    <ReviewLineInput
-                      value={line.quantity}
-                      onFocus={onFocus}
-                      onChange={(value) => onUpdateLine(index, "quantity", value)}
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <ReviewLineInput
-                      value={line.uom}
-                      onFocus={onFocus}
-                      onChange={(value) => onUpdateLine(index, "uom", value)}
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <ReviewLineInput
-                      value={line.unit_price}
-                      align="right"
-                      onFocus={onFocus}
-                      onChange={(value) => onUpdateLine(index, "unit_price", value)}
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <ReviewLineInput
-                      value={line.net_amount}
-                      align="right"
-                      onFocus={onFocus}
-                      onChange={(value) => onUpdateLine(index, "net_amount", value)}
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <ReviewLineInput
-                      value={line.tax_amount}
-                      align="right"
-                      onFocus={onFocus}
-                      onChange={(value) => onUpdateLine(index, "tax_amount", value)}
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <ReviewLineInput
-                      value={line.total_amount}
-                      align="right"
-                      onFocus={onFocus}
-                      onChange={(value) =>
-                        onUpdateLine(index, "total_amount", value)
-                      }
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <ReviewLineInput
-                      value={line.category}
-                      onFocus={onFocus}
-                      onChange={(value) => onUpdateLine(index, "category", value)}
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <button
-                      type="button"
-                      onClick={() => onToggleRemoved(index)}
-                      className={cn(
-                        "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border px-2 text-xs font-black transition-colors",
-                        line.removed
-                          ? "border-success/30 bg-success-soft text-success hover:bg-canvas"
-                          : "border-line-strong bg-canvas text-ink-secondary hover:border-danger hover:text-danger",
-                      )}
-                    >
-                      {line.removed ? (
-                        "Restore"
-                      ) : (
-                        <>
-                          <Trash2 size={14} />
-                          Remove
-                        </>
-                      )}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mt-3 flex flex-col gap-2 text-xs font-bold text-ink-muted sm:flex-row sm:items-center sm:justify-between">
-        <span>
-          {activeLines.length} line{activeLines.length === 1 ? "" : "s"} will be
-          saved.
-        </span>
-        <span>{currency || "USD"} amounts are editable before posting.</span>
-      </div>
-    </div>
-  );
-}
-
-function ReviewLineInput({
-  value,
-  align = "left",
-  onFocus,
-  onChange,
-}: {
-  value: string;
-  align?: "left" | "right";
-  onFocus?: () => void;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <input
-      value={value}
-      onFocus={onFocus}
-      onChange={(event) => onChange(event.target.value)}
-      className={cn(
-        "h-10 w-full rounded-lg border border-line-strong bg-canvas px-2 text-sm font-bold text-ink outline-none transition-colors focus:border-accent",
-        align === "right" && "text-right font-mono",
-      )}
-    />
-  );
-}
-
-function lineDraftLooksNoisy(line: ReviewLineDraft) {
-  return /iban|acct|sort code|customer card|tel:|email|street|suite|invoice|due date|bank|swift|bic|contract|purchase order/i.test(
-    line.description,
+      <span className="shrink-0 text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+        {label}
+      </span>
+      <span className="truncate text-ink">{value}</span>
+    </span>
   );
 }
 
@@ -1998,7 +1711,404 @@ function ReviewTextField({
           {fieldReview.suggestion}
         </p>
       )}
+      {fieldReview?.issue && (
+        <p className="mt-2 rounded-lg border border-gold/20 bg-gold-soft px-2.5 py-2 text-[11px] font-bold leading-4 text-gold">
+          Why review: {fieldReview.issue}
+        </p>
+      )}
     </label>
+  );
+}
+
+function ReviewLineItemsPanel({
+  invoice,
+  lines,
+  fieldReview,
+  clientProfile,
+  editable,
+  onLinesChange,
+}: {
+  invoice: Invoice;
+  lines: InvoiceLine[];
+  fieldReview?: InvoiceReviewField;
+  clientProfile: ClientProfile | null;
+  editable: boolean;
+  onLinesChange: (lines: InvoiceLine[]) => void;
+}) {
+  const lineTotal = lines.reduce(
+    (sum, line) => sum + (line.net_amount ?? line.total_amount ?? 0),
+    0,
+  );
+  const variance = invoice.total ? invoice.total - lineTotal : 0;
+  const suspiciousLines = lines.filter((line) =>
+    /iban|acct|sort code|customer card|tel:|email|street|suite|invoice|due date/i.test(
+      line.description,
+    ),
+  );
+  const hasVariance = Math.abs(variance) > Math.max(1, invoice.total * 0.03);
+  const reviewState =
+    fieldReview?.severity === "error" || hasVariance
+      ? "error"
+      : fieldReview?.severity === "review" || suspiciousLines.length
+        ? "review"
+        : "ok";
+
+  function updateLine(index: number, patch: Partial<InvoiceLine>) {
+    onLinesChange(
+      lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    );
+  }
+
+  function removeLine(index: number) {
+    onLinesChange(
+      lines
+        .filter((_, i) => i !== index)
+        .map((line, i) => ({ ...line, line_number: i + 1 })),
+    );
+  }
+
+  function addLine() {
+    onLinesChange([
+      ...lines,
+      {
+        line_number: lines.length + 1,
+        description: "",
+        quantity: 0,
+        uom: "",
+        unit_price: 0,
+        net_amount: 0,
+        tax_amount: 0,
+        total_amount: 0,
+        hsn_sac: "",
+        category: "",
+        gl_code: "",
+        confidence: null,
+      },
+    ]);
+  }
+
+  return (
+    <section className="rounded-2xl border border-line bg-surface shadow-card">
+      <div className="flex flex-col gap-3 border-b border-line px-4 py-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+              Line items
+            </p>
+            <h3 className="mt-1 text-lg font-black text-ink">
+              {lines.length} line{lines.length === 1 ? "" : "s"}
+              <span className="ml-2 text-sm font-bold text-ink-muted">
+                edit inline · rows save with corrections
+              </span>
+            </h3>
+            <p className="mt-1 max-w-2xl text-xs font-semibold leading-5 text-ink-secondary">
+              Keep billable goods/services, then confirm each row&apos;s
+              profile mapping before posting.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex h-8 items-center rounded-full px-3 text-xs font-black",
+                reviewState === "ok"
+                  ? "bg-success-soft text-success"
+                  : reviewState === "error"
+                    ? "bg-danger-soft text-danger"
+                    : "bg-gold-soft text-gold-ink",
+              )}
+            >
+              {reviewState === "ok"
+                ? "Rows look clean"
+                : reviewState === "error"
+                  ? "Needs correction"
+                  : "Review rows"}
+            </span>
+            {editable && (
+              <button
+                type="button"
+                onClick={addLine}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line-strong bg-canvas px-3 text-xs font-black text-accent transition-colors hover:border-accent hover:bg-accent-soft"
+              >
+                <Plus size={14} />
+                Add row
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="grid w-full min-w-0 gap-2 sm:grid-cols-3">
+          <ReviewLineMetric
+            label="Line total"
+            value={formatCurrency(lineTotal, invoice.currency)}
+          />
+          <ReviewLineMetric
+            label="Invoice total"
+            value={formatCurrency(invoice.total, invoice.currency)}
+          />
+          <ReviewLineMetric
+            label="Variance"
+            value={formatCurrency(variance, invoice.currency)}
+            tone={hasVariance ? "warning" : "default"}
+          />
+        </div>
+      </div>
+
+      {(fieldReview?.issue || suspiciousLines.length > 0 || hasVariance) && (
+        <div className="border-b border-line bg-gold-soft px-5 py-3 text-sm font-bold leading-6 text-gold-ink">
+          {fieldReview?.issue ||
+            (suspiciousLines.length
+              ? `${suspiciousLines.length} line item(s) may be non-billable text.`
+              : "")}
+          {hasVariance &&
+            ` Line total differs from invoice total by ${formatCurrency(variance, invoice.currency)}.`}
+        </div>
+      )}
+
+      <div data-scroll-region="true" className="overflow-x-auto">
+        <table className="w-full table-fixed border-collapse text-left">
+          <thead className="bg-surface-subtle">
+            <tr className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
+              <th className="w-[30%] px-3 py-3">Description</th>
+              <th className="w-[9%] px-3 py-3 text-right">Qty</th>
+              <th className="w-[8%] px-3 py-3">UOM</th>
+              <th className="w-[14%] px-3 py-3 text-right">Unit price</th>
+              <th className="w-[17%] px-3 py-3 text-right">Amount</th>
+              <th className="w-[16%] px-3 py-3">Mapping</th>
+              <th className="w-[6%] px-3 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {lines.length ? (
+              lines.map((line, index) => {
+                const noisy = suspiciousLines.some(
+                  (candidate) => candidate === line,
+                );
+                const mapping = lineMappingChip(line);
+                return (
+                  <tr
+                    key={line.id ?? `row-${index}`}
+                    className="border-t border-line align-top"
+                  >
+                    <td className="px-2 py-2.5">
+                      <LineCellInput
+                        value={line.description}
+                        editable={editable}
+                        placeholder="Description"
+                        className="text-sm font-black leading-5 text-ink"
+                        onCommit={(value) =>
+                          updateLine(index, { description: value })
+                        }
+                      />
+                      <span
+                        className={cn(
+                          "ml-2 mt-1.5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-black",
+                          noisy || reviewState === "error"
+                            ? "bg-gold-soft text-gold-ink"
+                            : "bg-success-soft text-success",
+                        )}
+                      >
+                        {noisy ? "Check row" : "Looks billable"}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <LineCellInput
+                        value={line.quantity ? String(line.quantity) : ""}
+                        editable={editable}
+                        placeholder="0"
+                        align="right"
+                        className="font-mono text-sm text-ink"
+                        onCommit={(value) =>
+                          updateLine(index, { quantity: parseLineAmount(value) })
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <LineCellInput
+                        value={line.uom}
+                        editable={editable}
+                        placeholder="—"
+                        className="text-sm font-bold text-ink-secondary"
+                        onCommit={(value) => updateLine(index, { uom: value })}
+                      />
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <LineCellInput
+                        value={line.unit_price ? String(line.unit_price) : ""}
+                        editable={editable}
+                        placeholder="0.00"
+                        align="right"
+                        className="font-mono text-sm text-ink"
+                        onCommit={(value) =>
+                          updateLine(index, {
+                            unit_price: parseLineAmount(value),
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <LineCellInput
+                        value={
+                          (line.net_amount ?? line.total_amount)
+                            ? String(line.net_amount ?? line.total_amount)
+                            : ""
+                        }
+                        editable={editable}
+                        placeholder="0.00"
+                        align="right"
+                        className="font-mono text-sm font-black text-ink"
+                        onCommit={(value) => {
+                          const amount = parseLineAmount(value);
+                          updateLine(index, {
+                            net_amount: amount,
+                            total_amount: amount + (line.tax_amount ?? 0),
+                          });
+                        }}
+                      />
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <span
+                        className={cn(
+                          "inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-[11px] font-black",
+                          mapping.className,
+                        )}
+                        title={
+                          clientProfile
+                            ? `Mapped via ${clientProfile.name} profile`
+                            : "Heuristic mapping — confirm in Rules & mapping"
+                        }
+                      >
+                        {mapping.label}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5 text-right">
+                      {editable && (
+                        <button
+                          type="button"
+                          onClick={() => removeLine(index)}
+                          className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-danger-soft hover:text-danger"
+                          title="Remove row"
+                          aria-label={`Remove line ${index + 1}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-5 py-12 text-center text-sm font-semibold text-ink-muted"
+                >
+                  No line items were extracted. Add at least one billable line
+                  before validation and posting.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function lineMappingChip(line: InvoiceLine): {
+  label: string;
+  className: string;
+} {
+  if (line.gl_code) {
+    return {
+      label: line.gl_code,
+      className: "bg-accent-soft text-accent-ink",
+    };
+  }
+  const description = (line.description || "").toLowerCase();
+  if (/igst|cgst|sgst|\bgst\b|\btax\b|tcs|tds|\bvat\b|cess/.test(description)) {
+    return { label: "Tax ledger", className: "bg-accent-soft text-accent-ink" };
+  }
+  if (line.quantity > 0 && (line.uom || "").trim()) {
+    return { label: "Stock item", className: "bg-cyan-soft text-cyan-ink" };
+  }
+  if (/freight|transport|courier|shipping|round.?off|discount|charge|insurance/.test(description)) {
+    return {
+      label: "Expense ledger",
+      className: "bg-surface-strong text-ink-secondary",
+    };
+  }
+  return { label: "Ledger", className: "bg-surface-strong text-ink-secondary" };
+}
+
+function parseLineAmount(value: string) {
+  const parsed = Number(value.replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function LineCellInput({
+  value,
+  editable,
+  placeholder,
+  align = "left",
+  className,
+  onCommit,
+}: {
+  value: string;
+  editable: boolean;
+  placeholder: string;
+  align?: "left" | "right";
+  className?: string;
+  onCommit: (value: string) => void;
+}) {
+  if (!editable) {
+    return (
+      <p
+        className={cn(
+          "min-h-9 break-words px-2 py-1.5",
+          align === "right" && "text-right",
+          className,
+        )}
+      >
+        {value || placeholder}
+      </p>
+    );
+  }
+  return (
+    <input
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onCommit(event.target.value)}
+      className={cn(
+        "w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 outline-none transition-colors placeholder:text-ink-muted hover:border-line focus:border-accent focus:bg-canvas",
+        align === "right" && "text-right",
+        className,
+      )}
+    />
+  );
+}
+
+function ReviewLineMetric({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "warning";
+}) {
+  return (
+    <div
+      className={cn(
+        "min-w-[150px] rounded-xl border bg-canvas px-3 py-2",
+        tone === "warning" ? "border-gold/30 bg-gold-soft" : "border-line",
+      )}
+    >
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+        {label}
+      </p>
+      <p className="mt-1 truncate font-mono text-sm font-black text-ink">
+        {value}
+      </p>
+    </div>
   );
 }
 
