@@ -34,11 +34,20 @@ AI_PARSER_MODES = {
 AI_PROVIDER_DISABLED = "disabled"
 AI_PROVIDER_PROFILE_CONTEXT = "profile_context"
 AI_PROVIDER_WEBHOOK = "webhook"
+AI_PROVIDER_ANTHROPIC = "anthropic"
+AI_PROVIDER_OPENAI_COMPATIBLE = "openai_compatible"
 AI_PROVIDERS = {
     AI_PROVIDER_DISABLED,
     AI_PROVIDER_PROFILE_CONTEXT,
     AI_PROVIDER_WEBHOOK,
+    AI_PROVIDER_ANTHROPIC,
+    AI_PROVIDER_OPENAI_COMPATIBLE,
 }
+
+# External AI is OFF unless explicitly enabled: without SIFTENTRY_AI_PROVIDER
+# set to a live provider (anthropic / openai_compatible / webhook) plus its
+# credentials, extraction runs on the free, local profile_context mode —
+# no external calls, no cost, no keys required.
 
 
 @dataclass(frozen=True)
@@ -48,6 +57,9 @@ class AiExtractorConfig:
     provider: str = AI_PROVIDER_PROFILE_CONTEXT
     endpoint: str = ""
     token: str = ""
+    api_key: str = ""
+    model: str = ""
+    base_url: str = ""
     timeout_seconds: float = 8.0
     max_payload_chars: int = 120_000
     policy: str = "review_only"
@@ -58,6 +70,13 @@ class AiExtractorConfig:
             provider=_normalize_provider(os.getenv("SIFTENTRY_AI_PROVIDER", "")),
             endpoint=os.getenv("SIFTENTRY_AI_EXTRACTOR_URL", "").strip(),
             token=os.getenv("SIFTENTRY_AI_EXTRACTOR_TOKEN", "").strip(),
+            api_key=(
+                os.getenv("SIFTENTRY_AI_API_KEY", "").strip()
+                or os.getenv("ANTHROPIC_API_KEY", "").strip()
+                or os.getenv("OPENAI_API_KEY", "").strip()
+            ),
+            model=os.getenv("SIFTENTRY_AI_MODEL", "").strip(),
+            base_url=os.getenv("SIFTENTRY_AI_BASE_URL", "").strip(),
             timeout_seconds=float(os.getenv("SIFTENTRY_AI_TIMEOUT_SECONDS", "8")),
             max_payload_chars=int(os.getenv("SIFTENTRY_AI_MAX_PAYLOAD_CHARS", "120000")),
             policy=os.getenv("SIFTENTRY_AI_POLICY", "review_only").strip() or "review_only",
@@ -69,6 +88,17 @@ class AiExtractorConfig:
             provider=_normalize_provider(getattr(settings, "ai_provider", "")),
             endpoint=str(getattr(settings, "ai_extractor_url", "") or "").strip(),
             token=str(getattr(settings, "ai_extractor_token", "") or "").strip(),
+            api_key=str(
+                getattr(settings, "ai_api_key", "")
+                or os.getenv("SIFTENTRY_AI_API_KEY", "")
+                or os.getenv("ANTHROPIC_API_KEY", "")
+                or os.getenv("OPENAI_API_KEY", "")
+            ).strip(),
+            model=str(getattr(settings, "ai_model", "") or "").strip(),
+            base_url=str(
+                getattr(settings, "ai_base_url", "")
+                or os.getenv("SIFTENTRY_AI_BASE_URL", "")
+            ).strip(),
             timeout_seconds=float(getattr(settings, "ai_timeout_seconds", 8.0)),
             max_payload_chars=int(getattr(settings, "ai_max_payload_chars", 120_000)),
             policy=str(getattr(settings, "ai_policy", "review_only") or "review_only").strip(),
@@ -80,10 +110,14 @@ class AiExtractorConfig:
             return False
         if self.provider == AI_PROVIDER_PROFILE_CONTEXT:
             return True
+        if self.provider in {AI_PROVIDER_ANTHROPIC, AI_PROVIDER_OPENAI_COMPATIBLE}:
+            return bool(self.api_key)
         return self.provider == AI_PROVIDER_WEBHOOK and bool(self.endpoint)
 
     @property
     def live_provider(self) -> bool:
+        if self.provider in {AI_PROVIDER_ANTHROPIC, AI_PROVIDER_OPENAI_COMPATIBLE}:
+            return bool(self.api_key)
         return self.provider == AI_PROVIDER_WEBHOOK and bool(self.endpoint)
 
     def status(self) -> Dict[str, Any]:
@@ -93,11 +127,25 @@ class AiExtractorConfig:
             "live_provider": self.live_provider,
             "endpoint_configured": bool(self.endpoint),
             "token_configured": bool(self.token),
+            "api_key_configured": bool(self.api_key),
+            "base_url": self.base_url,
+            "model": self.model
+            or (
+                "claude-sonnet-4-6"
+                if self.provider == AI_PROVIDER_ANTHROPIC
+                else "gpt-4o-mini"
+                if self.provider == AI_PROVIDER_OPENAI_COMPATIBLE
+                else ""
+            ),
             "policy": self.policy,
             "timeout_seconds": self.timeout_seconds,
             "max_payload_chars": self.max_payload_chars,
             "mode": (
-                "external_webhook"
+                "anthropic_llm"
+                if self.provider == AI_PROVIDER_ANTHROPIC and self.api_key
+                else "openai_compatible_llm"
+                if self.provider == AI_PROVIDER_OPENAI_COMPATIBLE and self.api_key
+                else "external_webhook"
                 if self.live_provider
                 else "profile_context_fallback"
                 if self.provider == AI_PROVIDER_PROFILE_CONTEXT
@@ -117,6 +165,8 @@ def apply_ai_parser_context(
     client_profile: Optional[ClientProfile] = None,
     correction_signals: Optional[List[CorrectionLearningSignal]] = None,
     ai_config: Optional[AiExtractorConfig] = None,
+    document_text: str = "",
+    pdf_bytes: bytes = b"",
 ) -> Dict[str, Any]:
     if not is_ai_parser_mode(parser_mode):
         return payload
@@ -127,7 +177,13 @@ def apply_ai_parser_context(
     config = ai_config or AiExtractorConfig.from_environment()
 
     _apply_profile_hints(invoice, client_profile)
-    external_result = request_external_ai_suggestions(invoice, context, config=config)
+    external_result = request_external_ai_suggestions(
+        invoice,
+        context,
+        config=config,
+        document_text=document_text,
+        pdf_bytes=pdf_bytes,
+    )
 
     base_parser = str(document.get("PARSER") or document.get("ADAPTER") or "Generic")
     document["PARSER"] = "AI/OCR assisted"
@@ -291,8 +347,67 @@ def request_external_ai_suggestions(
     context: Dict[str, Any],
     *,
     config: Optional[AiExtractorConfig] = None,
+    document_text: str = "",
+    pdf_bytes: bytes = b"",
 ) -> Dict[str, Any]:
     resolved = config or AiExtractorConfig.from_environment()
+    if resolved.provider == AI_PROVIDER_ANTHROPIC:
+        if not resolved.api_key:
+            return _ai_result(
+                provider=AI_PROVIDER_ANTHROPIC,
+                configured=False,
+                policy=resolved.policy,
+                error="ANTHROPIC_API_KEY is not configured.",
+            )
+        from .anthropic_extractor import extract_with_anthropic
+
+        outcome = extract_with_anthropic(
+            document_text=document_text,
+            context=context,
+            api_key=resolved.api_key,
+            model=resolved.model or "claude-sonnet-4-6",
+            timeout_seconds=max(resolved.timeout_seconds, 45.0),
+            max_payload_chars=resolved.max_payload_chars,
+            pdf_bytes=pdf_bytes,
+        )
+        return _ai_result(
+            provider=AI_PROVIDER_ANTHROPIC,
+            configured=True,
+            policy=resolved.policy,
+            suggestions=outcome["suggestions"],
+            model=outcome["model"],
+            latency_ms=outcome["latency_ms"],
+            error=outcome["error"],
+        )
+    if resolved.provider == AI_PROVIDER_OPENAI_COMPATIBLE:
+        if not resolved.api_key:
+            return _ai_result(
+                provider=AI_PROVIDER_OPENAI_COMPATIBLE,
+                configured=False,
+                policy=resolved.policy,
+                error="SIFTENTRY_AI_API_KEY is not configured.",
+            )
+        from .openai_extractor import extract_with_openai_compatible
+
+        outcome = extract_with_openai_compatible(
+            document_text=document_text,
+            context=context,
+            api_key=resolved.api_key,
+            base_url=resolved.base_url or "https://api.openai.com/v1",
+            model=resolved.model or "gpt-4o-mini",
+            timeout_seconds=max(resolved.timeout_seconds, 45.0),
+            max_payload_chars=resolved.max_payload_chars,
+            pdf_bytes=pdf_bytes,
+        )
+        return _ai_result(
+            provider=AI_PROVIDER_OPENAI_COMPATIBLE,
+            configured=True,
+            policy=resolved.policy,
+            suggestions=outcome["suggestions"],
+            model=outcome["model"],
+            latency_ms=outcome["latency_ms"],
+            error=outcome["error"],
+        )
     if resolved.provider == AI_PROVIDER_DISABLED:
         return _ai_result(
             provider=AI_PROVIDER_DISABLED,
@@ -372,6 +487,20 @@ def _normalize_provider(value: str) -> str:
         return AI_PROVIDER_PROFILE_CONTEXT
     if normalized in {"url", "http", "https", "external"}:
         return AI_PROVIDER_WEBHOOK
+    if normalized in {"anthropic", "claude", "claude_api"}:
+        return AI_PROVIDER_ANTHROPIC
+    if normalized in {
+        "openai",
+        "openai_compatible",
+        "gpt",
+        "gemini",
+        "groq",
+        "deepseek",
+        "openrouter",
+        "ollama",
+        "compatible",
+    }:
+        return AI_PROVIDER_OPENAI_COMPATIBLE
     return normalized
 
 

@@ -992,8 +992,6 @@ class InvoiceRepository:
             return None
 
         updates = patch.model_dump(exclude_unset=True)
-        learn_vendor_memory = updates.pop("learn_vendor_memory", None)
-        learn = True if learn_vendor_memory is None else bool(learn_vendor_memory)
         if not updates:
             return current
 

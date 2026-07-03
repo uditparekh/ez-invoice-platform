@@ -584,6 +584,31 @@ class BatchPostSkip(BaseModel):
     reason: str
 
 
+class LearningExportBundle(BaseModel):
+    """Portable backup of everything the AI learns from — provider-independent.
+
+    This is the same knowledge injected into whichever AI provider is active,
+    so migrating brains (or instances) means exporting here and importing
+    there; the new model picks up exactly where the old one left off.
+    """
+
+    schema_version: str = "siftentry_learning_v1"
+    generated_at: datetime
+    organization_id: str
+    organization_settings: Dict[str, Any] = Field(default_factory=dict)
+    client_profiles: List[ClientProfileCreate] = Field(default_factory=list)
+    learning_signals: List[CorrectionLearningSignal] = Field(default_factory=list)
+    learning_summary: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LearningImportResult(BaseModel):
+    organization_settings_applied: bool
+    profiles_created: int
+    profiles_updated: int
+    learning_signals_received: int
+    notes: List[str] = Field(default_factory=list)
+
+
 class BatchPostResult(BaseModel):
     attempted: int
     succeeded: int

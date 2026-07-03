@@ -62,6 +62,42 @@ BACKEND TODO: honor `learn_vendor_memory` in the invoice PATCH handler when writ
 - **Client-profiles wizard polish** — structurally complete (3,146-line panel, wizard + approval flow present); final polish deferred until live client feedback, exactly as your parity review recommends. Blind-rewriting it now would add risk, not value.
 - **Teach-fields region marking** — ships when extraction returns bounding boxes (backend dependency).
 
+## Step 11 (REVISED — supersedes the earlier Step 11 zip) — Provider-agnostic AI layer, OFF by default, learning fully portable (2026-07-03) ✅
+**Verification: backend `pytest` 46/46 (all existing + 8 AI-layer tests). Zero regressions.**
+
+Design goals delivered: (1) **any AI model can take the brain slot without code changes** —
+switching providers is an environment-variable edit; (2) **external AI is OFF by default** —
+no env vars set means local profile_context mode: zero external calls, zero cost, zero keys;
+(3) **all learning is portable and backed up** — one exportable bundle that is literally the
+same knowledge injected into whichever brain is active, so a new model picks up exactly where
+the old one left off.
+
+| File | Status | Change |
+|---|---|---|
+| siftentry_app/backend/extraction_common.py | NEW | The provider-agnostic core: field contract, system prompt, the client-context briefing builder, response shaping, and text-layer evidence location (bounding boxes are found by YOUR code in the PDF text layer — identical no matter which model extracted the values). Every brain eats identical food. |
+| siftentry_app/backend/anthropic_extractor.py | REWRITTEN | Now transport-only: speaks the Anthropic Messages dialect, delegates all intelligence to extraction_common. Key from ANTHROPIC_API_KEY (or SIFTENTRY_AI_API_KEY). |
+| siftentry_app/backend/openai_extractor.py | NEW | OpenAI-compatible adapter (/chat/completions) — **one adapter, most of the market**: OpenAI, Gemini's compatible endpoint, Groq, DeepSeek, OpenRouter, and local models via Ollama (SIFTENTRY_AI_BASE_URL=http://127.0.0.1:11434/v1 → zero API cost, data never leaves the machine). |
+| siftentry_app/backend/ai_parser.py | EDITED | New provider `openai_compatible` in the contract; config gains base_url; aliases normalize (openai/gpt/gemini/groq/deepseek/openrouter/ollama → openai_compatible; claude/anthropic → anthropic). Default-off semantics documented in-code. Status endpoint reports mode `anthropic_llm` / `openai_compatible_llm` / `external_webhook` / `profile_context_fallback` / `disabled`. |
+| siftentry_app/backend/models.py | EDITED | `LearningExportBundle` (schema_version siftentry_learning_v1: org settings + full client profiles + denormalized learning signals + summary) and `LearningImportResult`. |
+| siftentry_app/backend/main.py | EDITED | `GET /organizations/{id}/learning/export` (admin) — the portable backup; `POST /organizations/{id}/learning/import` — applies settings + creates-or-updates profiles **by name** (idempotent re-import: updates, never duplicates). Historical signals travel in the bundle for reference; the live loop repopulates from new reviews. |
+| siftentry_app/backend/repository.py | EDITED | Cleanup: removed two stray dead-code lines that Step 10's edit accidentally duplicated into `update_client_profile` (benign, but not clean). The invoice-PATCH learning gate is untouched and re-verified by tests. |
+| siftentry_app/requirements-api.txt · requirements.txt | NEW · REWRITTEN | Production API deps split from the Streamlit pilot's extras (unchanged from earlier Step 11). |
+| tests/test_ai_anthropic.py | EDITED | Import path updated for the moved evidence locator. |
+| tests/test_ai_providers_and_learning.py | NEW | 4 tests: default-is-off proof (no external call is ever attempted without explicit config), provider-alias normalization, full OpenAI-compatible round-trip against a mocked local Ollama URL (evidence still located locally), and a learning export→import round-trip across two organizations incl. idempotent re-import. |
+
+### The switchboard (all optional — unset = AI off)
+```
+SIFTENTRY_AI_PROVIDER   anthropic | openai | gemini | groq | deepseek | openrouter | ollama | webhook | disabled
+SIFTENTRY_AI_API_KEY    the key for whichever provider (ANTHROPIC_API_KEY / OPENAI_API_KEY also honored)
+SIFTENTRY_AI_BASE_URL   for openai-compatible targets (e.g. http://127.0.0.1:11434/v1 for Ollama)
+SIFTENTRY_AI_MODEL      model override (defaults: claude-sonnet-4-6 / gpt-4o-mini)
+```
+Examples — Claude: provider=anthropic + ANTHROPIC_API_KEY. OpenAI: provider=openai + key.
+Local & free: provider=ollama + base_url above + model=llama3.1 + any non-empty key.
+Switching brains later = edit these variables, restart. The briefing (profile, tax setup,
+instructions, correction-learning summary) is identical for every provider, and
+`/organizations/{id}/learning/export` is your off-platform backup of all of it.
+
 ## Step 10 — Full-stack pass: backend TODOs live + batch posting + E2E scaffold (2026-07-03) ✅
 
 **Verification: backend `pytest` 36/36 passed (incl. 3 new feature tests) · web `tsc` 0 errors ·

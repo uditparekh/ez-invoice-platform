@@ -44,6 +44,8 @@ from .models import (
     InvoiceStatus,
     LoginRequest,
     Membership,
+    LearningExportBundle,
+    LearningImportResult,
     Organization,
     OrganizationCreate,
     OrganizationSettings,
@@ -106,6 +108,17 @@ APPROVE_ROLES = {
     OrganizationRole.APPROVER,
 }
 MANAGE_ROLES = {OrganizationRole.OWNER, OrganizationRole.ADMIN}
+
+
+def _profile_export_payload(profile: ClientProfile) -> ClientProfileCreate:
+    """Strip identity/timestamps: a profile as a portable creation payload."""
+    return ClientProfileCreate(
+        name=profile.name,
+        accounting_system=profile.accounting_system,
+        description=profile.description,
+        is_default=profile.is_default,
+        settings=profile.settings,
+    )
 
 
 def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
@@ -1255,6 +1268,112 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             OrganizationSettings.model_validate(stored)
             if stored
             else OrganizationSettings()
+        )
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/learning/export",
+        response_model=LearningExportBundle,
+        tags=["organizations"],
+    )
+    def export_learning_bundle(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+        limit: int = Query(default=2000, ge=1, le=10000),
+    ) -> LearningExportBundle:
+        """One portable JSON bundle of everything the AI learns from.
+
+        Download it as an off-platform backup; import it into a fresh
+        instance (or hand it to a new AI provider) and extraction context
+        continues from exactly where it left off.
+        """
+        _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        repo = _repo(request)
+        signals = repo.list_correction_learning_signals(organization_id, limit=limit)
+        field_counts: Dict[str, int] = {}
+        for signal in signals:
+            field_counts[signal.field_path] = field_counts.get(signal.field_path, 0) + 1
+        profiles = repo.list_client_profiles(organization_id)
+        return LearningExportBundle(
+            generated_at=datetime.now(timezone.utc),
+            organization_id=organization_id,
+            organization_settings=repo.get_organization_settings(organization_id),
+            client_profiles=[_profile_export_payload(profile) for profile in profiles],
+            learning_signals=signals,
+            learning_summary={
+                "signal_count": len(signals),
+                "field_counts": field_counts,
+                "profile_count": len(profiles),
+            },
+        )
+
+    @app.post(
+        "/api/v1/organizations/{organization_id}/learning/import",
+        response_model=LearningImportResult,
+        tags=["organizations"],
+    )
+    def import_learning_bundle(
+        request: Request,
+        organization_id: str,
+        body: LearningExportBundle,
+        current_user: CurrentUser,
+    ) -> LearningImportResult:
+        """Restore a learning bundle into this organization.
+
+        Applies organization settings and creates-or-updates client profiles
+        by name (the carriers of extraction instructions, mappings, and
+        training context). Historical learning signals travel in the bundle
+        for reference; the live learning loop repopulates from new reviews.
+        """
+        _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        repo = _repo(request)
+        notes: List[str] = []
+        settings_applied = False
+        if body.organization_settings:
+            repo.upsert_organization_settings(
+                organization_id, dict(body.organization_settings)
+            )
+            settings_applied = True
+        existing = {
+            profile.name.strip().lower(): profile
+            for profile in repo.list_client_profiles(organization_id)
+        }
+        created = 0
+        updated = 0
+        for payload in body.client_profiles:
+            key = payload.name.strip().lower()
+            if not key:
+                continue
+            match = existing.get(key)
+            if match:
+                repo.update_client_profile(
+                    match.id,
+                    ClientProfilePatch(
+                        name=payload.name,
+                        accounting_system=payload.accounting_system,
+                        description=payload.description,
+                        is_default=payload.is_default,
+                        settings=payload.settings,
+                    ),
+                    actor_id=current_user.id,
+                )
+                updated += 1
+            else:
+                repo.create_client_profile(
+                    organization_id, payload, actor_id=current_user.id
+                )
+                created += 1
+        if body.learning_signals:
+            notes.append(
+                f"{len(body.learning_signals)} historical learning signals received "
+                "for reference; live learning repopulates from new reviews."
+            )
+        return LearningImportResult(
+            organization_settings_applied=settings_applied,
+            profiles_created=created,
+            profiles_updated=updated,
+            learning_signals_received=len(body.learning_signals),
+            notes=notes,
         )
 
     @app.put(

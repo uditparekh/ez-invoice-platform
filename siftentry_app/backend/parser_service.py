@@ -93,6 +93,8 @@ def parse_pdf_invoice(
         client_profile=client_profile,
         correction_signals=correction_signals or [],
         ai_config=ai_config,
+        document_text=text,
+        pdf_bytes=pdf_bytes,
     )
     return legacy_payload_to_invoice(
         payload,
