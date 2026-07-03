@@ -1198,7 +1198,7 @@ function QueueTabsStrip({
     },
   ];
   return (
-    <section className="border-b border-line bg-canvas px-4 sm:px-6 lg:px-8">
+    <section className="bg-canvas px-4 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-[1440px] min-w-0 gap-2 overflow-x-auto py-4">
         {tabs.map((tab) => (
           <button
@@ -1241,7 +1241,7 @@ function QueueReadinessStrip({
   detectedProfile: DetectedInvoiceProfile | null;
 }) {
   return (
-    <section className="border-b border-line bg-canvas px-4 pb-4 sm:px-6 lg:px-8">
+    <section className="bg-canvas px-4 pb-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1440px]">
         <div className="flex min-h-20 flex-col gap-4 rounded-[24px] border border-line bg-surface px-5 py-4 shadow-card xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
