@@ -1,4 +1,5 @@
 from pathlib import Path
+import base64
 import hashlib
 import sqlite3
 from datetime import datetime, timezone
@@ -30,22 +31,24 @@ def _database_url_for(tmp_path: Path) -> str:
     return base.replace(parsed.path or "/postgres", f"/{dbname}", 1)
 
 
-def make_client(tmp_path: Path) -> TestClient:
+def make_client(tmp_path: Path, **overrides) -> TestClient:
+    settings_data = {
+        "database_url": _database_url_for(tmp_path),
+        "database_path": tmp_path / "api.db",
+        "upload_directory": tmp_path / "uploads",
+        "max_upload_bytes": 2 * 1024 * 1024,
+        "cors_origins": ("http://localhost:3000",),
+        "app_base_url": "http://testserver",
+        "jwt_secret": "test-secret-that-is-not-used-in-production",
+        "access_token_minutes": 5,
+        "refresh_token_days": 2,
+        "allow_dev_bootstrap": True,
+        "environment": "test",
+        "email_provider": "memory",
+    }
+    settings_data.update(overrides)
     app = create_app(
-        ApiSettings(
-            database_url=_database_url_for(tmp_path),
-            database_path=tmp_path / "api.db",
-            upload_directory=tmp_path / "uploads",
-            max_upload_bytes=2 * 1024 * 1024,
-            cors_origins=("http://localhost:3000",),
-            app_base_url="http://testserver",
-            jwt_secret="test-secret-that-is-not-used-in-production",
-            access_token_minutes=5,
-            refresh_token_days=2,
-            allow_dev_bootstrap=True,
-            environment="test",
-            email_provider="memory",
-        )
+        ApiSettings(**settings_data)
     )
     return TestClient(app)
 
@@ -1140,6 +1143,62 @@ def test_clear_queue_removes_stored_pdf(tmp_path: Path):
         )
         assert cleared.status_code == 200
         assert not stored_path.exists()
+
+
+def test_inbound_email_intake_uses_shared_invoice_processing(tmp_path: Path):
+    secret = "email-secret-with-enough-randomness"
+    with make_client(tmp_path, inbound_email_secret=secret) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        pdf_bytes = make_text_pdf(
+            "INVOICE INV-EMAIL-1\nSupplier Email Vendor\nInvoice Date 20-JUN-2026\nTotal USD 224.00"
+        )
+        body = {
+            "organization_id": org_id,
+            "from_email": "ap@supplier.example",
+            "to_email": "invoices@siftentry.example",
+            "subject": "Invoice INV-EMAIL-1",
+            "message_id": "<email-1@example>",
+            "attachments": [
+                {
+                    "filename": "email-invoice.pdf",
+                    "content_type": "application/pdf",
+                    "content_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+                }
+            ],
+        }
+
+        denied = client.post(
+            "/api/v1/inbound/email",
+            json=body,
+            headers={"X-SiftEntry-Inbound-Secret": "wrong"},
+        )
+        assert denied.status_code == 403
+
+        accepted = client.post(
+            "/api/v1/inbound/email",
+            json=body,
+            headers={"X-SiftEntry-Inbound-Secret": secret},
+        )
+        assert accepted.status_code == 202
+        payload = accepted.json()
+        assert payload["accepted"] == 1
+        assert payload["rejected"] == 0
+        invoice = payload["invoices"][0]
+        assert invoice["invoice_number"] == "INV-EMAIL-1"
+        assert invoice["raw_payload"]["ingestion"]["channel"] == "email"
+        assert invoice["raw_payload"]["ingestion"]["from_email"] == "ap@supplier.example"
+        assert invoice["document_retention"]["retained"] is True
+        assert invoice["document_retention"]["sha256_hash"] == hashlib.sha256(pdf_bytes).hexdigest()
+        assert Path(invoice["source_path"]).exists()
+
+        queue = client.get(
+            "/api/v1/invoices",
+            params={"organization_id": org_id},
+            headers=authorization(tokens),
+        )
+        assert queue.status_code == 200
+        assert [item["invoice_number"] for item in queue.json()] == ["INV-EMAIL-1"]
 
 
 def test_expired_pdf_cleanup_keeps_invoice_history(tmp_path: Path):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import secrets
 import sqlite3
@@ -44,6 +46,8 @@ from .models import (
     InvoicePatch,
     InvoiceReviewResult,
     InvoiceStatus,
+    InboundEmailIntakeResult,
+    InboundEmailRequest,
     LoginRequest,
     Membership,
     LearningExportBundle,
@@ -920,84 +924,105 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         persist: bool = Query(default=True),
         client_profile_id: Optional[str] = Query(default=None),
     ) -> Invoice:
-        _require_membership(request, current_user, organization_id, EDIT_ROLES)
-        organization = _get_organization(request, organization_id)
-        filename = Path(file.filename or "invoice.pdf").name
-        if not filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=415, detail="Only PDF invoices are accepted.")
-        content = await file.read()
-        if not content:
-            raise HTTPException(status_code=400, detail="The uploaded PDF is empty.")
-        if len(content) > request.app.state.settings.max_upload_bytes:
-            raise HTTPException(status_code=413, detail="The uploaded PDF exceeds the size limit.")
-
-        client_profile = _resolve_parser_profile(
+        return _process_invoice_pdf_bytes(
             request,
-            organization_id,
-            client_profile_id,
-            parser_mode,
-            current_user,
-        )
-        correction_signals = (
-            _repo(request).list_correction_learning_signals(organization_id, limit=50)
-            if is_ai_parser_mode(parser_mode)
-            else []
+            organization_id=organization_id,
+            filename=file.filename or "invoice.pdf",
+            content=await file.read(),
+            content_type=file.content_type or "application/pdf",
+            parser_mode=parser_mode,
+            persist=persist,
+            client_profile_id=client_profile_id,
+            current_user=current_user,
         )
 
-        retention_policy, retention_until = _resolve_pdf_retention(
-            request,
-            client_profile,
-        )
-        should_store_pdf = persist and retention_policy != PdfRetentionPolicy.DO_NOT_STORE.value
-        stored_path: Optional[Path] = None
-        file_hash = hashlib.sha256(content).hexdigest()
-        if should_store_pdf:
-            stored_path = _storage(request).save(organization_id, filename, content)
-        try:
-            parsed = parse_pdf_invoice(
-                filename=filename,
-                pdf_bytes=content,
-                organization_id=organization_id,
-                legal_names=organization.legal_names or [organization.name],
-                source_path=str(stored_path or ""),
-                parser_mode=parser_mode,
-                client_profile=client_profile,
-                correction_signals=correction_signals,
-                ai_config=request.app.state.ai_extractor_config,
+    @app.post(
+        "/api/v1/inbound/email",
+        response_model=InboundEmailIntakeResult,
+        status_code=status.HTTP_202_ACCEPTED,
+        tags=["inbound"],
+    )
+    def inbound_email_intake(
+        request: Request,
+        body: InboundEmailRequest,
+        x_siftentry_inbound_secret: Annotated[Optional[str], Header()] = None,
+    ) -> InboundEmailIntakeResult:
+        settings = request.app.state.settings
+        if not settings.inbound_email_secret:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Inbound email intake is not configured.",
             )
-            if persist:
-                invoice = _repo(request).create_invoice(parsed)
-                if stored_path:
-                    _repo(request).create_invoice_file(
-                        organization_id=organization_id,
-                        invoice_id=invoice.id,
-                        original_filename=filename,
-                        content_type=file.content_type or "application/pdf",
-                        storage_backend="local",
-                        storage_key=_storage(request).storage_key(stored_path),
-                        local_path=str(stored_path),
-                        sha256_hash=file_hash,
-                        size_bytes=len(content),
-                        retention_policy=retention_policy,
-                        retention_until=retention_until,
+        supplied_secret = x_siftentry_inbound_secret or ""
+        if not hmac.compare_digest(supplied_secret, settings.inbound_email_secret):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid inbound email secret.",
+            )
+        if not body.attachments:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one PDF attachment is required.",
+            )
+        if len(body.attachments) > settings.inbound_email_max_attachments:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=(
+                    "Too many email attachments. "
+                    f"Limit is {settings.inbound_email_max_attachments}."
+                ),
+            )
+
+        _get_organization(request, body.organization_id)
+        invoices: List[Invoice] = []
+        errors: List[str] = []
+        for attachment in body.attachments:
+            filename = Path(attachment.filename).name
+            content_type = attachment.content_type or "application/pdf"
+            if not filename.lower().endswith(".pdf") and content_type != "application/pdf":
+                errors.append(f"{filename}: skipped non-PDF attachment")
+                continue
+            try:
+                content = base64.b64decode(
+                    attachment.content_base64.encode("utf-8"),
+                    validate=True,
+                )
+            except (binascii.Error, ValueError) as exc:
+                errors.append(f"{filename}: invalid base64 content")
+                continue
+            try:
+                invoices.append(
+                    _process_invoice_pdf_bytes(
+                        request,
+                        organization_id=body.organization_id,
+                        filename=filename,
+                        content=content,
+                        content_type=content_type,
+                        parser_mode=body.parser_mode or "auto",
+                        persist=True,
+                        client_profile_id=body.client_profile_id,
+                        current_user=None,
+                        source_metadata={
+                            "ingestion": {
+                                "channel": "email",
+                                "from_email": body.from_email,
+                                "to_email": body.to_email,
+                                "subject": body.subject,
+                                "message_id": body.message_id,
+                            }
+                        },
                     )
-                    invoice = _repo(request).get_invoice(invoice.id) or invoice
-                return invoice
-            now = datetime.now(timezone.utc)
-            return Invoice(
-                id=f"preview-{uuid.uuid4()}",
-                created_at=now,
-                updated_at=now,
-                **parsed.model_dump(),
-            )
-        except ValueError as exc:
-            if stored_path:
-                _storage(request).delete(stored_path)
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except Exception as exc:
-            if stored_path:
-                _storage(request).delete(stored_path)
-            raise HTTPException(status_code=500, detail=f"Invoice processing failed: {exc}") from exc
+                )
+            except HTTPException as exc:
+                errors.append(f"{filename}: {exc.detail}")
+
+        return InboundEmailIntakeResult(
+            organization_id=body.organization_id,
+            accepted=len(invoices),
+            rejected=len(errors),
+            invoices=invoices,
+            errors=errors,
+        )
 
     @app.get("/api/v1/invoices", response_model=List[Invoice], tags=["invoices"])
     def list_invoices(
@@ -1677,6 +1702,107 @@ def _repo(request: Request) -> InvoiceRepository:
 
 def _storage(request: Request) -> LocalDocumentStorage:
     return request.app.state.storage
+
+
+def _process_invoice_pdf_bytes(
+    request: Request,
+    *,
+    organization_id: str,
+    filename: str,
+    content: bytes,
+    content_type: str = "application/pdf",
+    parser_mode: str = "auto",
+    persist: bool = True,
+    client_profile_id: Optional[str] = None,
+    current_user: Optional[AuthenticatedUser] = None,
+    source_metadata: Optional[Dict[str, Any]] = None,
+) -> Invoice:
+    if current_user is not None:
+        _require_membership(request, current_user, organization_id, EDIT_ROLES)
+
+    organization = _get_organization(request, organization_id)
+    safe_filename = Path(filename or "invoice.pdf").name
+    if not safe_filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=415, detail="Only PDF invoices are accepted.")
+    if not content:
+        raise HTTPException(status_code=400, detail="The uploaded PDF is empty.")
+    if len(content) > request.app.state.settings.max_upload_bytes:
+        raise HTTPException(status_code=413, detail="The uploaded PDF exceeds the size limit.")
+
+    client_profile = _resolve_parser_profile(
+        request,
+        organization_id,
+        client_profile_id,
+        parser_mode,
+        current_user,
+    )
+    correction_signals = (
+        _repo(request).list_correction_learning_signals(organization_id, limit=50)
+        if is_ai_parser_mode(parser_mode)
+        else []
+    )
+
+    retention_policy, retention_until = _resolve_pdf_retention(
+        request,
+        client_profile,
+    )
+    should_store_pdf = persist and retention_policy != PdfRetentionPolicy.DO_NOT_STORE.value
+    stored_path: Optional[Path] = None
+    file_hash = hashlib.sha256(content).hexdigest()
+    if should_store_pdf:
+        stored_path = _storage(request).save(organization_id, safe_filename, content)
+
+    try:
+        parsed = parse_pdf_invoice(
+            filename=safe_filename,
+            pdf_bytes=content,
+            organization_id=organization_id,
+            legal_names=organization.legal_names or [organization.name],
+            source_path=str(stored_path or ""),
+            parser_mode=parser_mode,
+            client_profile=client_profile,
+            correction_signals=correction_signals,
+            ai_config=request.app.state.ai_extractor_config,
+        )
+        if source_metadata:
+            parsed.raw_payload = {**parsed.raw_payload, **source_metadata}
+        if persist:
+            invoice = _repo(request).create_invoice(parsed)
+            if stored_path:
+                _repo(request).create_invoice_file(
+                    organization_id=organization_id,
+                    invoice_id=invoice.id,
+                    original_filename=safe_filename,
+                    content_type=content_type or "application/pdf",
+                    storage_backend="local",
+                    storage_key=_storage(request).storage_key(stored_path),
+                    local_path=str(stored_path),
+                    sha256_hash=file_hash,
+                    size_bytes=len(content),
+                    retention_policy=retention_policy,
+                    retention_until=retention_until,
+                )
+                invoice = _repo(request).get_invoice(invoice.id) or invoice
+            return invoice
+        now = datetime.now(timezone.utc)
+        return Invoice(
+            id=f"preview-{uuid.uuid4()}",
+            created_at=now,
+            updated_at=now,
+            **parsed.model_dump(),
+        )
+    except ValueError as exc:
+        if stored_path:
+            _storage(request).delete(stored_path)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except HTTPException:
+        if stored_path:
+            _storage(request).delete(stored_path)
+        raise
+    except Exception as exc:
+        if stored_path:
+            _storage(request).delete(stored_path)
+        raise HTTPException(status_code=500, detail=f"Invoice processing failed: {exc}") from exc
 
 
 def _resolve_pdf_retention(
@@ -2429,9 +2555,14 @@ def _resolve_parser_profile(
     organization_id: str,
     profile_id: Optional[str],
     parser_mode: str,
-    current_user: AuthenticatedUser,
+    current_user: Optional[AuthenticatedUser],
 ) -> Optional[ClientProfile]:
     if profile_id:
+        if current_user is None:
+            profile = _repo(request).get_client_profile(profile_id)
+            if not profile or profile.organization_id != organization_id:
+                raise HTTPException(status_code=404, detail="Client profile not found.")
+            return profile
         return _require_client_profile(
             request,
             organization_id,

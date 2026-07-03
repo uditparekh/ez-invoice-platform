@@ -6,12 +6,14 @@ import {
   Database,
   FileCog,
   FileSpreadsheet,
+  Inbox,
   KeyRound,
   Landmark,
   Network,
   PlugZap,
   RefreshCcw,
   ShieldCheck,
+  Smartphone,
   Table2,
   Workflow,
 } from "lucide-react";
@@ -238,6 +240,31 @@ export default function IntegrationsPage() {
             </div>
           </div>
         </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <ChannelCard
+            icon={<Inbox size={20} />}
+            title="Invoice email inbox"
+            subtitle="Supplier PDFs can enter the same extraction queue by email."
+            facts={[
+              ["Webhook secured", "Shared secret required"],
+              ["Smart storage", "PDF retained by profile policy"],
+              ["Same parser", "Upload and email use one intake path"],
+            ]}
+          />
+          <ChannelCard
+            icon={<Smartphone size={20} />}
+            title="Mobile approvals"
+            subtitle="Validated invoices can be approved from a phone-sized view."
+            facts={[
+              ["Route", "/app/approvals"],
+              ["Actions", "Approve, reject, open PDF"],
+              ["Audit", "Approval recorded before posting"],
+            ]}
+            href="/app/approvals"
+            actionLabel="Open approvals"
+          />
+        </section>
       </main>
     </div>
   );
@@ -301,5 +328,68 @@ function StatusPill({
       {tone === "success" && <CheckCircle2 size={13} />}
       {children}
     </span>
+  );
+}
+
+function ChannelCard({
+  icon,
+  title,
+  subtitle,
+  facts,
+  href,
+  actionLabel,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  facts: Array<[string, string]>;
+  href?: string;
+  actionLabel?: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-line bg-surface p-5 shadow-card">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink dark:text-cyan">
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-black text-ink">{title}</h2>
+            <p className="mt-1 text-sm font-semibold leading-6 text-ink-secondary">
+              {subtitle}
+            </p>
+          </div>
+        </div>
+        {href && actionLabel ? (
+          <Link
+            href={href}
+            className="hidden h-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface px-3 text-xs font-black text-ink transition-colors hover:border-accent hover:text-accent sm:inline-flex"
+          >
+            {actionLabel}
+          </Link>
+        ) : null}
+      </div>
+      <div className="mt-5 grid gap-2 sm:grid-cols-3">
+        {facts.map(([label, value]) => (
+          <div
+            key={label}
+            className="min-w-0 rounded-2xl border border-line bg-canvas px-3 py-3"
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-ink-muted">
+              {label}
+            </p>
+            <p className="mt-1 truncate text-sm font-black text-ink">{value}</p>
+          </div>
+        ))}
+      </div>
+      {href && actionLabel ? (
+        <Link
+          href={href}
+          className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-xl bg-accent text-sm font-black text-white sm:hidden"
+        >
+          {actionLabel}
+        </Link>
+      ) : null}
+    </div>
   );
 }

@@ -38,7 +38,7 @@ packaging\windows\tally-connector\build_installer_windows.bat
 The installer will be created at:
 
 ```text
-packaging\windows\tally-connector\output\SiftEntry-Tally-Connector-Setup-0.2.0.exe
+packaging\windows\tally-connector\output\SiftEntry-Tally-Connector-Setup-0.3.0.exe
 ```
 
 ## Client Install Flow
@@ -47,13 +47,15 @@ Send the setup `.exe` to the client.
 
 The client should:
 
-1. Run the installer.
-2. Keep `Start connector when I sign in` checked.
-3. Launch `SiftEntry Tally Connector`.
-4. Enter SiftEntry URL, workspace ID, connector token, and Tally URL.
-5. Click `Save settings`.
-6. Click `Test Tally`.
-7. Click `Start connector`.
+1. Open TallyPrime and load the correct company.
+2. Enable HTTP/XML on port `9000`.
+3. Run the SiftEntry connector installer.
+4. Keep `Start connector when I sign in` checked.
+5. Launch `SiftEntry Tally Connector`.
+6. Enter SiftEntry URL, workspace ID, connector token, and Tally URL.
+7. Click `Save settings`.
+8. Click `Test Tally`.
+9. Click `Start connector`.
 
 The Tally URL is usually:
 
@@ -74,4 +76,6 @@ AppData folder:
 - The connector makes outbound HTTPS calls to SiftEntry.
 - The connector checks TallyPrime before claiming jobs, so closed TallyPrime
   does not create false failed postings.
+- The connector never requires opening Tally's local `9000` port to the public
+  internet.
 - For enterprise rollout, add code signing before distributing broadly.

@@ -1,0 +1,40 @@
+name: Build Tally Connector Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/build-tally-connector-windows.yml"
+      - "packaging/windows/tally-connector/**"
+      - "siftentry_app/tally_connector_agent.py"
+      - "siftentry_app/tally_connector_desktop.py"
+      - "siftentry_app/tally_integration.py"
+
+jobs:
+  build-installer:
+    name: Build installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build one-click installer
+        shell: cmd
+        run: packaging\windows\tally-connector\build_installer_windows.bat
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiftEntry-Tally-Connector-Windows
+          path: packaging/windows/tally-connector/output/SiftEntry-Tally-Connector-Setup-*.exe
+          if-no-files-found: error

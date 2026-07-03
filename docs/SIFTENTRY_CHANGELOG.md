@@ -89,6 +89,32 @@ make worker   # in a second terminal
 SQLite remains the zero-setup default; nothing changes until you set the URL.
 (EZ_API_* env names are intentionally stable until the pre-launch rename pass — ADR 0003.)
 
+## Step 13 — Tally connector packaging, inbound email intake, and mobile channel readiness (2026-07-03) ✅
+**Verification: backend `pytest` 49/49 · web `tsc --noEmit` ✅ · `next build` ✅ 41/41 routes.**
+
+This closes the pilot-facing distribution layer around the core posting workflow: accountants can
+install the local Tally bridge, invoices can enter the platform through an email webhook, and the
+web app now exposes mobile approvals and channel readiness from Integrations.
+
+| File | Status | Change |
+|---|---|---|
+| packaging/windows/tally-connector/SiftEntryTallyConnector.iss | EDITED | Connector installer version bumped to `0.3.0` for the pilot package. |
+| .github/workflows/build-tally-connector-windows.yml | NEW | GitHub Actions workflow to build the Windows installer on `windows-latest` with Inno Setup and publish the `.exe` artifact. |
+| packaging/windows/tally-connector/CLIENT_INSTALL_GUIDE.md | NEW | Accountant-facing setup guide: enable TallyPrime HTTP/XML on port 9000, install connector, enter workspace URL/token, test Tally, and troubleshoot common failures. |
+| packaging/windows/tally-connector/README.md · docs/TALLY_CONNECTOR_WINDOWS.md | EDITED | Packaging docs updated for version `0.3.0`, the client guide, and the “Tally stays local” security model. |
+| siftentry_app/backend/models.py · settings.py · main.py | EDITED | Added `POST /api/v1/inbound/email` with shared PDF invoice processing. Webhook requires `X-SiftEntry-Inbound-Secret`, accepts base64 PDF attachments, applies the active profile/retention policy, and records ingestion metadata without requiring the original email service to know invoice internals. |
+| tests/test_api.py | EDITED | Added inbound-email intake coverage, including rejected bad-secret requests and accepted PDF attachments that land in the invoice queue with email metadata and file-retention tracking. |
+| apps/web/src/app/(product)/app/integrations/page.tsx | EDITED | Integrations now includes dedicated channel cards for the invoice email inbox and mobile approvals, alongside accounting systems/connectors. |
+| docs/INBOUND_EMAIL.md · docs/INDEX.md · docs/PILOT_RUNBOOK.md · docs/ROADMAP_STATUS.md | EDITED/NEW | Documented the inbound email flow, pilot readiness, and updated roadmap status for connector packaging, email intake, and mobile approval view. |
+
+### Pilot behavior
+- **Email intake is off unless configured**: no secret means the webhook returns a disabled response,
+  so there is no surprise public ingestion endpoint.
+- **Original PDF storage still follows retention policy**: review-window-only remains the intended
+  cost-conscious default; long retention is a paid option later.
+- **Tally connector remains local**: the cloud app never calls `localhost:9000`; the Windows bridge
+  polls SiftEntry and posts into the local TallyPrime company.
+
 ## Step 11 (REVISED — supersedes the earlier Step 11 zip) — Provider-agnostic AI layer, OFF by default, learning fully portable (2026-07-03) ✅
 **Verification: backend `pytest` 46/46 (all existing + 8 AI-layer tests). Zero regressions.**
 

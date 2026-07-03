@@ -16,6 +16,7 @@ Use this index to avoid hunting through the repo.
 |---|---|
 | `PILOT_RUNBOOK.md` | Local pilot/demo flow, client profile workflow, and client handoff checklist |
 | `TALLY_CONNECTOR_WINDOWS.md` | Windows Tally connector packaging and setup |
+| `INBOUND_EMAIL.md` | Supplier invoice email webhook, security, and retention behavior |
 | `PRODUCTION_DEPLOYMENT.md` | Pilot/staging/production infrastructure requirements |
 
 ## Architecture Decisions

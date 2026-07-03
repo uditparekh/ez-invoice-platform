@@ -501,6 +501,46 @@ class Invoice(InvoiceCreate):
     model_config = ConfigDict(use_enum_values=True)
 
 
+class InboundEmailAttachment(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = "application/pdf"
+    content_base64: str = Field(min_length=1)
+
+    @field_validator("filename")
+    @classmethod
+    def normalize_filename(cls, value: str) -> str:
+        return value.strip() or "invoice.pdf"
+
+    @field_validator("content_type")
+    @classmethod
+    def normalize_content_type(cls, value: str) -> str:
+        return (value or "application/pdf").strip().lower()
+
+
+class InboundEmailRequest(BaseModel):
+    organization_id: str
+    from_email: str = ""
+    to_email: str = ""
+    subject: str = ""
+    message_id: str = ""
+    parser_mode: str = "auto"
+    client_profile_id: Optional[str] = None
+    attachments: List[InboundEmailAttachment] = Field(default_factory=list)
+
+    @field_validator("from_email", "to_email", "subject", "message_id", "parser_mode")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return (value or "").strip()
+
+
+class InboundEmailIntakeResult(BaseModel):
+    organization_id: str
+    accepted: int = 0
+    rejected: int = 0
+    invoices: List[Invoice] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
+
+
 class InvoiceDocumentRetention(BaseModel):
     file_id: str
     retained: bool

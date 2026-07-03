@@ -65,6 +65,9 @@ class ApiSettings:
     smtp_password: str = ""
     smtp_use_tls: bool = True
     smtp_timeout_seconds: float = 10.0
+    inbound_email_secret: str = ""
+    inbound_email_address: str = ""
+    inbound_email_max_attachments: int = 10
     ai_provider: str = "profile_context"
     ai_extractor_url: str = ""
     ai_extractor_token: str = ""
@@ -139,6 +142,13 @@ class ApiSettings:
             smtp_password=os.environ.get("EZ_SMTP_PASSWORD", ""),
             smtp_use_tls=_truthy(os.environ.get("EZ_SMTP_USE_TLS", "true")),
             smtp_timeout_seconds=float(os.environ.get("EZ_SMTP_TIMEOUT_SECONDS", "10")),
+            inbound_email_secret=os.environ.get("SIFTENTRY_INBOUND_EMAIL_SECRET", ""),
+            inbound_email_address=os.environ.get("SIFTENTRY_INBOUND_EMAIL_ADDRESS", "")
+            .strip()
+            .lower(),
+            inbound_email_max_attachments=max(
+                1, int(os.environ.get("SIFTENTRY_INBOUND_EMAIL_MAX_ATTACHMENTS", "10"))
+            ),
             ai_provider=os.environ.get(
                 "SIFTENTRY_AI_PROVIDER",
                 "profile_context",
@@ -216,6 +226,10 @@ class ApiSettings:
                 problems.append("set EZ_SMTP_USERNAME")
             if not self.smtp_password:
                 problems.append("set EZ_SMTP_PASSWORD")
+        if self.inbound_email_address and len(self.inbound_email_secret) < 24:
+            problems.append(
+                "set SIFTENTRY_INBOUND_EMAIL_SECRET to a 24+ character random webhook secret"
+            )
         if self.ai_provider == "webhook" and not self.ai_extractor_url:
             problems.append("set SIFTENTRY_AI_EXTRACTOR_URL or use SIFTENTRY_AI_PROVIDER=profile_context")
         return problems

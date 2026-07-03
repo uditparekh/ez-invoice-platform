@@ -91,6 +91,9 @@ the target system and builds the accounting payload from that profile.
 - Correction learning signals from saved field edits.
 - Validation, approval, posting, posting logs, and retry.
 - QuickBooks, Tally, and Zoho posting foundations.
+- Inbound email intake for supplier PDFs through a secured webhook.
+- Mobile-first approvals at `/app/approvals`.
+- Windows Tally connector installer packaging path for pilot clients.
 - Streamlit demo preserved for existing client demos.
 
 ## Production Hardening Still Needed
@@ -101,7 +104,7 @@ the target system and builds the accounting payload from that profile.
 - Rate limiting, login throttling, and production session policies.
 - Hosted document storage with signed URLs.
 - Queue workers for OCR/parsing/posting jobs.
-- Client installer or managed connector for Tally desktop environments.
+- Code signing and managed release distribution for the Tally desktop connector.
 - Automated parser evaluation against client invoice samples.
 
 ## Deployable Pilot Setup
@@ -131,6 +134,7 @@ For client handoff, send:
 - The clean project folder.
 - `siftentry_app/CLIENT_WINDOWS_SETUP.md`.
 - `siftentry_app/TALLY_DEMO_CHECKLIST.md`.
+- `packaging/windows/tally-connector/CLIENT_INSTALL_GUIDE.md`.
 - A client profile export JSON when the profile is ready.
 - Only non-secret sample PDFs.
 

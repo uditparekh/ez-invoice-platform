@@ -24,7 +24,7 @@ local TallyPrime.
 For normal pilots, send the client:
 
 ```text
-SiftEntry-Tally-Connector-Setup-0.2.0.exe
+SiftEntry-Tally-Connector-Setup-0.3.0.exe
 ```
 
 The client should run the installer, keep `Start connector when I sign in`
@@ -65,11 +65,17 @@ packaging\windows\tally-connector\build_installer_windows.bat
 The generated file will be:
 
 ```text
-packaging\windows\tally-connector\output\SiftEntry-Tally-Connector-Setup-0.2.0.exe
+packaging\windows\tally-connector\output\SiftEntry-Tally-Connector-Setup-0.3.0.exe
 ```
 
 GitHub Actions can also build the installer using the
 `Build Tally Connector Windows Installer` workflow.
+
+For accountant-facing instructions, send:
+
+```text
+packaging/windows/tally-connector/CLIENT_INSTALL_GUIDE.md
+```
 
 ## Manual Developer Setup
 
