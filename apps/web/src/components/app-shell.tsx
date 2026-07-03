@@ -20,6 +20,10 @@ import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import {
+  CommandCenter,
+  openCommandPalette,
+} from "@/components/command-center";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -184,20 +188,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {membership?.role ?? "member"}
             </span>
           </div>
-          <label className="ml-auto mr-3 hidden h-10 w-[min(34vw,360px)] items-center gap-2 rounded-full border border-line bg-surface-subtle px-3 text-sm font-semibold text-ink-muted xl:flex">
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            className="ml-auto mr-3 hidden h-10 w-[min(34vw,360px)] items-center gap-2 rounded-full border border-line bg-surface-subtle px-3 text-sm font-semibold text-ink-muted transition-colors hover:border-line-strong hover:text-ink-secondary xl:flex"
+            aria-label="Open command palette"
+          >
             <span className="size-2 rounded-full bg-cyan" />
-            <input
-              aria-label="Global search"
-              placeholder="Search invoices, vendors, profiles"
-              className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-muted"
-            />
-          </label>
+            <span className="min-w-0 flex-1 truncate text-left">
+              Search invoices, vendors, pages…
+            </span>
+            <kbd className="rounded-md border border-line-strong bg-surface px-1.5 py-0.5 font-mono text-[10px] font-black text-ink-secondary">
+              ⌘K
+            </kbd>
+          </button>
           <div>
             <ThemeToggle />
           </div>
         </header>
         <main>{children}</main>
       </div>
+      <CommandCenter />
     </div>
   );
 }

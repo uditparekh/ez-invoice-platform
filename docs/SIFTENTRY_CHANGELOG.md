@@ -62,6 +62,103 @@ BACKEND TODO: honor `learn_vendor_memory` in the invoice PATCH handler when writ
 - **Client-profiles wizard polish** — structurally complete (3,146-line panel, wizard + approval flow present); final polish deferred until live client feedback, exactly as your parity review recommends. Blind-rewriting it now would add risk, not value.
 - **Teach-fields region marking** — ships when extraction returns bounding boxes (backend dependency).
 
+## Step 9 — Saved views + queue keyboard nav (2026-07-03) ✅ COMPILE-VERIFIED
+Closes the last two open items on the wow shortlist.
+
+| File | Status | Change |
+|---|---|---|
+| apps/web/src/components/invoice-workspace.tsx | EDITED | **Saved views** (wow #5): a "Views" chip strip appears under the queue readiness bar. Set any status tab + search combo → a dashed "＋ Save view" chip appears → name it inline → it becomes a one-click chip (e.g. "Tally · Ready · This week"). Active view highlights indigo; hover a chip to reveal ✕ delete; persists in localStorage (max 8). **Queue keyboard nav** (wow #4 completion): J/K move the selection through the visible list, Enter opens the selected invoice in the Review Workspace, "/" focuses search — same vocabulary as Sift mode, guarded so it never fires while typing or in review mode. |
+| apps/web/src/components/command-center.tsx | EDITED | Shortcuts overlay gains an "Invoices queue" section documenting J/K · Enter · /. |
+
+### How it works (for the team)
+- On Invoices: click a status tab (e.g. Ready), type a vendor in search, then "＋ Save view" → name it.
+  From then on it's a one-click chip; the chip glows when its filters are active. Hover → ✕ to remove.
+- J/K/Enter work anywhere on the queue when you're not typing; press ? to see every shortcut.
+
+### Verification: `tsc` ✅ 0 errors · `eslint` ✅ 0 errors 0 warnings · `next build` ✅ 41/41 routes.
+
+### Wow shortlist status: 1 ⌘K ✅ · 2 nudges ✅ · 3 resizable panes ✅ · 4 shortcuts+overlay ✅ · 5 saved views ✅ · 6 chat sidebar intentionally skipped. **Shortlist complete.**
+
+## Step 9 — Wow-list closure (2026-07-03)
+Review finding: your "Lock in SiftEntry product UI polish" commit already shipped **saved views**
+(chips strip on the Invoices queue, localStorage-persisted) and **queue keyboard nav** (J/K move
+selection · Enter opens review · "/" focuses search). With Step 8's palette + overlay, the entire
+§18 wow shortlist is now complete: ⌘K ✓ · nudges ✓ · resizable panes ✓ · shortcuts + ? overlay ✓ ·
+saved views ✓ · chat sidebar skipped by design ✓.
+
+| File | Status | Change |
+|---|---|---|
+| apps/web/src/components/command-center.tsx | EDITED | "?" overlay gains an **Invoices queue** section documenting J/K · Enter · "/" so every live shortcut is discoverable. |
+
+## Step 8 — Full repo review + Command Center (2026-07-03) ✅ COMPILE-VERIFIED
+
+**Repo review verdict (github.com/uditparekh/ez-invoice-platform @ 052954d):** the pushed repo is
+healthy — all Step 0–7 work integrated (some with your own equivalent lint fixes and naming polish),
+and it passed `tsc` ✅ `eslint` ✅ `next build` ✅ (41/41 routes) with ZERO changes needed.
+Page-by-page against UI Spec v1.0: all 13 pages match the lock. The only spec items missing were
+the top two entries of the wow backlog (§18) — both built in this step.
+
+| File | Status | Change |
+|---|---|---|
+| apps/web/src/components/command-center.tsx | NEW | **⌘K command palette + "?" shortcuts overlay** in one mounted-once component. Palette: opens with ⌘K/Ctrl+K (or clicking the header search), fuzzy-filters three groups — **Actions** (Upload invoices · Start Sift mode · New client profile · Open approvals · Toggle dark mode), **Pages** (all 8 nav destinations), **Invoices** (LIVE search of real invoices by number or supplier; selecting one deep-links straight into the Review Workspace). Full keyboard control (↑↓ · ↵ · esc), mouse hover sync, scroll-into-view, body-scroll lock, group headers, empty state, footer hint bar. Shortcuts overlay: press **?** anywhere (outside inputs) — Global / Sift mode / Review Workspace shortcut tables with kbd chips. Exports `openCommandPalette()` (window event) so any component can trigger it without prop-drilling. |
+| apps/web/src/components/app-shell.tsx | EDITED | The header's dead search `<input>` (placeholder-only, wired to nothing) replaced with a live palette trigger button — same look, plus a **⌘K** kbd chip — and `<CommandCenter />` mounted once at shell root. |
+| apps/web/pnpm-workspace.yaml | EDITED | Added `packages: ["."]` (kept your `allowBuilds`) — required for `pnpm install` on pnpm 9 (CI-safe); harmless on pnpm 10. |
+
+### How the new features work (for the team)
+- **⌘K anywhere** (Ctrl+K on Windows) or click the header search → type "mad" to jump to a Madelin
+  invoice in review mode, "sift" to start Sift mode, "dark" to flip the theme. Esc closes.
+- **? anywhere** → the shortcuts overlay. This is also where new keyboard features get documented.
+- **For developers:** `import { openCommandPalette } from "@/components/command-center"` and call it
+  from any button. The invoices group uses `useWorkspaceInvoices`, mounted lazily only while the
+  palette is open — no extra fetches during normal navigation.
+
+### Verification (this step, fresh clone)
+`pnpm install` → `tsc --noEmit` 0 errors → `eslint` 0 errors → `next build` 41/41 routes.
+(Google-Fonts fetch is the only sandbox-blocked step; verified via temporary stub, layout restored.)
+
+## REBASE — new baseline (2026-07-02, evening)
+Baseline is now **siftentry-platform-source-2026-07-02.zip** (your upload), which already contains
+Steps 0–5 integrated plus your own additions (settings sub-components, client-profiles route,
+integrations hub, exceptions page). The zip below contains ONLY this pass's changes vs that baseline.
+
+## Step 6 — Client profiles + Settings rebuild, Home parity (this zip)
+
+| File | Status | Change |
+|---|---|---|
+| apps/web/src/components/client-profiles/profile-wizard.tsx | NEW | The spec §15 **full-screen onboarding wizard** (matches the locked mockup): fixed overlay with brand chrome + "takes ~4 minutes" + Save-draft-&-exit, 5-dot progress rail (done=green ✓, current=indigo glow). Steps: ① client name + system cards (Tally/QuickBooks/Zoho) ② country & tax cards (🇮🇳 India GST with the GSTIN-validation callout / 🇺🇸 US / ✨ Auto-detect) ③ posting mode (Item invoice vs Accounting voucher for Tally; supplier-bill note for cloud) + posting-expectations textarea ④ multi-PDF sample picker with removable "✓ ready to sift" rows ⑤ review card → green **Submit for approval**. Wiring is REAL: builds the payload via the panel's own `blankProfile()` (now exported), stamps `training_profile.onboarding_status = "ready_for_admin_review"` + expectations into `extraction_instructions`, calls `createProfile`, then uploads each sample via `uploadTrainingSample`. Draft auto-persists to localStorage and restores on reopen. |
+| apps/web/src/app/(product)/app/client-profiles/page.tsx | REWRITTEN | Spec §13 overview-first page replacing the raw monolith render. **Pending-approval banners** for `ready_for_admin_review` profiles with Review setup + working **✓ Approve & activate** (real `updateProfile` → onboarding_status "active"). **Profile cards grid**: initials avatar, Default/status chips, system · posting mode, country · tax label · currency, samples + mappings counts, Open profile. **+ New profile** opens the wizard. **Advanced editor** toggle renders the full existing 2,752-line ClientProfilesPanel (connection settings, templates, AI readiness, import/export — nothing lost, one click away). Empty state per spec. |
+| apps/web/src/components/client-profiles-panel.tsx | EDITED (1 line) | `blankProfile` exported so the wizard reuses the panel's canonical payload builder instead of duplicating it. |
+| apps/web/src/app/(product)/app/settings/page.tsx | REWRITTEN | Spec §14 **Linear-style two-group rail**: WORKSPACE (Organization / Team access / Data retention) · MY ACCOUNT (Profile / Security / Notifications / Appearance), sticky on desktop, horizontal scroll on mobile. **Organization**: real org name from the active membership + workspace defaults (currency/country/primary system). **Team access** = your existing TeamManagementPanel, **Security** = your PasswordChangeCard (both reused as-is). **Data retention**: the 3 locked policies as selectable cards + the isolation/credentials facts. **Profile**: real name/email from auth with audit-attribution note. **Notifications**: approval/failure/digest toggles. **Appearance**: Light/Dark/System wired to the same `siftentry-theme` mechanism as the header toggle. Workspace prefs persist locally with an explicit "syncs when the org-settings API lands" note — honest, and trivially swappable to the API later. |
+| apps/web/src/app/(product)/app/page.tsx | EDITED | Home brought to spec §5 parity: **gradient ROI hero** (real auto-extracted %, real processed value, EST-labeled time saved), **approvals shortcut banner** when validated invoices are waiting (routes to /app/approvals — the mobile view is now discoverable), and the **✦ proactive nudge card** with real pattern detection (a vendor whose invoices repeat the same validation flag ≥2×) → "Create rule →" into Rules, dismissible + remembered. |
+
+### Parity verdict on your baseline (checked page-by-page vs the locked spec)
+✓ Shell/nav (8 items incl. Client profiles) · ✓ tokens/dark/fonts · ✓ Invoices queue + Sift launcher · ✓ Sift loop · ✓ Review Workspace depth · ✓ Insights 4-tab · ✓ Rules 4-tab · ✓ History + posting log · ✓ Integrations hub grid + detail steppers · ✓ Approvals route. Gaps closed this pass: Home hero/nudge, Client profiles overview + wizard + approve flow, Settings rail.
+
+### Backend TODOs (unchanged + new)
+1. Honor `learn_vendor_memory` on invoice PATCH. 2. Org-settings + notification-preferences endpoints (Settings panes are pre-wired to swap localStorage → API). 3. Bounding boxes from extraction → unlocks teach-fields + true PDF coordinate highlighting.
+
+## Step 7 — Compile verification pass (2026-07-03) ✅
+First fully compiler-verified delivery. Environment: Node 22 · pnpm 9 · fresh `pnpm install`.
+
+**Results: `tsc --noEmit` ✅ 0 errors · `eslint` ✅ 0 errors · `next build` ✅ all 23 routes compiled**
+(the only build failure in the sandbox was next/font fetching Google Fonts — network-blocked here,
+works on any normal machine; verified by stubbing fonts, building clean, then restoring layout.tsx).
+
+Lint fixes applied (React's strict `set-state-in-effect` rule on localStorage hydration —
+all four were in Step 6 files, all now use lazy `useState` initializers):
+
+| File | Fix |
+|---|---|
+| apps/web/src/app/(product)/app/page.tsx | Nudge dismissed-flag → lazy initializer + `useSyncExternalStore` isClient gate so server and hydration renders stay identical (no hydration mismatch on the banner). |
+| apps/web/src/components/client-profiles/profile-wizard.tsx | Draft restore → lazy initializer (still restores saved drafts on mount). |
+| apps/web/src/app/(product)/app/settings/page.tsx | AppearancePane theme + the shared `usePrefs` hook → lazy initializers. |
+
+**Repo note:** github.com/uditparekh/ez-invoice-platform is at the 2026-06-19 baseline and contains
+NO `apps/web` — the entire SiftEntry platform exists only locally. Push it (see chat) so future
+passes can verify against the true tree.
+**CI note:** with pnpm 9, `apps/web/pnpm-workspace.yaml` needs a `packages: ["."]` entry to install;
+pnpm 10 accepts the current file. Not shipped in the zip — flagging in case CI uses pnpm 9.
+
 ## Packaging note (2026-07-02)
 From Step 3 onward, delivery is ONE consolidated zip — `siftentry-ui-complete.zip` — containing the
 CURRENT state of every file changed since the uploaded baseline (Steps 0+1+2+3 merged). Unzip once
