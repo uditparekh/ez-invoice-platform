@@ -443,6 +443,12 @@ class ExtractionEvidence(BaseModel):
     page: Optional[int] = None
     snippet: str = ""
     confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    # Normalized (0..1 of page size) bounding box located in the PDF text
+    # layer at parse time — powers true coordinate highlighting in review.
+    x0: Optional[float] = None
+    y0: Optional[float] = None
+    x1: Optional[float] = None
+    y1: Optional[float] = None
 
 
 class InvoiceLine(BaseModel):
@@ -610,6 +616,10 @@ class OrganizationSettings(BaseModel):
     @classmethod
     def upper_currency(cls, value: str) -> str:
         return value.strip().upper()
+
+
+class SendBackRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
 
 
 class BatchPostRequest(BaseModel):

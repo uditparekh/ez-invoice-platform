@@ -9,6 +9,7 @@ from ..accounting_routing import apply_accounting_route
 from ..gst_invoice_parser import looks_like_gst_invoice, parse_gst_invoice
 from ..universal_parser import parse_generic_invoice
 from .ai_parser import AiExtractorConfig, apply_ai_parser_context
+from .extraction_common import locate_field_evidence
 from .domain import legacy_payload_to_invoice
 from .models import ClientProfile, CorrectionLearningSignal, InvoiceCreate
 
@@ -96,9 +97,59 @@ def parse_pdf_invoice(
         document_text=text,
         pdf_bytes=pdf_bytes,
     )
-    return legacy_payload_to_invoice(
+    invoice_create = legacy_payload_to_invoice(
         payload,
         organization_id=organization_id,
         source_file=filename,
         source_path=source_path,
     )
+    invoice_create.evidence = build_parse_evidence(pdf_bytes, invoice_create)
+    return invoice_create
+
+
+def build_parse_evidence(pdf_bytes: bytes, invoice) -> list:
+    """Locate the parsed values in the PDF text layer -> evidence with real
+    page + bounding boxes (normalized 0..1). Free, deterministic, provider-
+    independent. Scanned PDFs without a text layer yield no evidence rather
+    than fabricated coordinates."""
+    from .models import ExtractionEvidence
+
+    targets = {}
+    if invoice.invoice_number:
+        targets["invoice_number"] = invoice.invoice_number
+    if invoice.supplier and invoice.supplier.name:
+        targets["supplier.name"] = invoice.supplier.name
+    if getattr(invoice.supplier, "tax_id", ""):
+        targets["supplier.tax_id"] = invoice.supplier.tax_id
+    for field, amount in (
+        ("total", invoice.total),
+        ("tax_total", invoice.tax_total),
+        ("subtotal", invoice.subtotal),
+    ):
+        if amount:
+            targets[field] = f"{amount:.2f}"
+    if not targets:
+        return []
+    try:
+        located = locate_field_evidence(pdf_bytes, targets)
+    except (OSError, ValueError, RuntimeError):
+        # Unreadable/odd PDFs yield no evidence; programming errors surface.
+        return []
+    evidence = []
+    for field, box in located.items():
+        if not box:
+            continue
+        evidence.append(
+            ExtractionEvidence(
+                field=field,
+                value=targets[field],
+                page=box["page"],
+                snippet=f"Found on page {box['page']}: {targets[field]}",
+                confidence=0.95,
+                x0=box["x0"],
+                y0=box["y0"],
+                x1=box["x1"],
+                y1=box["y1"],
+            )
+        )
+    return evidence

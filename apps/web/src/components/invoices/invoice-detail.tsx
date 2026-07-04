@@ -20,6 +20,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ResizableSplit } from "@/components/review/resizable-split";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  PdfEvidenceViewer,
+  hasLocatedEvidence,
+} from "@/components/invoices/pdf-evidence-viewer";
 import type {
   ApiErrorPayload,
   ClientProfile,
@@ -1076,6 +1080,26 @@ function ReviewWorkspace({
             </div>
           ) : (
             <div className="relative overflow-hidden rounded-xl">
+              {review && hasLocatedEvidence(review.fields) ? (
+                <PdfEvidenceViewer
+                  url={pdfUrl}
+                  fields={review?.fields ?? []}
+                  activeFieldPath={activeField?.field_path ?? null}
+                  fallback={
+                    <object
+                      data={pdfUrl}
+                      type="application/pdf"
+                      className="h-[620px] w-full rounded-xl border border-line bg-surface"
+                    >
+                      <div className="grid h-[620px] place-items-center rounded-xl border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
+                        <p className="text-sm font-black text-ink">
+                          Use Open PDF to review the source document.
+                        </p>
+                      </div>
+                    </object>
+                  }
+                />
+              ) : (
               <object
                 key={pdfUrl}
                 data={pdfUrl}
@@ -1094,6 +1118,7 @@ function ReviewWorkspace({
                   </div>
                 </div>
               </object>
+              )}
               {activeField && (
                 <span
                   key={`scan-${activeField.field_path}`}

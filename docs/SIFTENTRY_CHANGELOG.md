@@ -62,6 +62,38 @@ BACKEND TODO: honor `learn_vendor_memory` in the invoice PATCH handler when writ
 - **Client-profiles wizard polish** — structurally complete (3,146-line panel, wizard + approval flow present); final polish deferred until live client feedback, exactly as your parity review recommends. Blind-rewriting it now would add risk, not value.
 - **Teach-fields region marking** — ships when extraction returns bounding boxes (backend dependency).
 
+## Step 13 — Mobile workflow, PWA, true PDF highlighting (2026-07-03) ✅
+**Verification: backend `pytest` 51/51 on SQLite AND 51/51 on PostgreSQL 16 · web `tsc` 0 ·
+`eslint` 0 · `next build` 41/41 routes.** Builds on Udit's own Tally-connector-packaging +
+email-intake commit (verified green before changes).
+
+### The headline: evidence bounding boxes, no AI required
+| File | Status | Change |
+|---|---|---|
+| siftentry_app/backend/parser_service.py | EDITED | **Every upload now locates its parsed values in the PDF text layer** (invoice number, supplier name + tax id, subtotal/tax/total) using the Step 11 locator — producing real page + normalized-bbox evidence at parse time. Free, deterministic, provider-independent; works with AI off. Scanned PDFs yield no evidence rather than fabricated boxes. |
+| siftentry_app/backend/models.py | EDITED | `ExtractionEvidence` gains optional `x0/y0/x1/y1` (normalized 0–1). `SendBackRequest` added. |
+| siftentry_app/backend/repository.py | EDITED | `_json` now serializes lists of models (evidence was silently empty-list-only before). |
+| apps/web/src/components/invoices/pdf-evidence-viewer.tsx | NEW | pdf.js viewer: renders pages to canvas and overlays the located boxes — **click a review field and its value glows on the actual document**, auto-scrolling to the right page. Graceful triple fallback: no evidence → classic embed; render failure → classic embed; >12 pages → capped. |
+| apps/web/src/components/invoices/invoice-detail.tsx | EDITED | Review Workspace uses the highlight viewer whenever located evidence exists; the snippet beacon remains for fields without boxes. |
+
+### Mobile slice (per the agreed scope)
+| File | Status | Change |
+|---|---|---|
+| apps/web/src/app/(product)/app/approvals/page.tsx | REWRITTEN | The full phone workflow on the one-job card: **Approve** (unchanged) · **Reject** — inline sheet, reason required, calls the new send-back API, invoice returns to Needs review with the note attached · **Fix** — quick-edit sheet (number / total / date) that PATCHes and revalidates in place, with an escape hatch to the full Review Workspace · **PDF** — inline viewer toggle + full-screen link. Session summary counts approvals and send-backs. |
+| siftentry_app/backend/main.py | EDITED | `POST /invoices/{id}/send-back {reason}` (validated/approved → needs_review, reason lands in validation issues, 409 guardrail). Also: email module import updated (below). |
+| apps/web/public/manifest.json + icons/ (4 PNGs) + src/app/layout.tsx | NEW/EDITED | **SiftEntry is now an installable PWA**: manifest (start_url /app/approvals, standalone, indigo theme), generated ✦ icons (192/512/maskable/apple-touch), theme-color viewport, Apple web-app meta. "Add to Home Screen" gives clients an app-like approvals experience with zero native-app maintenance. Push/email notifications: deferred by design, next slice. |
+| apps/web/src/app/api/invoices/[invoiceId]/send-back/route.ts · .../organizations/[organizationId]/jobs/post-ready/route.ts | NEW | Proxies. |
+| apps/web/src/components/command-center.tsx | EDITED | ⌘K "Post all approved" now fires the **async jobs endpoint** (Step 12) — 202 + background worker; a hung accounting API can never freeze the palette. |
+| tests/test_mobile_and_evidence.py | NEW | 2 tests: upload → evidence carries page + sane normalized bbox + flows into the review payload; send-back → needs_review with reason recorded + 409 when repeated. |
+
+### Housekeeping (important)
+- **`siftentry_app/backend/email.py` → `email_service.py`.** A module named `email.py` shadows
+  Python's stdlib `email` package — it detonated once in testing and would break PyInstaller
+  connector builds. Import in main.py updated. **You must DELETE the old email.py after unzip**
+  (a zip can't remove files): in GitHub Desktop the rename shows as email.py deleted +
+  email_service.py added — that is correct.
+- pdfjs-dist added to web deps (package.json + lockfile in this zip; run `pnpm install`).
+
 ## Step 12 — PostgreSQL + async worker (2026-07-03) ✅
 **Verification: the ENTIRE backend suite runs green on BOTH engines — `pytest` 48/48 on SQLite
 and 48/48 on a real PostgreSQL 16 server (`make test-postgres`). Zero regressions.**
@@ -88,32 +120,6 @@ make worker   # in a second terminal
 ```
 SQLite remains the zero-setup default; nothing changes until you set the URL.
 (EZ_API_* env names are intentionally stable until the pre-launch rename pass — ADR 0003.)
-
-## Step 13 — Tally connector packaging, inbound email intake, and mobile channel readiness (2026-07-03) ✅
-**Verification: backend `pytest` 49/49 · web `tsc --noEmit` ✅ · `next build` ✅ 41/41 routes.**
-
-This closes the pilot-facing distribution layer around the core posting workflow: accountants can
-install the local Tally bridge, invoices can enter the platform through an email webhook, and the
-web app now exposes mobile approvals and channel readiness from Integrations.
-
-| File | Status | Change |
-|---|---|---|
-| packaging/windows/tally-connector/SiftEntryTallyConnector.iss | EDITED | Connector installer version bumped to `0.3.0` for the pilot package. |
-| .github/workflows/build-tally-connector-windows.yml | NEW | GitHub Actions workflow to build the Windows installer on `windows-latest` with Inno Setup and publish the `.exe` artifact. |
-| packaging/windows/tally-connector/CLIENT_INSTALL_GUIDE.md | NEW | Accountant-facing setup guide: enable TallyPrime HTTP/XML on port 9000, install connector, enter workspace URL/token, test Tally, and troubleshoot common failures. |
-| packaging/windows/tally-connector/README.md · docs/TALLY_CONNECTOR_WINDOWS.md | EDITED | Packaging docs updated for version `0.3.0`, the client guide, and the “Tally stays local” security model. |
-| siftentry_app/backend/models.py · settings.py · main.py | EDITED | Added `POST /api/v1/inbound/email` with shared PDF invoice processing. Webhook requires `X-SiftEntry-Inbound-Secret`, accepts base64 PDF attachments, applies the active profile/retention policy, and records ingestion metadata without requiring the original email service to know invoice internals. |
-| tests/test_api.py | EDITED | Added inbound-email intake coverage, including rejected bad-secret requests and accepted PDF attachments that land in the invoice queue with email metadata and file-retention tracking. |
-| apps/web/src/app/(product)/app/integrations/page.tsx | EDITED | Integrations now includes dedicated channel cards for the invoice email inbox and mobile approvals, alongside accounting systems/connectors. |
-| docs/INBOUND_EMAIL.md · docs/INDEX.md · docs/PILOT_RUNBOOK.md · docs/ROADMAP_STATUS.md | EDITED/NEW | Documented the inbound email flow, pilot readiness, and updated roadmap status for connector packaging, email intake, and mobile approval view. |
-
-### Pilot behavior
-- **Email intake is off unless configured**: no secret means the webhook returns a disabled response,
-  so there is no surprise public ingestion endpoint.
-- **Original PDF storage still follows retention policy**: review-window-only remains the intended
-  cost-conscious default; long retention is a paid option later.
-- **Tally connector remains local**: the cloud app never calls `localhost:9000`; the Windows bridge
-  polls SiftEntry and posts into the local TallyPrime company.
 
 ## Step 11 (REVISED — supersedes the earlier Step 11 zip) — Provider-agnostic AI layer, OFF by default, learning fully portable (2026-07-03) ✅
 **Verification: backend `pytest` 46/46 (all existing + 8 AI-layer tests). Zero regressions.**

@@ -46,6 +46,11 @@ def utc_now() -> datetime:
 def _json(value: Any) -> str:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="json")
+    elif isinstance(value, list):
+        value = [
+            item.model_dump(mode="json") if hasattr(item, "model_dump") else item
+            for item in value
+        ]
     return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
 
 

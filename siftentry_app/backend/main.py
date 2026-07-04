@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse
 from .adapters import _profiled_legacy_payload, _tally_settings_from_profile, default_adapters
 from .ai_parser import AiExtractorConfig, is_ai_parser_mode
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
-from .email import EmailDeliveryError, EmailService
+from .email_service import EmailDeliveryError, EmailService
 from .models import (
     AccountingSystem,
     AuthBootstrapRequest,
@@ -66,6 +66,7 @@ from .models import (
     BatchPostResult,
     BatchPostSkip,
     PostingRequest,
+    SendBackRequest,
     PostingRetryRequest,
     PostingResult,
     PostingResultCreate,
@@ -1200,6 +1201,34 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 detail="Only a validated invoice can be approved.",
             )
         return _repo(request).set_status(invoice_id, InvoiceStatus.APPROVED) or invoice
+
+    @app.post(
+        "/api/v1/invoices/{invoice_id}/send-back",
+        response_model=Invoice,
+        tags=["workflow"],
+    )
+    def send_back_invoice(
+        request: Request,
+        invoice_id: str,
+        body: SendBackRequest,
+        current_user: CurrentUser,
+    ) -> Invoice:
+        """Mobile reject: return a validated/approved invoice to review with a
+        reason. The reason lands in validation issues so the Review Workspace
+        shows exactly why it came back."""
+        invoice = _require_invoice(request, invoice_id, current_user, APPROVE_ROLES)
+        current_status = InvoiceStatus(invoice.status)
+        if current_status not in {InvoiceStatus.VALIDATED, InvoiceStatus.APPROVED}:
+            raise HTTPException(
+                status_code=409,
+                detail="Only a validated or approved invoice can be sent back.",
+            )
+        updated = _repo(request).update_validation(
+            invoice_id,
+            InvoiceStatus.NEEDS_REVIEW,
+            [f"Sent back from approvals: {body.reason.strip()}"],
+        )
+        return updated or invoice
 
     @app.post(
         "/api/v1/invoices/{invoice_id}/post",

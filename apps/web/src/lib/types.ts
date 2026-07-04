@@ -131,6 +131,12 @@ export interface ExtractionEvidence {
   page: number | null;
   snippet: string;
   confidence: number | null;
+  /** Normalized (0..1) bounding box located in the PDF text layer at parse
+   *  time — powers true coordinate highlighting in review. */
+  x0?: number | null;
+  y0?: number | null;
+  x1?: number | null;
+  y1?: number | null;
 }
 
 export interface Invoice {

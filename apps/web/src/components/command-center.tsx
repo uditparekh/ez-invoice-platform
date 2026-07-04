@@ -189,7 +189,7 @@ function Palette({ onClose }: { onClose: () => void }) {
       id: "act-batch-post",
       group: "Actions",
       label: `Post all approved invoices (${approvedCount})`,
-      hint: "batch → books",
+      hint: "batch → books (async)",
       keywords: "post all ready approved batch tally books push",
       icon: <BadgeDollarSign size={16} />,
       run: (nav) => {
@@ -199,8 +199,10 @@ function Palette({ onClose }: { onClose: () => void }) {
           )
         )
           return;
+        // Async since Step 12: returns 202 with a job — a hung accounting
+        // API never blocks the palette. Results land in History › Posting log.
         void fetch(
-          `/api/organizations/${activeOrganizationId}/invoices/post-ready`,
+          `/api/organizations/${activeOrganizationId}/jobs/post-ready`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
