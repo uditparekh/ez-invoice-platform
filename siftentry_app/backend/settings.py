@@ -21,20 +21,24 @@ def _split_csv(value: str) -> tuple[str, ...]:
 
 
 def _database_path_from_url(database_url: str, fallback: Path) -> Path:
-    """Translate a local SQLite URL into the path used by the current repository."""
+    """Translate a local SQLite URL into the path used by the repository.
+
+    Postgres deployments still need a harmless local fallback path because the
+    repository owns a few filesystem-adjacent defaults. The actual connection
+    uses ``database_url`` when it starts with postgres/postgresql.
+    """
 
     if not database_url:
         return fallback
     parsed = urlparse(database_url)
     if parsed.scheme in {"", "file"}:
         return Path(unquote(database_url)).expanduser()
+    if parsed.scheme in {"postgres", "postgresql"}:
+        return fallback
     if parsed.scheme != "sqlite":
-        # The current repository is SQLite-backed. Keep this explicit so a pilot
-        # cannot silently start against an unsupported production database.
         raise RuntimeError(
-            "Only sqlite database URLs are supported by the current repository. "
-            "Use EZ_API_DATABASE_URL=sqlite:////absolute/path/siftentry.db for "
-            "the deployable pilot, then migrate to the planned Postgres adapter."
+            "Unsupported database URL. Use sqlite:///... for local development "
+            "or postgresql://... for hosted pilot deployments."
         )
     if parsed.netloc not in {"", "localhost"}:
         raise RuntimeError("SQLite database URLs must point at a local filesystem path.")
@@ -68,6 +72,11 @@ class ApiSettings:
     inbound_email_secret: str = ""
     inbound_email_address: str = ""
     inbound_email_max_attachments: int = 10
+    storage_backend: str = "local"
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = ""
+    storage_timeout_seconds: float = 20.0
     ai_provider: str = "profile_context"
     ai_extractor_url: str = ""
     ai_extractor_token: str = ""
@@ -149,6 +158,20 @@ class ApiSettings:
             inbound_email_max_attachments=max(
                 1, int(os.environ.get("SIFTENTRY_INBOUND_EMAIL_MAX_ATTACHMENTS", "10"))
             ),
+            storage_backend=os.environ.get("EZ_STORAGE_BACKEND", "local")
+            .strip()
+            .lower()
+            or "local",
+            supabase_url=os.environ.get("EZ_SUPABASE_URL", "").strip().rstrip("/"),
+            supabase_service_role_key=os.environ.get(
+                "EZ_SUPABASE_SERVICE_ROLE_KEY",
+                "",
+            ).strip(),
+            supabase_storage_bucket=os.environ.get(
+                "EZ_SUPABASE_STORAGE_BUCKET",
+                "",
+            ).strip(),
+            storage_timeout_seconds=float(os.environ.get("EZ_STORAGE_TIMEOUT_SECONDS", "20")),
             ai_provider=os.environ.get(
                 "SIFTENTRY_AI_PROVIDER",
                 "profile_context",
@@ -185,6 +208,10 @@ class ApiSettings:
     def is_sqlite(self) -> bool:
         return urlparse(self.database_url).scheme in {"", "file", "sqlite"}
 
+    @property
+    def is_supabase_storage(self) -> bool:
+        return self.storage_backend == "supabase"
+
     def validate_startup(self) -> None:
         """Fail fast when a production deployment is missing required controls."""
 
@@ -207,8 +234,19 @@ class ApiSettings:
             problems.append("set EZ_API_DATABASE_URL")
         if self.is_sqlite:
             problems.append(
-                "pilot uses SQLite; attach a persistent disk or migrate to Postgres before production data"
+                "use Postgres for hosted production data"
             )
+        if self.storage_backend not in {"local", "supabase"}:
+            problems.append("set EZ_STORAGE_BACKEND to local or supabase")
+        if self.storage_backend == "local":
+            problems.append("use hosted object storage for retained PDFs")
+        if self.storage_backend == "supabase":
+            if not self.supabase_url.startswith("https://"):
+                problems.append("set EZ_SUPABASE_URL to the HTTPS Supabase project URL")
+            if not self.supabase_service_role_key:
+                problems.append("set EZ_SUPABASE_SERVICE_ROLE_KEY in backend secrets only")
+            if not self.supabase_storage_bucket:
+                problems.append("set EZ_SUPABASE_STORAGE_BUCKET")
         if not self.app_base_url.startswith("https://"):
             problems.append("set EZ_APP_BASE_URL to the HTTPS app domain")
         if any("localhost" in origin or "127.0.0.1" in origin for origin in self.cors_origins):

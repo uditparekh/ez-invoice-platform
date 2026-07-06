@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -93,8 +94,8 @@ from .security import (
     parse_refresh_session_id,
     verify_password,
 )
-from .settings import ApiSettings
-from .storage import LocalDocumentStorage
+from .settings import DEFAULT_JWT_SECRET, ApiSettings
+from .storage import DocumentStorage, StoredDocument, build_document_storage
 from .validation import validate_invoice
 from ..tally_integration import build_tally_xml
 
@@ -137,7 +138,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         app.state.repository = InvoiceRepository(
             resolved.database_path, database_url=resolved.database_url
         )
-        app.state.storage = LocalDocumentStorage(resolved.upload_directory)
+        app.state.storage = build_document_storage(resolved)
         app.state.adapters = default_adapters()
         app.state.email = EmailService(resolved)
         app.state.ai_extractor_config = AiExtractorConfig.from_settings(resolved)
@@ -159,7 +160,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:
-        return HealthResponse(status="ok", service="ez-invoice-api", version=API_VERSION)
+        return HealthResponse(status="ok", service="siftentry-api", version=API_VERSION)
 
     @app.get("/health/deployment", tags=["system"])
     def deployment_health(request: Request) -> Dict[str, Any]:
@@ -170,11 +171,15 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             "status": "ready" if not problems else "needs_configuration",
             "environment": settings.environment,
             "checks": {
-                "jwt_secret": settings.jwt_secret != "ez-invoice-local-development-secret-change-me"
+                "jwt_secret": settings.jwt_secret != DEFAULT_JWT_SECRET
                 and len(settings.jwt_secret) >= 32,
                 "dev_bootstrap_disabled": not settings.allow_dev_bootstrap,
                 "database_url_configured": bool(settings.database_url),
                 "sqlite_pilot_database": settings.is_sqlite,
+                "storage_backend": settings.storage_backend,
+                "hosted_pdf_storage": settings.storage_backend == "supabase",
+                "pdf_retention_policy": settings.default_pdf_retention_policy,
+                "pdf_retention_days": settings.default_pdf_retention_days,
                 "https_app_url": settings.app_base_url.startswith("https://"),
                 "cors_configured": bool(settings.cors_origins)
                 and not any(
@@ -698,16 +703,17 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         if len(content) > request.app.state.settings.max_upload_bytes:
             raise HTTPException(status_code=413, detail="The uploaded PDF exceeds the size limit.")
 
-        stored_path = _storage(request).save(
+        stored_document = _storage(request).save(
             organization_id,
             f"training-{profile_id}-{filename}",
             content,
+            file.content_type or "application/pdf",
         )
         settings = profile.settings.model_copy(deep=True)
         training_profile = settings.training_profile.model_copy(deep=True)
         sample = ClientTrainingSample(
             filename=filename,
-            stored_path=str(stored_path),
+            stored_path=stored_document.source_path,
             size_bytes=len(content),
             content_type=file.content_type or "application/pdf",
             sample_type=sample_type or "invoice",
@@ -732,7 +738,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             actor_id=current_user.id,
         )
         if not updated:
-            _storage(request).delete(stored_path)
+            _storage(request).delete(stored_document)
             raise HTTPException(status_code=404, detail="Client profile not found.")
         return updated
 
@@ -1055,11 +1061,30 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         request: Request,
         invoice_id: str,
         current_user: CurrentUser,
-    ) -> FileResponse:
+    ) -> Response:
         invoice = _require_invoice(request, invoice_id, current_user, READ_ROLES)
         document_file = _repo(request).get_active_invoice_file(invoice_id)
+        if document_file is not None and document_file.storage_backend == "supabase":
+            try:
+                content = _storage(request).read(document_file)
+            except FileNotFoundError as exc:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Invoice document is not retained or is no longer available.",
+                ) from exc
+            filename = document_file.original_filename or invoice.source_file or "invoice.pdf"
+            return Response(
+                content=content,
+                media_type=document_file.content_type or "application/pdf",
+                headers={
+                    "Content-Disposition": (
+                        f"inline; filename*=UTF-8''{quote(filename, safe='')}"
+                    )
+                },
+            )
+
         source_path = Path(document_file.local_path) if document_file else Path(invoice.source_path)
-        if not source_path.exists() or not source_path.is_file():
+        if not str(source_path) or not source_path.exists() or not source_path.is_file():
             raise HTTPException(
                 status_code=404,
                 detail="Invoice document is not retained or is no longer available.",
@@ -1123,19 +1148,21 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> DeleteInvoicesResult:
         _require_membership(request, current_user, organization_id, MANAGE_ROLES)
         retained_files = _repo(request).list_organization_invoice_files(organization_id)
-        stored_paths = [
+        legacy_paths = [
             invoice.source_path
             for invoice in _repo(request).list_invoices(
                 organization_id=organization_id,
                 limit=100_000,
                 offset=0,
             )
-            if invoice.source_path
+            if invoice.source_path and not invoice.source_path.startswith("supabase://")
         ]
-        stored_paths.extend(record.local_path for record in retained_files if record.local_path)
         deleted = _repo(request).delete_organization_invoices(organization_id)
-        for stored_path in set(stored_paths):
-            _storage(request).delete(Path(stored_path))
+        for record in retained_files:
+            _storage(request).delete(record)
+        if getattr(_storage(request), "backend", "local") == "local":
+            for stored_path in set(legacy_paths):
+                _storage(request).delete(Path(stored_path))
         return DeleteInvoicesResult(organization_id=organization_id, deleted=deleted)
 
     @app.post(
@@ -1729,7 +1756,7 @@ def _repo(request: Request) -> InvoiceRepository:
     return request.app.state.repository
 
 
-def _storage(request: Request) -> LocalDocumentStorage:
+def _storage(request: Request) -> DocumentStorage:
     return request.app.state.storage
 
 
@@ -1776,10 +1803,15 @@ def _process_invoice_pdf_bytes(
         client_profile,
     )
     should_store_pdf = persist and retention_policy != PdfRetentionPolicy.DO_NOT_STORE.value
-    stored_path: Optional[Path] = None
+    stored_document: Optional[StoredDocument] = None
     file_hash = hashlib.sha256(content).hexdigest()
     if should_store_pdf:
-        stored_path = _storage(request).save(organization_id, safe_filename, content)
+        stored_document = _storage(request).save(
+            organization_id,
+            safe_filename,
+            content,
+            content_type or "application/pdf",
+        )
 
     try:
         parsed = parse_pdf_invoice(
@@ -1787,7 +1819,7 @@ def _process_invoice_pdf_bytes(
             pdf_bytes=content,
             organization_id=organization_id,
             legal_names=organization.legal_names or [organization.name],
-            source_path=str(stored_path or ""),
+            source_path=stored_document.source_path if stored_document else "",
             parser_mode=parser_mode,
             client_profile=client_profile,
             correction_signals=correction_signals,
@@ -1797,15 +1829,15 @@ def _process_invoice_pdf_bytes(
             parsed.raw_payload = {**parsed.raw_payload, **source_metadata}
         if persist:
             invoice = _repo(request).create_invoice(parsed)
-            if stored_path:
+            if stored_document:
                 _repo(request).create_invoice_file(
                     organization_id=organization_id,
                     invoice_id=invoice.id,
                     original_filename=safe_filename,
                     content_type=content_type or "application/pdf",
-                    storage_backend="local",
-                    storage_key=_storage(request).storage_key(stored_path),
-                    local_path=str(stored_path),
+                    storage_backend=stored_document.backend,
+                    storage_key=stored_document.storage_key,
+                    local_path=stored_document.local_path,
                     sha256_hash=file_hash,
                     size_bytes=len(content),
                     retention_policy=retention_policy,
@@ -1821,16 +1853,16 @@ def _process_invoice_pdf_bytes(
             **parsed.model_dump(),
         )
     except ValueError as exc:
-        if stored_path:
-            _storage(request).delete(stored_path)
+        if stored_document:
+            _storage(request).delete(stored_document)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except HTTPException:
-        if stored_path:
-            _storage(request).delete(stored_path)
+        if stored_document:
+            _storage(request).delete(stored_document)
         raise
     except Exception as exc:
-        if stored_path:
-            _storage(request).delete(stored_path)
+        if stored_document:
+            _storage(request).delete(stored_document)
         raise HTTPException(status_code=500, detail=f"Invoice processing failed: {exc}") from exc
 
 
@@ -1877,8 +1909,7 @@ def _cleanup_expired_documents(
     errors: List[str] = []
     for record in expired:
         try:
-            if record.local_path:
-                _storage(request).delete(Path(record.local_path))
+            _storage(request).delete(record)
             _repo(request).mark_invoice_file_deleted(record.id, deleted_at=now)
             deleted += 1
         except Exception as exc:  # pragma: no cover - defensive cleanup path

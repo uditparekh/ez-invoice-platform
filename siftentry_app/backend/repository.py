@@ -1,4 +1,4 @@
-"""SQLite persistence for the first SiftEntry SaaS backend slice."""
+"""Persistence repository for SiftEntry's SQLite and PostgreSQL backends."""
 
 from __future__ import annotations
 

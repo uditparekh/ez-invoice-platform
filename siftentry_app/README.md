@@ -36,9 +36,11 @@ You can also double-click `INSTALL_PACKAGES_WINDOWS.bat`, then
 
 ## FastAPI Backend
 
-The first SaaS backend slice now lives in `backend/`. It adds a universal
-invoice model, SQLite persistence, local PDF storage, validation, corrections,
-audit events, and posting adapters for QuickBooks, Tally, and Zoho Books.
+The SaaS backend lives in `backend/`. It adds a universal invoice model,
+authenticated organization-scoped persistence, review-window PDF retention,
+validation, corrections, audit events, and posting adapters for QuickBooks,
+Tally, and Zoho Books. Local development can use SQLite and local file storage;
+hosted pilots should use Supabase Postgres and a private Supabase Storage bucket.
 
 From the folder containing `siftentry_app`, run:
 
@@ -104,8 +106,11 @@ export EZ_API_JWT_SECRET="GENERATE_A_LONG_RANDOM_SECRET"
 export EZ_API_ALLOW_DEV_BOOTSTRAP="false"
 export EZ_APP_BASE_URL="https://app.siftentry.com"
 export EZ_API_CORS_ORIGINS="https://app.siftentry.com"
-export EZ_API_DATABASE_URL="sqlite:////var/lib/siftentry/siftentry.db"
-export EZ_API_UPLOAD_DIRECTORY="/var/lib/siftentry/uploads"
+export EZ_API_DATABASE_URL="postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres"
+export EZ_STORAGE_BACKEND="supabase"
+export EZ_SUPABASE_URL="https://<project-ref>.supabase.co"
+export EZ_SUPABASE_SERVICE_ROLE_KEY="SUPABASE_SERVICE_ROLE_KEY_BACKEND_ONLY"
+export EZ_SUPABASE_STORAGE_BUCKET="siftentry-pdf-review"
 export SIFTENTRY_PDF_RETENTION_POLICY="review_window"
 export SIFTENTRY_PDF_RETENTION_DAYS="3"
 export EZ_EMAIL_PROVIDER="smtp"
@@ -121,9 +126,9 @@ team invites and password reset links. Refresh sessions are rotating, revocable,
 and stored only as token hashes in the database.
 
 Use `/health/deployment` after startup to see any remaining production-readiness
-problems. Strict `EZ_API_ENVIRONMENT=production` intentionally fails fast while
-the repository is still SQLite-backed; use `pilot` or `staging` with a persistent
-disk until the planned PostgreSQL migration is complete.
+problems. Strict `EZ_API_ENVIRONMENT=production` intentionally fails fast if the
+API still uses local/demo defaults such as SQLite, local PDF storage, the default
+JWT secret, or missing SMTP configuration.
 
 Authentication endpoints are available in the FastAPI documentation:
 

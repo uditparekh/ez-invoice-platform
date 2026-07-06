@@ -98,34 +98,35 @@ the target system and builds the accounting payload from that profile.
 
 ## Production Hardening Still Needed
 
-- PostgreSQL with migrations and backups.
-- Encrypted secret storage for OAuth tokens and connector tokens.
 - Role editing, member deactivation, and audit export.
 - Rate limiting, login throttling, and production session policies.
-- Hosted document storage with signed URLs.
 - Queue workers for OCR/parsing/posting jobs.
 - Code signing and managed release distribution for the Tally desktop connector.
 - Automated parser evaluation against client invoice samples.
 
 ## Deployable Pilot Setup
 
-Use this mode for a private hosted demo before the Postgres migration is
-finished:
+Use this mode for private pilots on Vercel, Railway, and Supabase:
 
 1. Buy the domain and point `app.yourdomain.com` to the Next.js host.
 2. Point `api.yourdomain.com` to the FastAPI host.
-3. Copy `.env.pilot.example` into the host provider secrets.
-4. Use `EZ_API_ENVIRONMENT=pilot` or `staging` while the backend still uses a
-   persistent SQLite volume.
-5. Set `EZ_API_DATABASE_URL=sqlite:////absolute/persistent/path/siftentry.db`.
-6. Set `EZ_API_UPLOAD_DIRECTORY` to a persistent upload directory.
-7. Configure SMTP for invitation and password reset email delivery.
-8. Open `/health/deployment` on the API and resolve every listed problem before
+3. Create a Supabase project.
+4. Copy the Supabase pooled Postgres connection string into Railway as
+   `EZ_API_DATABASE_URL`.
+5. Create a private Supabase Storage bucket named `siftentry-pdf-review`.
+6. Copy Supabase project URL, service-role key, and bucket name into Railway.
+7. Copy only frontend-safe variables into Vercel.
+8. Configure SMTP for invitation and password reset email delivery.
+9. Open `/health/deployment` on the API and resolve every listed problem before
    letting a pilot client log in.
 
 In strict `EZ_API_ENVIRONMENT=production`, the API fails fast if local/demo
 defaults are still present. That is intentional: real production data should use
-PostgreSQL with migrations, backups, and encrypted secret storage.
+Postgres, hosted storage, real email, and managed secrets.
+
+PDFs are retained only for the configured review window by default. Structured
+invoice data, correction history, hashes, and posting logs remain in Postgres so
+the platform stays auditable without paying to keep every original PDF forever.
 
 ## Pilot Packaging
 

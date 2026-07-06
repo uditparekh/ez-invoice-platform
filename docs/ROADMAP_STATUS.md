@@ -9,6 +9,7 @@ the practical product-tracking view; keep `PROJECT_MAP.md` as the repository map
 - Next.js product shell with login, invoices, history, analytics, settings, integrations, profile management, and review flows.
 - FastAPI backend with auth, organizations, memberships, invoices, profiles, posting logs, retry hooks, storage settings, and same-origin API support.
 - PDF retention infrastructure with invoice file metadata, SHA-256 hashes, review-window retention, paid 90-day retention policy support, and cleanup endpoint.
+- Hosted pilot infrastructure scaffolding for Supabase Postgres, private Supabase PDF storage, Railway backend deployment, and Vercel frontend deployment.
 - Repository hygiene pass with clear file ownership rules, ignored runtime artifacts, one root project map, and a docs index for tracking.
 - QuickBooks, Tally, and Zoho integration foundations.
 - Tally local connector foundation with desktop status window and Windows packaging path.
@@ -25,7 +26,7 @@ the practical product-tracking view; keep `PROJECT_MAP.md` as the repository map
 - Vendor-specific learning from saved corrections.
 - Batch parser evaluation dashboard.
 - More live Tally item-invoice testing with real client edge cases.
-- Production deployment with Postgres, hosted file storage, lifecycle jobs, encrypted secrets, real email, and worker queues.
+- Live staging deployment with account-created Supabase/Railway/Vercel projects, real email secrets, lifecycle cleanup scheduling, and worker queues.
 - Code signing and managed release distribution for the Windows connector.
 
 ## Controlled Commit Checklist
@@ -51,5 +52,5 @@ Productize onboarding profiles and Tally posting
 2. Wire a real OCR/LLM provider and worker queue for difficult invoices.
 3. Convert correction history into automatic vendor/profile parser learning.
 4. Harden Tally with more real invoices and better error explanations.
-5. Deploy staging with production-like database, object storage, scheduled retention cleanup, email, secrets, and HTTPS.
+5. Create Supabase/Railway/Vercel accounts, deploy staging with the pilot checklist, schedule retention cleanup, and verify HTTPS/email/secrets.
 6. Code-sign the Windows Tally connector before broad customer rollout.
