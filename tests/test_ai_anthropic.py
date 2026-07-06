@@ -2,7 +2,6 @@
 
 import io
 import json
-from pathlib import Path
 
 from siftentry_app.backend.ai_parser import (
     AiExtractorConfig,

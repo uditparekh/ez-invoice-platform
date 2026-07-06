@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from typing import Any, Dict
 
 from .main import _execute_posting, create_app
-from .models import AuthenticatedUser, InvoiceStatus, PostingTarget
+from .models import AuthenticatedUser, PostingTarget
 from .settings import ApiSettings
 
 logger = logging.getLogger("siftentry.worker")

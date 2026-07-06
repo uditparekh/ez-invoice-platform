@@ -322,8 +322,6 @@ def classifier_settings_ui(classifier):
 # --- Quick self-test ---
 
 if __name__ == "__main__":
-    import sys
-    
     # Optional seed CSV is disabled by default for new client workspaces.
     c = ItemClassifier(use_seed_mappings=False)
     

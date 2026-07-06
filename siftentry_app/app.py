@@ -3,7 +3,7 @@
 #   python -m pip install streamlit pandas pymupdf pypdf
 # Run:
 #   python -m streamlit run app.py
-from accounting_routing import DEFAULT_HOME_COMPANIES, apply_accounting_route
+from accounting_routing import apply_accounting_route
 from item_classifier import ItemClassifier, classifier_settings_ui
 from gst_invoice_parser import looks_like_gst_invoice, parse_gst_invoice
 from qb_integration import (

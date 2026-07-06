@@ -12,8 +12,36 @@ import secrets as pysecrets
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-import streamlit as st
-import streamlit.components.v1 as components
+try:
+    import streamlit as st
+    import streamlit.components.v1 as components
+except ModuleNotFoundError:  # headless API/worker containers install requirements-api.txt only
+    st = None
+    components = None
+
+
+class _HeadlessStreamlit:
+    """Minimal stand-in so shared helpers work without Streamlit installed.
+
+    The backend QuickBooksAdapter imports send_to_quickbooks from this module;
+    with empty session state it returns a clean "QuickBooks not connected"
+    result instead of crashing. UI functions are never called headless.
+    """
+
+    def __init__(self):
+        self.session_state = {}
+        self.query_params = {}
+        self.secrets = {}
+
+    def __getattr__(self, name):
+        def _noop(*_args, **_kwargs):
+            return None
+
+        return _noop
+
+
+if st is None:
+    st = _HeadlessStreamlit()
 
 try:
     import requests

@@ -13,7 +13,34 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from xml.etree import ElementTree as ET
 
-import streamlit as st
+try:
+    import streamlit as st
+except ModuleNotFoundError:  # headless API/worker containers install requirements-api.txt only
+    st = None
+
+
+class _HeadlessStreamlit:
+    """Minimal stand-in so shared helpers work without Streamlit installed.
+
+    The FastAPI backend imports build_tally_xml/send_to_tally from this
+    module; those paths only touch st.secrets and st.session_state, which
+    this shim provides as plain dicts. UI functions are never called headless.
+    """
+
+    def __init__(self):
+        self.session_state = {}
+        self.query_params = {}
+        self.secrets = {}
+
+    def __getattr__(self, name):
+        def _noop(*_args, **_kwargs):
+            return None
+
+        return _noop
+
+
+if st is None:
+    st = _HeadlessStreamlit()
 try:
     from .tally_connector_client import (
         connector_health,

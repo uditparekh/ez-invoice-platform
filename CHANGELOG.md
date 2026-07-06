@@ -4,6 +4,27 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Backend no longer requires Streamlit: `tally_integration`, `qb_integration`,
+  and `zoho_integration` import Streamlit optionally with a headless fallback,
+  so API and worker containers built from `requirements-api.txt` start and
+  post correctly (QuickBooks/Zoho report "not connected" cleanly instead of
+  crashing when no pilot session exists)
+- `db.create_database_if_missing` builds the Postgres admin URL from the
+  parsed path instead of `str.replace`, which corrupted URLs where the
+  database name also appeared in the username
+  (e.g. `postgresql://siftentry:pw@host/siftentry`)
+- Web BFF proxy forwards `Content-Disposition`, preserving the original
+  filename when downloading invoice PDFs
+
+### Quality
+
+- Full-repo review pass: removed dead imports and unused exception bindings
+  across backend, pilot, and tests (ruff E9/F401/F811/F821 clean); verified
+  54/54 Python tests, TypeScript typecheck 0, ESLint 0, and production build
+  41/41 routes
+
 ### Added
 
 - Next.js 16 customer application under `apps/web`

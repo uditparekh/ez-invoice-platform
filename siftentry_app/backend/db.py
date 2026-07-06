@@ -13,7 +13,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 from urllib.parse import urlparse
 
 
@@ -133,7 +133,9 @@ def create_database_if_missing(database_url: str) -> None:
 
     parsed = urlparse(database_url)
     dbname = parsed.path.lstrip("/")
-    admin_url = database_url.replace(f"/{dbname}", "/postgres")
+    # Replace only the path component. A naive str.replace corrupts URLs where
+    # the database name also appears elsewhere (e.g. postgresql://siftentry:pw@host/siftentry).
+    admin_url = parsed._replace(path="/postgres").geturl()
     try:
         with psycopg.connect(admin_url, autocommit=True) as admin:
             exists = admin.execute(

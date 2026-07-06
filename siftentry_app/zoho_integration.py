@@ -15,8 +15,36 @@ from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import urlencode, urlparse
 
-import streamlit as st
-import streamlit.components.v1 as components
+try:
+    import streamlit as st
+    import streamlit.components.v1 as components
+except ModuleNotFoundError:  # headless API/worker containers install requirements-api.txt only
+    st = None
+    components = None
+
+
+class _HeadlessStreamlit:
+    """Minimal stand-in so shared helpers work without Streamlit installed.
+
+    The backend ZohoBooksAdapter imports build_zoho_export/send_to_zoho from
+    this module; with empty session state posting reports "not connected"
+    instead of crashing. UI functions are never called headless.
+    """
+
+    def __init__(self):
+        self.session_state = {}
+        self.query_params = {}
+        self.secrets = {}
+
+    def __getattr__(self, name):
+        def _noop(*_args, **_kwargs):
+            return None
+
+        return _noop
+
+
+if st is None:
+    st = _HeadlessStreamlit()
 
 from erp_connector import ConnectorResult, PreflightIssue
 

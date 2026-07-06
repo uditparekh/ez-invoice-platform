@@ -994,7 +994,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                     attachment.content_base64.encode("utf-8"),
                     validate=True,
                 )
-            except (binascii.Error, ValueError) as exc:
+            except (binascii.Error, ValueError):
                 errors.append(f"{filename}: invalid base64 content")
                 continue
             try:

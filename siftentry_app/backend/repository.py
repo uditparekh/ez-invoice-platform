@@ -31,7 +31,6 @@ from .models import (
     OrganizationCreate,
     OrganizationMember,
     OrganizationRole,
-    PdfRetentionPolicy,
     PostingResult,
     PostingStatus,
     PostingTarget,

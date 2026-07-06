@@ -93,6 +93,10 @@ export async function authenticatedApiRequest(
   if (contentType && body !== null) {
     response.headers.set("Content-Type", contentType);
   }
+  const contentDisposition = upstream.headers.get("Content-Disposition");
+  if (contentDisposition && body !== null) {
+    response.headers.set("Content-Disposition", contentDisposition);
+  }
 
   if (tokens) setAuthCookies(response, tokens);
   if (upstream.status === 401 && !tokens) clearAuthCookies(response);
