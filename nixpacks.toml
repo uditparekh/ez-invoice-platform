@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = [
+  "python -m pip install --upgrade pip",
+  "python -m pip install -r siftentry_app/requirements-api.txt"
+]
+
+[start]
+cmd = "python -m uvicorn siftentry_app.backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"
