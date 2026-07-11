@@ -1,81 +1,77 @@
-# SiftEntry — Full Review & Cleanup Pass (July 5, 2026)
+# SiftEntry — Pilot Readiness + Full QA Pass (July 10, 2026)
 
 ## How to apply
 
-Unzip `siftentry-review-cleanup.zip` over the repo root, letting it replace
-existing files. Then commit in GitHub Desktop and push.
+Unzip `siftentry-pilot-ready-qa.zip` over the repo root, letting it replace
+existing files. Commit in GitHub Desktop and push.
 
 **Suggested commit message:**
-`Review pass: headless backend imports, Postgres admin-URL fix, dead-code cleanup`
+`Pilot readiness + QA: worker lifespan fix, hosted Tally connector fix, Resend bridge, e2e QA harness`
 
 ## File count
 
-**14 files** in this package (13 modified + this note):
+**10 files** (6 modified, 3 new, plus this note):
 
 | # | File | Change |
 |---|------|--------|
-| 1 | `siftentry_app/tally_integration.py` | Streamlit import optional + headless fallback |
-| 2 | `siftentry_app/qb_integration.py` | Streamlit import optional + headless fallback |
-| 3 | `siftentry_app/zoho_integration.py` | Streamlit import optional + headless fallback |
-| 4 | `siftentry_app/backend/db.py` | Postgres admin-URL fix; dead import removed |
-| 5 | `siftentry_app/backend/main.py` | Unused exception binding removed |
-| 6 | `siftentry_app/backend/repository.py` | Dead import removed |
-| 7 | `siftentry_app/backend/worker.py` | Dead import removed |
-| 8 | `siftentry_app/backend/profile_recommendation.py` | Dead import removed |
-| 9 | `siftentry_app/item_classifier.py` | Dead import removed |
-| 10 | `siftentry_app/app.py` | Dead import removed |
-| 11 | `tests/test_ai_anthropic.py` | Dead import removed |
-| 12 | `apps/web/src/lib/server/api.ts` | Forward Content-Disposition on PDF downloads |
-| 13 | `CHANGELOG.md` | Review pass recorded under [Unreleased] |
-| 14 | `README-INTEGRATION.md` | This note |
+| 1 | `railway.worker.json` | NEW — Railway config for the worker service |
+| 2 | `nixpacks.toml` | Python 3.11 → 3.12 |
+| 3 | `siftentry_app/backend/worker.py` | FIX — standalone worker crashed on first poll (lifespan never entered) |
+| 4 | `siftentry_app/backend/adapters.py` | FIX — hosted Tally posts hit a phantom 127.0.0.1:8765 connector |
+| 5 | `apps/web/src/app/api/inbound/resend/route.ts` | NEW — Resend inbound → SiftEntry intake bridge |
+| 6 | `apps/web/src/components/login-form.tsx` | Honor validated `?next=` redirect |
+| 7 | `tests/pilot_e2e_qa.py` | NEW — 42-check end-to-end pilot QA harness |
+| 8 | `docs/PILOT_INFRA_CHECKLIST.md` | Worker, spend limit, Resend, monitoring, pre-launch QA, signup order |
+| 9 | `CHANGELOG.md` | All entries under [Unreleased] |
+| 10 | `README-INTEGRATION.md` | This note |
 
-## Bugs fixed
+## The two bugs QA caught (both would have hit the pilot on day one)
 
-**1. Backend hard-required Streamlit (deployment blocker).**
-`backend/main.py` imports `build_tally_xml` from `tally_integration.py`, which
-imported `streamlit` at module top — so a production container installing
-`requirements-api.txt` (documented as "production API dependencies only")
-crashed on startup with `ModuleNotFoundError: No module named 'streamlit'`.
-The same applied to the worker, and QuickBooks/Zoho posting paths. All three
-integration modules now import Streamlit optionally and fall back to a
-minimal headless shim: the API and worker start cleanly, Tally posting works
-via file/env settings, and QuickBooks/Zoho report "not connected" gracefully
-when no pilot session exists. Verified by importing the full API and worker
-with Streamlit imports blocked.
+**1. The worker service crashed instantly.** `python -m
+siftentry_app.backend.worker` — the exact Railway start command — died on
+its first poll with `'State' object has no attribute 'repository'`. The
+repository/storage/adapters are wired inside the FastAPI lifespan, which
+only an ASGI server runs; the standalone worker never entered it. The 54
+unit tests all pass because TestClient enters the lifespan automatically —
+only running the real entrypoint exposed it. Fixed: the worker now enters
+the lifespan context explicitly. Verified by running the actual entrypoint.
 
-**2. Postgres admin-URL corruption in `db.create_database_if_missing`.**
-`database_url.replace(f"/{dbname}", "/postgres")` replaces every occurrence,
-so `postgresql://siftentry:pw@host/siftentry` became
-`postgresql://postgres:pw@host/postgres` — wrong username. Now rebuilt from
-the parsed URL path only.
+**2. Hosted Tally posting was broken for profile-based clients.** The
+legacy default connector settings are `enabled: true` at
+`http://127.0.0.1:8765` — correct when the Streamlit pilot runs on the
+client's own Windows machine, wrong on Railway, where every web-initiated
+Tally post or dry run tried to reach a connector bridge on the server
+itself and failed with a confusing connection error. Fixed: client profiles
+that define no local bridge URL now explicitly disable that default. Cloud
+desktop connectors are unaffected (they use the claim/results endpoints).
 
-**3. PDF downloads lost their filename.**
-The Next.js BFF proxy forwarded only `Content-Type`; it now forwards
-`Content-Disposition` too, so downloaded invoice PDFs keep their original
-name.
+## The QA harness (keep running this)
 
-## Cleanup
+`python tests/pilot_e2e_qa.py` from the repo root — 42 checks over the full
+two-client lifecycle on a throwaway SQLite database: auth + session
+rotation, two orgs, Tally + QuickBooks profiles, upload/parse/evidence, the
+reviewer correct→validate→approve flow, send-back, dry-run posting, batch
+jobs through the worker, the Tally connector claim/results loop (with
+wrong-token rejection), document download, inbound email intake (with
+wrong-secret rejection), invitations, password reset, cross-org isolation,
+learning export/import, retention cleanup, and AI-off confirmation.
 
-Removed dead imports and unused exception bindings flagged by ruff across
-backend, pilot, and tests. Nothing behavioral was touched in `app.py` beyond
-one unused top-level import — the 9k-line Streamlit pilot is working code and
-was deliberately left alone otherwise.
+Final state: **42/42 QA checks, 54/54 unit tests, ruff clean.** Frontend
+unchanged since the previous verified build (typecheck 0, lint 0, 42/42
+routes).
 
-## Verification (all run on this exact code)
+## Required Tally profile values (QA-proven)
 
-- Python: `ruff check` clean (E9/F401/F811/F821), **54/54 tests pass**
-- Headless simulation: API `create_app` + worker import succeed with
-  Streamlit blocked; adapters degrade gracefully
-- Frontend: `tsc --noEmit` **0 errors**, `eslint` **0 errors**,
-  `next build` **41/41 routes**
+Dry-run preflight BLOCKS posting until these are set on a Tally client
+profile: `company_name` (exact TallyPrime company name), plus
+`purchase_ledger`, `tax_mode`, `tax_ledger`, and `round_off_ledger` for
+India GST clients. The checklist section 8 records this.
 
-## Observations (no action taken — flag for later passes)
+## Known parser-quality expectation (not a bug)
 
-- The `next=` redirect param the middleware sets on `/login` is never
-  consumed; login always lands on `/app/invoices`. Harmless, minor UX.
-- Inbound email intake uses one global secret and takes `organization_id`
-  from the request body — fine for the pilot, worth per-org routing before
-  opening it to multiple customers.
-- The rename pass (`EZ_API_*` → `SIFTENTRY_*`, `ez_` cookies) and deployment
-  pass remain as previously sequenced; nothing in this pass conflicts with
-  them.
+The deterministic parsers are format-specific. On unfamiliar synthetic
+layouts they misread totals/GSTIN — by design, the review screen exists to
+correct this and corrections feed vendor memory. Onboarding rule: run 5-10
+of each client's REAL invoices through review before go-live and check the
+correction rate; do not judge extraction on invoices the parsers were never
+built for.

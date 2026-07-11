@@ -31,7 +31,15 @@ export function LoginForm() {
         setError(apiErrorMessage(payload, "Unable to sign in."));
         return;
       }
-      router.replace("/app/invoices");
+      // The middleware appends ?next=<path> when redirecting a signed-out
+      // visitor to /login. Only follow internal app paths — never external
+      // URLs or protocol-relative //host values.
+      const requested = new URLSearchParams(window.location.search).get("next");
+      const destination =
+        requested && requested.startsWith("/app") && !requested.startsWith("//")
+          ? requested
+          : "/app/invoices";
+      router.replace(destination);
       router.refresh();
     } catch {
       setError("The SiftEntry API is unavailable. Start FastAPI and try again.");

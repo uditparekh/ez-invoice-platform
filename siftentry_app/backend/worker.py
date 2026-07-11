@@ -13,9 +13,9 @@ and repository wiring are identical by construction.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Dict
@@ -125,9 +125,18 @@ def main() -> None:
         "postgres" if settings.database_url.startswith("postgres") else "sqlite",
         POLL_SECONDS,
     )
-    while True:
-        if not run_once(app):
-            time.sleep(POLL_SECONDS)
+    asyncio.run(_poll_forever(app))
+
+
+async def _poll_forever(app) -> None:
+    # create_app wires repository/storage/adapters inside the FastAPI
+    # lifespan. No ASGI server runs it here, so enter it explicitly —
+    # without this, app.state.repository does not exist and the worker
+    # crashes on its first poll.
+    async with app.router.lifespan_context(app):
+        while True:
+            if not run_once(app):
+                await asyncio.sleep(POLL_SECONDS)
 
 
 if __name__ == "__main__":

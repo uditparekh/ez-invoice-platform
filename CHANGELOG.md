@@ -4,7 +4,38 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Railway background worker service config (`railway.worker.json`) so batch
+  posting jobs are actually executed in the hosted pilot
+- Resend inbound email bridge route (`/api/inbound/resend`): verifies the
+  Svix webhook signature, downloads PDF attachments via the Resend
+  Attachments API, and forwards them to the backend inbound intake; inert
+  until its environment variables are configured
+- Pilot infra checklist: worker service setup, Railway spend limit, Resend
+  outbound SMTP and inbound bridge configuration, uptime monitoring, and
+  provider signup order
+- Full pilot QA harness (`tests/pilot_e2e_qa.py`): 42-check end-to-end run
+  covering the complete two-client lifecycle on a throwaway database
+
 ### Fixed
+
+- Standalone worker (`python -m siftentry_app.backend.worker`) crashed on
+  first poll because app state (repository/storage/adapters) is wired inside
+  the FastAPI lifespan, which no ASGI server runs for the worker; the worker
+  now enters the lifespan context explicitly — this is the exact entrypoint
+  the Railway worker service runs
+- Hosted Tally posting/dry runs no longer fail with a confusing
+  "Connector import failed: 127.0.0.1:8765 connection refused": client
+  profiles without a machine-local bridge URL now explicitly disable the
+  legacy local-connector default, which only applies when the Streamlit
+  pilot runs on the same computer as the connector
+
+- Login now follows the validated `?next=` path the middleware sets
+  (internal `/app` paths only), instead of always landing on `/app/invoices`
+- Railway build uses Python 3.12 to match the version the test suite runs on
+
+### Fixed (review pass)
 
 - Backend no longer requires Streamlit: `tally_integration`, `qb_integration`,
   and `zoho_integration` import Streamlit optionally with a headless fallback,

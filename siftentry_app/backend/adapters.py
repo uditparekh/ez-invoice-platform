@@ -352,7 +352,13 @@ def _tally_connector_settings_from_profile(
         or connection_settings.get("tally_connector_url")
     )
     if not connector_url:
-        return None
+        # The profile defines no machine-local bridge. Explicitly disable the
+        # legacy local-connector default (enabled=True at 127.0.0.1:8765),
+        # which only makes sense when the Streamlit pilot runs on the same
+        # computer as the connector. Hosted posts and dry runs then use the
+        # direct Tally path; cloud desktop connectors are unaffected because
+        # they use the claim/results endpoints, not this adapter.
+        return {"enabled": False}
     return {
         "enabled": connection_settings.get("connector_enabled", True),
         "url": connector_url,
