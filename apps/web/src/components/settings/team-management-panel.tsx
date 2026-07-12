@@ -147,8 +147,8 @@ export function TeamManagementPanel() {
         </Button>
       }
     >
-      <div className="grid gap-5 xl:grid-cols-[minmax(300px,420px)_1fr]">
-        <div className="rounded-2xl border border-line bg-canvas p-4">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
+        <div className="min-w-0 rounded-2xl border border-line bg-canvas p-4">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent">
               <MailPlus size={18} />
@@ -226,10 +226,10 @@ export function TeamManagementPanel() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="overflow-x-auto rounded-2xl border border-line">
-            <div className="min-w-[620px]">
-              <div className="grid grid-cols-[1fr_130px_160px] gap-3 border-b border-line bg-surface-subtle px-4 py-3 text-[11px] font-extrabold uppercase text-ink-muted">
+        <div className="min-w-0 space-y-4">
+          <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-line">
+            <div className="min-w-[540px]">
+              <div className="grid grid-cols-[minmax(0,1fr)_120px_128px] gap-3 border-b border-line bg-surface-subtle px-4 py-3 text-[11px] font-extrabold uppercase text-ink-muted">
                 <span>Member</span>
                 <span>Role</span>
                 <span>Last login</span>
@@ -238,7 +238,7 @@ export function TeamManagementPanel() {
                 members.map((member) => (
                   <div
                     key={member.user_id}
-                    className="grid grid-cols-[1fr_130px_160px] items-center gap-3 border-b border-line px-4 py-4 last:border-b-0"
+                    className="grid grid-cols-[minmax(0,1fr)_120px_128px] items-center gap-3 border-b border-line px-4 py-4 last:border-b-0"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-ink">

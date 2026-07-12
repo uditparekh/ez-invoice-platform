@@ -54,17 +54,17 @@ export default function SettingsPage() {
   const org = useOrgSettings();
 
   return (
-    <div className="min-h-[calc(100vh-68px)] bg-canvas">
+    <div className="min-h-[calc(100vh-68px)] min-w-0 overflow-x-hidden bg-canvas">
       <PageHeader
         title="Settings"
         section="Workspace & account"
         description="Workspace-wide defaults and your personal preferences. Client accounting logic lives in Client profiles."
       />
-      <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <main className="mx-auto w-full max-w-[1440px] min-w-0 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
           {/* two-group rail */}
-          <nav className="lg:sticky lg:top-24 lg:self-start">
-            <div className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-0">
+          <nav className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+            <div className="flex min-w-0 gap-1 overflow-x-auto lg:flex-col lg:gap-0">
               {(["WORKSPACE", "MY ACCOUNT"] as const).map((group) => (
                 <div key={group} className="flex gap-1 lg:block">
                   <p className="hidden px-3 pb-2 pt-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted first:pt-0 lg:block">

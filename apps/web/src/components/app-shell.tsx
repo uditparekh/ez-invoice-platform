@@ -122,7 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-canvas">
+    <div className="min-h-screen overflow-x-hidden bg-canvas">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] flex-col border-r border-line bg-shell lg:flex">
         {nav}
       </aside>
@@ -149,7 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="lg:pl-[260px]">
+      <div className="min-w-0 lg:pl-[260px]">
         <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-shell/95 px-4 backdrop-blur sm:px-6 lg:px-8">
           <Button
             variant="ghost"
@@ -206,7 +206,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ThemeToggle />
           </div>
         </header>
-        <main>{children}</main>
+        <main className="min-w-0 overflow-x-hidden">{children}</main>
       </div>
       <CommandCenter />
     </div>
