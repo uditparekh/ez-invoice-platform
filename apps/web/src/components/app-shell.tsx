@@ -90,31 +90,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ))}
       </div>
       <div className="border-t border-line p-3">
-        <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-subtle px-3 py-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-black text-accent-ink">
-            {(user?.full_name || user?.email || "SE")
-              .split(/\s|@/)
-              .slice(0, 2)
-              .map((part) => part[0]?.toUpperCase())
-              .join("")}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-bold text-ink">
-              {loading ? "Loading account" : user?.full_name || user?.email}
+        <div className="rounded-xl border border-line bg-surface-subtle p-3">
+          <div className="flex items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-black text-accent-ink">
+              {(user?.full_name || user?.email || "SE")
+                .split(/\s|@/)
+                .slice(0, 2)
+                .map((part) => part[0]?.toUpperCase())
+                .join("")}
             </span>
-            <span className="block truncate text-[11px] capitalize text-ink-muted">
-              {membership?.role ?? "workspace member"}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-bold text-ink">
+                {loading ? "Loading account" : user?.full_name || user?.email}
+              </span>
+              <span className="block truncate text-[11px] capitalize text-ink-muted">
+                {membership?.role ?? "workspace member"}
+              </span>
             </span>
-          </span>
+          </div>
           <Button
             variant="ghost"
             size="sm"
-            className="size-8 px-0"
+            className="mt-3 h-9 w-full justify-center gap-2 rounded-lg border border-line bg-surface text-xs font-extrabold text-ink-secondary transition hover:border-accent/40 hover:text-accent"
             onClick={() => void logout()}
             title="Sign out"
             aria-label="Sign out"
           >
-            <LogOut size={15} />
+            <LogOut size={14} />
+            Sign out
           </Button>
         </div>
       </div>

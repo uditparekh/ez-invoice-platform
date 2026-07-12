@@ -48,7 +48,7 @@ export function AcceptInvitationForm() {
         setError(apiErrorMessage(payload, "Invitation could not be accepted."));
         return;
       }
-      router.replace("/app/invoices");
+      router.replace("/app");
       router.refresh();
     } catch {
       setError("The SiftEntry API is unavailable. Start FastAPI and try again.");

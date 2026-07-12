@@ -15,8 +15,14 @@ export function LoginForm() {
   const [error, setError] = useState("");
 
   async function submit(formData: FormData) {
+    if (submitting) {
+      return;
+    }
+
     setSubmitting(true);
     setError("");
+    let shouldReset = true;
+
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -38,18 +44,21 @@ export function LoginForm() {
       const destination =
         requested && requested.startsWith("/app") && !requested.startsWith("//")
           ? requested
-          : "/app/invoices";
+          : "/app";
+      shouldReset = false;
       router.replace(destination);
       router.refresh();
     } catch {
       setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
     } finally {
-      setSubmitting(false);
+      if (shouldReset) {
+        setSubmitting(false);
+      }
     }
   }
 
   return (
-    <form action={submit} className="mt-8 space-y-5">
+    <form action={submit} className="mt-8 space-y-5" aria-busy={submitting}>
       <label className="block">
         <span className="mb-2 block text-xs font-bold text-ink-secondary">
           Work email
@@ -62,7 +71,8 @@ export function LoginForm() {
             autoComplete="email"
             required
             placeholder="name@company.com"
-            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
+            disabled={submitting}
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted disabled:cursor-wait disabled:opacity-70"
           />
         </span>
       </label>
@@ -83,7 +93,8 @@ export function LoginForm() {
             type="password"
             autoComplete="current-password"
             required
-            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none"
+            disabled={submitting}
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none disabled:cursor-wait disabled:opacity-70"
           />
         </span>
       </label>
@@ -106,7 +117,7 @@ export function LoginForm() {
         ) : (
           <ArrowRight size={17} />
         )}
-        {submitting ? "Signing in" : "Continue"}
+        {submitting ? "Signing in..." : "Continue"}
       </Button>
     </form>
   );

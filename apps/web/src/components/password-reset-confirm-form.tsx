@@ -40,7 +40,7 @@ export function PasswordResetConfirmForm() {
         setError(apiErrorMessage(payload, "Password could not be reset."));
         return;
       }
-      router.replace("/app/invoices");
+      router.replace("/app");
       router.refresh();
     } catch {
       setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
