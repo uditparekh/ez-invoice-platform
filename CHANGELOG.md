@@ -4,6 +4,12 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Sign-in button no longer drops its "Signing in" spinner before navigation
+  completes; the idle-button dead time after a successful login was the main
+  perceived lag on the hosted app
+
 ### Added
 
 - Railway background worker service config (`railway.worker.json`) so batch
