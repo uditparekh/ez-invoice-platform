@@ -18,10 +18,49 @@ interface AuthContextValue {
   loading: boolean;
   refresh: () => Promise<void>;
   selectOrganization: (organizationId: string) => void;
-  logout: () => Promise<void>;
+  logout: (options?: LogoutOptions) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+type LogoutReason = "manual" | "inactive";
+
+interface LogoutOptions {
+  reason?: LogoutReason;
+}
+
+const DEFAULT_IDLE_LOGOUT_MINUTES = 30;
+const IDLE_CHECK_INTERVAL_MS = 15_000;
+const ACTIVITY_THROTTLE_MS = 10_000;
+const IDLE_WARNING_MS = 2 * 60_000;
+const LAST_ACTIVITY_STORAGE_KEY = "siftentry:last-activity-at";
+
+function configuredIdleTimeoutMs() {
+  const configured = Number(process.env.NEXT_PUBLIC_IDLE_LOGOUT_MINUTES);
+  const minutes =
+    Number.isFinite(configured) && configured > 0
+      ? configured
+      : DEFAULT_IDLE_LOGOUT_MINUTES;
+  return Math.max(5, minutes) * 60_000;
+}
+
+const IDLE_TIMEOUT_MS = configuredIdleTimeoutMs();
+
+function readLastActivityAt() {
+  if (typeof window === "undefined") return Date.now();
+  const raw = window.localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY);
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Date.now();
+}
+
+function writeLastActivityAt(value = Date.now()) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(value));
+  } catch {
+    // Private-mode storage failures should not break auth or logout.
+  }
+}
 
 async function fetchAuthenticatedUser() {
   const response = await fetch("/api/auth/me", { cache: "no-store" });
@@ -48,8 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     null,
   );
   const [loading, setLoading] = useState(true);
+  const [idleWarningOpen, setIdleWarningOpen] = useState(false);
 
   const applyUser = useCallback((nextUser: AuthenticatedUser) => {
+    writeLastActivityAt();
     setUser(nextUser);
     setActiveOrganizationId(preferredOrganizationId(nextUser));
   }, []);
@@ -57,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearUser = useCallback(() => {
     setUser(null);
     setActiveOrganizationId(null);
+    setIdleWarningOpen(false);
     if (pathname !== "/login") router.replace("/login");
   }, [pathname, router]);
 
@@ -96,13 +138,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActiveOrganizationId(organizationId);
   }, []);
 
-  const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+  const logout = useCallback(async (options: LogoutOptions = {}) => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Even if the network is unavailable, clear this browser session.
+    }
     setUser(null);
     setActiveOrganizationId(null);
-    router.replace("/login");
+    setIdleWarningOpen(false);
+    const destination =
+      options.reason === "inactive" ? "/login?reason=inactive" : "/login";
+    router.replace(destination);
     router.refresh();
   }, [router]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    writeLastActivityAt();
+    let lastActivityWrite = 0;
+
+    const markActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityWrite < ACTIVITY_THROTTLE_MS) return;
+      lastActivityWrite = now;
+      writeLastActivityAt(now);
+      setIdleWarningOpen(false);
+    };
+
+    const checkIdle = () => {
+      const idleFor = Date.now() - readLastActivityAt();
+      if (idleFor >= IDLE_TIMEOUT_MS) {
+        void logout({ reason: "inactive" });
+        return;
+      }
+      setIdleWarningOpen(idleFor >= IDLE_TIMEOUT_MS - IDLE_WARNING_MS);
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      "keydown",
+      "pointerdown",
+      "scroll",
+      "touchstart",
+      "mousemove",
+    ];
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, {
+        passive: true,
+        capture: true,
+      });
+    });
+    const interval = window.setInterval(checkIdle, IDLE_CHECK_INTERVAL_MS);
+
+    return () => {
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, markActivity, {
+          capture: true,
+        });
+      });
+      window.clearInterval(interval);
+    };
+  }, [logout, user]);
 
   const value = useMemo(
     () => ({
@@ -123,7 +220,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {idleWarningOpen && user ? (
+        <div
+          role="status"
+          className="fixed bottom-5 right-5 z-50 w-[min(360px,calc(100vw-2.5rem))] rounded-2xl border border-line-strong bg-panel p-4 shadow-2xl"
+        >
+          <p className="text-sm font-extrabold text-ink">Still working?</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
+            This device will sign out soon to protect the workspace. Other
+            devices stay signed in until they are inactive too.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className="rounded-xl border border-line-strong bg-surface px-3 py-2 text-xs font-extrabold text-ink transition hover:border-accent/40 hover:text-accent"
+              onClick={() => {
+                writeLastActivityAt();
+                setIdleWarningOpen(false);
+              }}
+            >
+              Stay signed in
+            </button>
+            <button
+              type="button"
+              className="rounded-xl bg-accent px-3 py-2 text-xs font-extrabold text-white shadow-soft transition hover:bg-accent-strong"
+              onClick={() => void logout()}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

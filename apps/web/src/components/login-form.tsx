@@ -13,10 +13,18 @@ export function LoginForm() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const reason = new URLSearchParams(window.location.search).get("reason");
+    return reason === "inactive"
+      ? "You were signed out after inactivity on this device."
+      : "";
+  });
 
   async function submit(formData: FormData) {
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -39,7 +47,7 @@ export function LoginForm() {
       const destination =
         requested && requested.startsWith("/app") && !requested.startsWith("//")
           ? requested
-          : "/app/invoices";
+          : "/app";
       router.replace(destination);
       router.refresh();
       // Deliberately keep `submitting` true on success: this page unmounts
@@ -91,6 +99,15 @@ export function LoginForm() {
           />
         </span>
       </label>
+      {notice && (
+        <p
+          role="status"
+          className="rounded-xl border border-accent/20 bg-accent-soft px-3.5 py-3 text-sm font-semibold text-accent"
+        >
+          {notice}
+        </p>
+      )}
+
       {error && (
         <p
           role="alert"
