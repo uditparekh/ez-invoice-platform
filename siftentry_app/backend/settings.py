@@ -69,6 +69,7 @@ class ApiSettings:
     smtp_password: str = ""
     smtp_use_tls: bool = True
     smtp_timeout_seconds: float = 10.0
+    resend_api_key: str = ""
     inbound_email_secret: str = ""
     inbound_email_address: str = ""
     inbound_email_max_attachments: int = 10
@@ -151,6 +152,7 @@ class ApiSettings:
             smtp_password=os.environ.get("EZ_SMTP_PASSWORD", ""),
             smtp_use_tls=_truthy(os.environ.get("EZ_SMTP_USE_TLS", "true")),
             smtp_timeout_seconds=float(os.environ.get("EZ_SMTP_TIMEOUT_SECONDS", "10")),
+            resend_api_key=os.environ.get("EZ_RESEND_API_KEY", "").strip(),
             inbound_email_secret=os.environ.get("SIFTENTRY_INBOUND_EMAIL_SECRET", ""),
             inbound_email_address=os.environ.get("SIFTENTRY_INBOUND_EMAIL_ADDRESS", "")
             .strip()
@@ -253,10 +255,12 @@ class ApiSettings:
             problems.append("remove localhost from EZ_API_CORS_ORIGINS")
         if not self.cors_origins:
             problems.append("set EZ_API_CORS_ORIGINS to the app domain")
-        if self.email_provider != "smtp":
-            problems.append("set EZ_EMAIL_PROVIDER=smtp")
+        if self.email_provider not in ("smtp", "resend"):
+            problems.append("set EZ_EMAIL_PROVIDER=smtp or resend")
         if not self.email_from:
             problems.append("set EZ_EMAIL_FROM")
+        if self.email_provider == "resend" and not self.resend_api_key:
+            problems.append("set EZ_RESEND_API_KEY")
         if self.email_provider == "smtp":
             if not self.smtp_host:
                 problems.append("set EZ_SMTP_HOST")

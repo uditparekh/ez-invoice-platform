@@ -4,6 +4,13 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- `resend` email provider: sends invitations and password resets through
+  Resend's HTTPS API (port 443) instead of SMTP, which Railway blocks or
+  disrupts; configure with `EZ_EMAIL_PROVIDER=resend` + `EZ_RESEND_API_KEY`
+  (4 new tests)
+
 ### Fixed
 
 - Sign-in button no longer drops its "Signing in" spinner before navigation

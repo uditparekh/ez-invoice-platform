@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import smtplib
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from email.message import EmailMessage
@@ -31,9 +34,10 @@ class EmailDeliveryError(RuntimeError):
 class EmailService:
     """Small provider boundary for pilot-safe email delivery.
 
-    `memory` is used by tests, `log` is useful for local development, and `smtp`
-    works with production providers such as Postmark, SendGrid, Brevo, SES SMTP,
-    or a company SMTP relay.
+    `memory` is used by tests, `log` is useful for local development, `smtp`
+    works with providers that accept SMTP relay, and `resend` sends through
+    Resend's HTTPS API — the right choice on hosts (such as Railway) that
+    block outbound SMTP ports.
     """
 
     def __init__(self, settings: ApiSettings):
@@ -131,7 +135,61 @@ class EmailService:
             self._send_smtp(delivered)
             self.outbox.append(delivered)
             return delivered
+        if provider == "resend":
+            self._send_resend(delivered)
+            self.outbox.append(delivered)
+            return delivered
         raise EmailDeliveryError(f"Unsupported email provider: {provider}")
+
+    def _send_resend(self, delivered: DeliveredEmail) -> None:
+        """Send through Resend's HTTPS API (https://api.resend.com/emails).
+
+        Preferred on hosts such as Railway that restrict outbound SMTP ports;
+        HTTPS on port 443 is never blocked.
+        """
+        settings = self.settings
+        if not settings.resend_api_key:
+            raise EmailDeliveryError("Resend API key is not configured.")
+        payload: dict = {
+            "from": settings.email_from,
+            "to": [delivered.to_email],
+            "subject": delivered.subject,
+            "text": delivered.text_body,
+            "html": delivered.html_body,
+        }
+        if settings.email_reply_to:
+            payload["reply_to"] = settings.email_reply_to
+        request = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {settings.resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(
+                request, timeout=settings.smtp_timeout_seconds
+            ) as response:
+                if response.status not in (200, 201):
+                    raise EmailDeliveryError(
+                        f"Resend API returned status {response.status}."
+                    )
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                body = json.loads(exc.read().decode("utf-8", errors="replace"))
+                detail = str(body.get("message", ""))[:200]
+            except Exception:  # noqa: BLE001 - best-effort error detail
+                pass
+            logger.error("Resend API error %s: %s", exc.code, detail)
+            raise EmailDeliveryError(
+                f"Resend API error {exc.code}: {detail or 'request rejected'}."
+            ) from exc
+        except OSError as exc:
+            logger.error("Resend API connection failed: %s", exc)
+            raise EmailDeliveryError("Email delivery failed.") from exc
 
     def _send_smtp(self, delivered: DeliveredEmail) -> None:
         settings = self.settings

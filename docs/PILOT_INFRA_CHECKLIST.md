@@ -144,19 +144,21 @@ Paid retention options later:
 
 ### Outbound (invites, password resets) — needed at launch
 
-Resend includes SMTP relay on every plan, so no code changes are needed.
-On the free plan (3,000 emails/month, 100/day) create an API key, verify the
-sending domain, then set on **Railway** (both services):
+Use Resend's **HTTPS API** provider, not SMTP: Railway restricts outbound
+SMTP ports (blocked entirely on Free/Trial/Hobby, and intermittently
+disrupted even on Pro), while HTTPS on port 443 always works. On the free
+plan (3,000 emails/month, 100/day) create an API key, verify the sending
+domain, then set on **Railway** (both services):
 
 ```bash
-EZ_EMAIL_PROVIDER=smtp
+EZ_EMAIL_PROVIDER=resend
+EZ_RESEND_API_KEY=<resend-api-key>
 EZ_EMAIL_FROM=SiftEntry <no-reply@yourdomain.com>
-EZ_SMTP_HOST=smtp.resend.com
-EZ_SMTP_PORT=587
-EZ_SMTP_USERNAME=resend
-EZ_SMTP_PASSWORD=<resend-api-key>
-EZ_SMTP_USE_TLS=true
+EZ_APP_BASE_URL=https://app.yourdomain.com
 ```
+
+`EZ_APP_BASE_URL` is required: password reset and invitation links are built
+from it (without it they point at localhost).
 
 Send yourself an invitation from the app to verify delivery before inviting a
 pilot client.
