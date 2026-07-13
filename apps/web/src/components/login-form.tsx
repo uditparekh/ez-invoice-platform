@@ -127,7 +127,7 @@ export function LoginForm() {
         ) : (
           <ArrowRight size={17} />
         )}
-        {submitting ? "Signing in" : "Continue"}
+        {submitting ? "Opening workspace" : "Continue"}
       </Button>
     </form>
   );
