@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import smtplib
@@ -177,15 +178,28 @@ class EmailService:
                         f"Resend API returned status {response.status}."
                     )
         except urllib.error.HTTPError as exc:
+            raw_body = ""
             detail = ""
             try:
-                body = json.loads(exc.read().decode("utf-8", errors="replace"))
-                detail = str(body.get("message", ""))[:200]
+                raw_body = exc.read().decode("utf-8", errors="replace")[:500]
+                parsed = json.loads(raw_body)
+                detail = str(
+                    parsed.get("message") or parsed.get("error") or ""
+                )[:300]
             except Exception:  # noqa: BLE001 - best-effort error detail
                 pass
-            logger.error("Resend API error %s: %s", exc.code, detail)
+            key_fingerprint = hashlib.sha256(
+                settings.resend_api_key.encode("utf-8")
+            ).hexdigest()[:8]
+            logger.error(
+                "Resend API error %s (key fingerprint %s, from %r): %s",
+                exc.code,
+                key_fingerprint,
+                settings.email_from,
+                detail or raw_body or "<empty response body>",
+            )
             raise EmailDeliveryError(
-                f"Resend API error {exc.code}: {detail or 'request rejected'}."
+                f"Resend API error {exc.code}: {detail or raw_body or 'request rejected'}."
             ) from exc
         except OSError as exc:
             logger.error("Resend API connection failed: %s", exc)
