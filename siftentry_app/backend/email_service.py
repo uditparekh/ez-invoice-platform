@@ -166,6 +166,11 @@ class EmailService:
             headers={
                 "Authorization": f"Bearer {settings.resend_api_key}",
                 "Content-Type": "application/json",
+                # Resend's API sits behind Cloudflare, which bans Python's
+                # default urllib signature from datacenter IPs (error 1010).
+                # Identifying ourselves properly passes the bot filter.
+                "User-Agent": "SiftEntry/1.0 (+https://app.siftentry.com)",
+                "Accept": "application/json",
             },
             method="POST",
         )
