@@ -482,7 +482,41 @@ function AiTab({
         </ContentCard>
 
         <ContentCard title="Vendor learning" subtitle="Exception rate by supplier">
-          <div className="overflow-x-auto" data-scroll-region="true">
+          <div className="md:hidden">
+            {m.vendors.slice(0, 6).map((vendor) => (
+              <article
+                key={`card-${vendor.label}`}
+                className="border-b border-line py-3.5 last:border-b-0"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 truncate font-black text-ink">
+                    {vendor.label}
+                  </p>
+                  <span
+                    className={cn(
+                      "inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black",
+                      vendor.state === "Mastered"
+                        ? "bg-success-soft text-success"
+                        : vendor.state === "Improving"
+                          ? "bg-cyan-soft text-cyan-ink"
+                          : "bg-gold-soft text-gold-ink",
+                    )}
+                  >
+                    {vendor.state}
+                  </span>
+                </div>
+                <p className="mt-1.5 font-mono text-xs font-bold text-ink-secondary">
+                  {vendor.count} invoice{vendor.count === 1 ? "" : "s"} ·{" "}
+                  <span className="text-ink">
+                    {formatCurrency(vendor.total, currency)}
+                  </span>
+                  {" · "}
+                  {vendor.flags} flag{vendor.flags === 1 ? "" : "s"}
+                </p>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block" data-scroll-region="true">
             <table className="w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">

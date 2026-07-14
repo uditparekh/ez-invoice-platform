@@ -61,7 +61,36 @@ export default function ExceptionsPage() {
               subtitle="A future AI layer can explain each blocker and suggest the correction."
             >
               {exceptions.length ? (
-                <div className="overflow-x-auto">
+                <>
+                <div className="md:hidden">
+                  {exceptions.map((invoice) => (
+                    <article
+                      key={`card-${invoice.id}`}
+                      className="border-b border-line px-4 py-4 last:border-b-0"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-black text-ink">
+                            {invoice.invoice_number || "Pending"}
+                          </p>
+                          <p className="truncate text-xs font-bold text-ink-muted">
+                            {invoice.supplier.name || "Supplier pending"} ·{" "}
+                            {formatDate(invoice.invoice_date)}
+                          </p>
+                        </div>
+                        <StatusBadge status={invoice.status} />
+                      </div>
+                      <p className="mt-2 text-sm leading-5 text-ink-secondary">
+                        {invoice.validation_issues[0] ||
+                          "Review extraction and accounting mapping."}
+                      </p>
+                      <p className="mt-2 font-mono text-sm font-black text-ink">
+                        {formatCurrency(invoice.total, invoice.currency)}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+                <div className="hidden overflow-x-auto md:block">
                   <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="text-xs font-extrabold uppercase text-ink-muted">
                       <tr className="border-b border-line">
@@ -98,6 +127,7 @@ export default function ExceptionsPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               ) : (
                 <EmptyState
                   icon={ShieldCheck}

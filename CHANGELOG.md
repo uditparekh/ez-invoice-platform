@@ -6,6 +6,14 @@ All notable platform changes will be recorded here.
 
 ### Changed
 
+- Mobile pass, phase 2: Rules mapping editor, GL-mapping, Exceptions, and
+  Analytics vendor tables all render as cards on phones (desktop keeps
+  the full tables); Rules cards use labeled inputs for thumb-friendly
+  editing. Audit confirmed the client-profiles panel and review split
+  view were already responsive.
+
+### Changed
+
 - Mobile professional pass: posting history renders as cards on phones
   (full table remains on desktop); invoice line items become editable
   cards on phones instead of a sideways-scrolling table; team roster rows

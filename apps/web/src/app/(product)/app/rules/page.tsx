@@ -265,7 +265,42 @@ function MappingTab({
         }
       >
         {rows.length ? (
-          <div className="overflow-x-auto" data-scroll-region="true">
+          <>
+          <div className="space-y-3 md:hidden">
+            {rows.map((row, index) => (
+              <article
+                key={`card-${index}`}
+                className="rounded-2xl border border-line bg-surface p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
+                    Mapping {index + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
+                    className="rounded-lg p-2.5 text-ink-muted transition-colors hover:bg-danger-soft hover:text-danger"
+                    aria-label={`Remove mapping ${index + 1}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                <div className="mt-1 space-y-3">
+                  <MapField label="Description contains" value={row.source_description_contains} placeholder="e.g. PTA SWEEP" strong onChange={(value) => update(index, { source_description_contains: value })} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <MapField label="HSN/SAC" value={row.source_hsn_sac} placeholder="—" onChange={(value) => update(index, { source_hsn_sac: value })} />
+                    <MapField label="UOM" value={row.target_uom} placeholder="KGS" onChange={(value) => update(index, { target_uom: value })} />
+                  </div>
+                  <MapField label="Target item" value={row.target_item_name} placeholder="Stock item name" onChange={(value) => update(index, { target_item_name: value })} />
+                  <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
+                    <MapField label="Purchase ledger" value={row.purchase_ledger} placeholder="Purchase A/C" onChange={(value) => update(index, { purchase_ledger: value })} />
+                    <MapField label="Tax ledger" value={row.tax_ledger} placeholder="IGST A/C" onChange={(value) => update(index, { tax_ledger: value })} />
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block" data-scroll-region="true">
             <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-sm">
               <thead>
                 <tr className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
@@ -302,6 +337,7 @@ function MappingTab({
               </tbody>
             </table>
           </div>
+          </>
         ) : (
           <p className="text-sm font-semibold text-ink-muted">
             No mappings yet — add one, or click an unmapped line item above.
@@ -823,6 +859,37 @@ function RuleCard({
       )}
       {action && <div className="mt-3">{action}</div>}
     </article>
+  );
+}
+
+function MapField({
+  label,
+  value,
+  placeholder,
+  onChange,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  strong?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+        {label}
+      </span>
+      <input
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(
+          "mt-1 w-full rounded-lg border border-line bg-canvas px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-ink-muted focus:border-accent",
+          strong ? "font-black text-ink" : "font-bold text-ink-secondary",
+        )}
+      />
+    </label>
   );
 }
 

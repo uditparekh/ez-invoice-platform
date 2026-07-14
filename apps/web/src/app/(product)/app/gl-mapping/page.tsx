@@ -55,7 +55,28 @@ export default function GlMappingPage() {
           title="Mapping worksheet"
           subtitle="Client-specific ledger names should be filled from the accounting system master data."
         >
-          <div className="overflow-x-auto">
+          <div className="md:hidden">
+            {rows.map((row) => (
+              <article
+                key={`card-${row.label}`}
+                className="border-b border-line px-4 py-4 last:border-b-0"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 truncate font-black text-ink">{row.label}</p>
+                  <span className="shrink-0 text-xs font-black text-ink-secondary">
+                    Review
+                  </span>
+                </div>
+                <p className="mt-1 font-mono text-sm font-black text-ink">
+                  {formatCurrency(row.total, invoices[0]?.currency || "USD")}
+                </p>
+                <p className="mt-1.5 text-xs font-semibold text-ink-secondary">
+                  Client ledger required · Workspace tax mapping
+                </p>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[780px] text-left text-sm">
               <thead className="text-xs font-extrabold uppercase text-ink-muted">
                 <tr className="border-b border-line">
