@@ -1379,7 +1379,7 @@ function DropdownPanel({
   return (
     <div
       className={cn(
-        "absolute top-[calc(100%+10px)] z-50 rounded-2xl border border-line bg-surface p-4 shadow-pop dark:bg-surface-strong",
+        "absolute top-[calc(100%+10px)] z-50 max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-surface p-4 shadow-pop dark:bg-surface-strong",
         width,
         align === "right" ? "right-0" : "left-0",
       )}

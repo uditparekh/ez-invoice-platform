@@ -1888,7 +1888,133 @@ function ReviewLineItemsPanel({
         </div>
       )}
 
-      <div data-scroll-region="true" className="overflow-x-auto">
+      {/* Mobile: line item cards with the same editable fields */}
+      <div className="md:hidden">
+        {lines.length ? (
+          lines.map((line, index) => {
+            const noisy = suspiciousLines.some(
+              (candidate) => candidate === line,
+            );
+            const mapping = lineMappingChip(line);
+            return (
+              <article
+                key={line.id ?? `card-${index}`}
+                className="border-b border-line px-4 py-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
+                    Line {index + 1}
+                  </span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "inline-flex max-w-[180px] truncate rounded-full px-2.5 py-1 text-[11px] font-black",
+                        mapping.className,
+                      )}
+                    >
+                      {mapping.label}
+                    </span>
+                    {editable && (
+                      <button
+                        type="button"
+                        onClick={() => removeLine(index)}
+                        className="rounded-lg p-2.5 text-ink-muted transition-colors hover:bg-danger-soft hover:text-danger"
+                        aria-label={`Remove line ${index + 1}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <LineCellInput
+                    value={line.description}
+                    editable={editable}
+                    placeholder="Description"
+                    className="text-sm font-black leading-5 text-ink"
+                    onCommit={(value) =>
+                      updateLine(index, { description: value })
+                    }
+                  />
+                  <span
+                    className={cn(
+                      "mt-1.5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-black",
+                      noisy || reviewState === "error"
+                        ? "bg-gold-soft text-gold-ink"
+                        : "bg-success-soft text-success",
+                    )}
+                  >
+                    {noisy ? "Check row" : "Looks billable"}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <MobileLineField label="Qty">
+                    <LineCellInput
+                      value={line.quantity ? String(line.quantity) : ""}
+                      editable={editable}
+                      placeholder="0"
+                      className="font-mono text-sm text-ink"
+                      onCommit={(value) =>
+                        updateLine(index, {
+                          quantity: parseLineAmount(value),
+                        })
+                      }
+                    />
+                  </MobileLineField>
+                  <MobileLineField label="UOM">
+                    <LineCellInput
+                      value={line.uom}
+                      editable={editable}
+                      placeholder="—"
+                      className="text-sm font-bold text-ink-secondary"
+                      onCommit={(value) => updateLine(index, { uom: value })}
+                    />
+                  </MobileLineField>
+                  <MobileLineField label="Unit price">
+                    <LineCellInput
+                      value={line.unit_price ? String(line.unit_price) : ""}
+                      editable={editable}
+                      placeholder="0.00"
+                      className="font-mono text-sm text-ink"
+                      onCommit={(value) =>
+                        updateLine(index, {
+                          unit_price: parseLineAmount(value),
+                        })
+                      }
+                    />
+                  </MobileLineField>
+                  <MobileLineField label="Amount">
+                    <LineCellInput
+                      value={
+                        (line.net_amount ?? line.total_amount)
+                          ? String(line.net_amount ?? line.total_amount)
+                          : ""
+                      }
+                      editable={editable}
+                      placeholder="0.00"
+                      className="font-mono text-sm font-black text-ink"
+                      onCommit={(value) => {
+                        const amount = parseLineAmount(value);
+                        updateLine(index, {
+                          net_amount: amount,
+                          total_amount: amount + (line.tax_amount ?? 0),
+                        });
+                      }}
+                    />
+                  </MobileLineField>
+                </div>
+              </article>
+            );
+          })
+        ) : (
+          <p className="px-5 py-12 text-center text-sm font-semibold text-ink-muted">
+            No line items were extracted. Add at least one billable line before
+            validation and posting.
+          </p>
+        )}
+      </div>
+
+      <div data-scroll-region="true" className="hidden overflow-x-auto md:block">
         <table className="w-full table-fixed border-collapse text-left">
           <thead className="bg-surface-subtle">
             <tr className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
@@ -2035,6 +2161,23 @@ function ReviewLineItemsPanel({
         </table>
       </div>
     </section>
+  );
+}
+
+function MobileLineField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block rounded-xl border border-line bg-surface-subtle px-3 py-2">
+      <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+        {label}
+      </span>
+      <span className="mt-1 block">{children}</span>
+    </label>
   );
 }
 

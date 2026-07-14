@@ -294,7 +294,95 @@ function PostingLog({ invoices }: { invoices: Invoice[] }) {
           {notice}
         </p>
       )}
-      <div className="overflow-x-auto" data-scroll-region="true">
+      {/* Mobile: posting cards */}
+      <div className="md:hidden">
+        {postings.slice(0, 25).map((posting) => {
+          const invoice = invoiceById.get(posting.invoice_id);
+          const failed = !posting.success;
+          const mappingIssue = /ledger|account|not found|map/i.test(
+            posting.message || "",
+          );
+          return (
+            <article
+              key={posting.id}
+              className={cn(
+                "border-b border-line px-4 py-4",
+                failed && "bg-danger-soft/30",
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm font-black text-ink">
+                    {invoice?.invoice_number || posting.invoice_id.slice(0, 8)}
+                  </p>
+                  <p className="truncate text-xs font-bold text-ink-secondary">
+                    {invoice?.supplier.name || ""}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-black",
+                    failed
+                      ? "bg-danger-soft text-danger"
+                      : "bg-success-soft text-success",
+                  )}
+                >
+                  {failed ? <XCircle size={11} /> : <CheckCircle2 size={11} />}
+                  {failed ? "FAILED" : "SUCCESS"}
+                </span>
+              </div>
+              <p className="mt-2 text-xs font-bold capitalize text-ink-secondary">
+                {posting.target}
+                {posting.dry_run ? " · dry run" : ""}
+                <span className="text-ink-muted">
+                  {" · "}
+                  {new Date(posting.created_at).toLocaleString()}
+                </span>
+              </p>
+              <p className="mt-1.5 break-words font-mono text-xs font-semibold text-ink-secondary">
+                {posting.message ||
+                  (posting.external_id
+                    ? `Accepted · ${posting.external_id}`
+                    : "Recorded")}
+              </p>
+              {failed && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={retrying === posting.id}
+                    onClick={() => void retry(posting)}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-black text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+                  >
+                    {retrying === posting.id ? (
+                      <LoaderCircle size={13} className="animate-spin" />
+                    ) : (
+                      <RotateCcw size={13} />
+                    )}
+                    Retry
+                  </button>
+                  {mappingIssue && (
+                    <Link
+                      href="/app/rules"
+                      className="inline-flex h-11 flex-1 items-center justify-center gap-1 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-accent transition-colors hover:border-accent hover:bg-accent-soft"
+                    >
+                      Fix mapping
+                      <ArrowUpRight size={12} />
+                    </Link>
+                  )}
+                </div>
+              )}
+            </article>
+          );
+        })}
+        {!postings.length && (
+          <p className="px-4 py-10 text-center text-sm font-semibold text-ink-muted">
+            No posting attempts yet.
+          </p>
+        )}
+      </div>
+
+      {/* Desktop: full table */}
+      <div className="hidden overflow-x-auto md:block" data-scroll-region="true">
         <table className="w-full min-w-[820px] border-collapse text-left text-sm">
           <thead className="bg-surface-subtle">
             <tr className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">

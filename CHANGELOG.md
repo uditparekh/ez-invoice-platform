@@ -4,6 +4,16 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Mobile professional pass: posting history renders as cards on phones
+  (full table remains on desktop); invoice line items become editable
+  cards on phones instead of a sideways-scrolling table; team roster rows
+  stack on small screens; workspace dropdown panels clamp to the viewport
+  so they never clip on narrow phones; header gains a mobile search button
+  (command palette); installed-PWA mode now respects iPhone/Android
+  safe-area insets (notch and home indicator)
+
 ### Added
 
 - `resend` email provider: sends invitations and password resets through

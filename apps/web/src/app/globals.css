@@ -233,3 +233,14 @@ a {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* Installed-PWA polish: respect iPhone/Android notch and home-indicator
+   insets when running standalone (Add to Home Screen). No effect in a
+   normal browser tab. */
+@media all and (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

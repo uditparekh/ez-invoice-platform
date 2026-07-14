@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   PlugZap,
+  Search,
   SlidersHorizontal,
   Users,
   Workflow,
@@ -237,6 +238,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <kbd className="rounded-md border border-line-strong bg-surface px-1.5 py-0.5 font-mono text-[10px] font-black text-ink-secondary">
               ⌘K
             </kbd>
+          </button>
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            className="ml-auto mr-2 grid size-10 place-items-center rounded-full border border-line bg-surface-subtle text-ink-secondary transition-colors hover:border-line-strong hover:text-ink xl:hidden"
+            aria-label="Search invoices, vendors, and pages"
+          >
+            <Search size={17} />
           </button>
           <div>
             <ThemeToggle />

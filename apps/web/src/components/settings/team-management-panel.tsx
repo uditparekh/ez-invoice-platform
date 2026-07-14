@@ -228,8 +228,8 @@ export function TeamManagementPanel() {
 
         <div className="min-w-0 space-y-4">
           <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-line">
-            <div className="min-w-[540px]">
-              <div className="grid grid-cols-[minmax(0,1fr)_120px_128px] gap-3 border-b border-line bg-surface-subtle px-4 py-3 text-[11px] font-extrabold uppercase text-ink-muted">
+            <div className="sm:min-w-[540px]">
+              <div className="hidden grid-cols-[minmax(0,1fr)_120px_128px] gap-3 border-b border-line bg-surface-subtle px-4 py-3 text-[11px] font-extrabold uppercase text-ink-muted sm:grid">
                 <span>Member</span>
                 <span>Role</span>
                 <span>Last login</span>
@@ -238,7 +238,7 @@ export function TeamManagementPanel() {
                 members.map((member) => (
                   <div
                     key={member.user_id}
-                    className="grid grid-cols-[minmax(0,1fr)_120px_128px] items-center gap-3 border-b border-line px-4 py-4 last:border-b-0"
+                    className="grid grid-cols-1 gap-2 border-b border-line px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_120px_128px] sm:items-center sm:gap-3"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-ink">
@@ -248,12 +248,15 @@ export function TeamManagementPanel() {
                         {member.email}
                       </p>
                     </div>
-                    <RolePill role={member.role} />
-                    <p className="text-xs font-semibold text-ink-secondary">
-                      {member.last_login_at
-                        ? formatDate(member.last_login_at)
-                        : "Not yet"}
-                    </p>
+                    <div className="flex items-center justify-between gap-3 sm:contents">
+                      <RolePill role={member.role} />
+                      <p className="text-xs font-semibold text-ink-secondary">
+                        <span className="sm:hidden">Last login: </span>
+                        {member.last_login_at
+                          ? formatDate(member.last_login_at)
+                          : "Not yet"}
+                      </p>
+                    </div>
                   </div>
                 ))
               ) : (
