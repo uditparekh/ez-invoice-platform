@@ -6,6 +6,11 @@ All notable platform changes will be recorded here.
 
 ### Changed
 
+- Workspace simplification: the Integrations page shows only the
+  accounting system configured in the workspace's client profiles (the
+  platform owner still sees every posting path); the invoice queue gains
+  quick filter chips (All, Needs review, Exceptions with live count)
+
 - Mobile pass, phase 2: Rules mapping editor, GL-mapping, Exceptions, and
   Analytics vendor tables all render as cards on phones (desktop keeps
   the full tables); Rules cards use labeled inputs for thumb-friendly

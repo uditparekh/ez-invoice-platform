@@ -9,14 +9,17 @@ export function InvoiceList({
   selectedId,
   loading,
   onSelect,
+  toolbar,
 }: {
   invoices: Invoice[];
   selectedId: string | null;
   loading: boolean;
   onSelect: (invoiceId: string) => void;
+  toolbar?: React.ReactNode;
 }) {
   return (
     <div className="border-b border-line bg-surface lg:border-b-0 lg:border-r lg:border-line">
+      {toolbar}
       <div className="flex h-14 items-center justify-between border-b border-line px-4 sm:px-6">
         <span className="text-sm font-extrabold text-ink-secondary">
           {invoices.length} invoice{invoices.length === 1 ? "" : "s"}

@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
@@ -19,10 +21,13 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/dashboard/page-header";
+import { useAuth } from "@/components/auth-provider";
+import { useClientProfiles } from "@/hooks/use-client-profiles";
 
 const systems = [
   {
     name: "QuickBooks",
+    key: "quickbooks",
     href: "/app/accounting/quickbooks",
     icon: Network,
     status: "Pilot ready",
@@ -34,6 +39,7 @@ const systems = [
   },
   {
     name: "Tally",
+    key: "tally",
     href: "/app/accounting/tally",
     icon: Table2,
     status: "Pilot ready",
@@ -45,6 +51,7 @@ const systems = [
   },
   {
     name: "Zoho Books",
+    key: "zoho_books",
     href: "/app/accounting/zoho-books",
     icon: FileSpreadsheet,
     status: "Configured",
@@ -56,6 +63,7 @@ const systems = [
   },
   {
     name: "Coupa",
+    key: "coupa",
     href: "/app/accounting/coupa",
     icon: Database,
     status: "Export ready",
@@ -67,6 +75,7 @@ const systems = [
   },
   {
     name: "NetSuite",
+    key: "netsuite",
     href: "/app/accounting/netsuite",
     icon: Landmark,
     status: "Export ready",
@@ -78,6 +87,7 @@ const systems = [
   },
   {
     name: "SAP",
+    key: "sap",
     href: "/app/accounting/sap",
     icon: FileCog,
     status: "Planned",
@@ -90,6 +100,24 @@ const systems = [
 ] as const;
 
 export default function IntegrationsPage() {
+  const { user, activeOrganizationId } = useAuth();
+  const { profiles } = useClientProfiles();
+  const membership =
+    user?.memberships.find(
+      (candidate) => candidate.organization_id === activeOrganizationId,
+    ) ?? user?.memberships[0];
+  const isOwner = membership?.role === "owner";
+  const activeSystems = new Set(
+    profiles.map((profile) => profile.accounting_system),
+  );
+  // Each client workspace runs one accounting system, chosen during
+  // onboarding via its client profile. Show only that system to client
+  // roles; the platform owner sees every posting path.
+  const visibleSystems =
+    isOwner || activeSystems.size === 0
+      ? systems
+      : systems.filter((system) => activeSystems.has(system.key));
+
   return (
     <div className="min-h-[calc(100vh-68px)] bg-canvas">
       <PageHeader
@@ -134,7 +162,7 @@ export default function IntegrationsPage() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {systems.map((system) => (
+          {visibleSystems.map((system) => (
             <Link
               key={system.name}
               href={system.href}
@@ -175,6 +203,13 @@ export default function IntegrationsPage() {
             </Link>
           ))}
         </section>
+
+        {!isOwner && activeSystems.size > 0 && visibleSystems.length < systems.length && (
+          <p className="rounded-2xl border border-line bg-surface-subtle px-4 py-3 text-sm font-semibold text-ink-secondary">
+            Showing the accounting system configured for this workspace. Need a
+            different system? Contact your SiftEntry administrator.
+          </p>
+        )}
 
         <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="rounded-[28px] border border-line bg-surface p-5 shadow-card">

@@ -981,6 +981,26 @@ export function InvoiceWorkspace() {
       >
         {detailMode !== "review" && (
           <InvoiceList
+            toolbar={
+              <div className="flex flex-wrap gap-2 border-b border-line px-4 py-3 sm:px-6">
+              <QueueChip
+                label="All"
+                active={status === undefined}
+                onClick={() => setStatus(undefined)}
+              />
+              <QueueChip
+                label="Needs review"
+                active={status === "needs_review"}
+                onClick={() => setStatus("needs_review")}
+              />
+              <QueueChip
+                label={`Exceptions${counts.exceptions ? ` · ${counts.exceptions}` : ""}`}
+                tone="warning"
+                active={status === "failed"}
+                onClick={() => setStatus("failed")}
+              />
+              </div>
+            }
             invoices={visibleInvoices}
             selectedId={selected?.id ?? null}
             loading={loading}
@@ -1363,6 +1383,35 @@ function ControlButton({
         size={16}
         className={cn("shrink-0 transition-transform", open && "rotate-180")}
       />
+    </button>
+  );
+}
+
+function QueueChip({
+  label,
+  active,
+  onClick,
+  tone = "default",
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  tone?: "default" | "warning";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-9 items-center rounded-full border px-3.5 text-xs font-black transition-colors",
+        active
+          ? tone === "warning"
+            ? "border-gold/40 bg-gold-soft text-gold-ink"
+            : "border-accent/40 bg-accent-soft text-accent-ink"
+          : "border-line bg-surface text-ink-secondary hover:border-line-strong hover:text-ink",
+      )}
+    >
+      {label}
     </button>
   );
 }
