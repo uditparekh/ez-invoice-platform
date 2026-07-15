@@ -4,6 +4,11 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- /health answers HEAD requests (uptime checkers such as UptimeRobot
+  probe with HEAD by default; the previous 405 read as downtime)
+
 ### Changed
 
 - Home redesigned as a calm work tray: dated greeting summarizing how many

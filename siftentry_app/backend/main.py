@@ -158,8 +158,16 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    @app.get("/health", response_model=HealthResponse, tags=["system"])
+    @app.api_route(
+        "/health",
+        methods=["GET", "HEAD"],
+        response_model=HealthResponse,
+        tags=["system"],
+    )
     def health() -> HealthResponse:
+        # HEAD is included because uptime checkers (e.g. UptimeRobot) probe
+        # with HEAD by default; FastAPI GET routes do not answer HEAD on
+        # their own and the resulting 405 reads as downtime.
         return HealthResponse(status="ok", service="siftentry-api", version=API_VERSION)
 
     @app.get("/health/deployment", tags=["system"])
