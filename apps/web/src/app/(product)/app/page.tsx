@@ -1,43 +1,55 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowRight,
-  BadgeCheck,
   CheckCircle2,
-  X,
-  FileText,
-  PlugZap,
-  Settings2,
+  Eye,
   Sparkles,
   Upload,
+  X,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 
-import { ContentCard } from "@/components/dashboard/content-card";
 import { LoadingState } from "@/components/dashboard/loading-state";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { useWorkspaceInvoices } from "@/hooks/use-workspace-invoices";
-import {
-  exceptionInvoices,
-  invoiceTotal,
-  postedTotal,
-  readyInvoices,
-} from "@/lib/invoice-metrics";
-import { cn, formatCurrency } from "@/lib/utils";
+import { invoiceTotal, postedTotal } from "@/lib/invoice-metrics";
+import { formatCurrency } from "@/lib/utils";
 
 export default function HomePage() {
   const { invoices, loading, error } = useWorkspaceInvoices();
   const currency = invoices[0]?.currency || "USD";
-  const ready = readyInvoices(invoices);
-  const exceptions = exceptionInvoices(invoices);
-  const posted = invoices.filter((invoice) => invoice.status === "posted");
+
+  const needsReview = invoices.filter(
+    (invoice) =>
+      invoice.status === "extracted" || invoice.status === "needs_review",
+  );
   const awaitingApproval = invoices.filter(
     (invoice) => invoice.status === "validated",
   );
+  const failed = invoices.filter((invoice) => invoice.status === "failed");
+  // Same predicate as the workspace's Sift button: everything Sift can clear.
+  const siftable = invoices.filter(
+    (invoice) =>
+      invoice.status === "extracted" ||
+      invoice.status === "needs_review" ||
+      invoice.status === "validated" ||
+      invoice.status === "failed" ||
+      invoice.validation_issues.length > 0,
+  );
+  const inFlight = invoiceTotal(siftable);
 
-  // ROI hero (spec §5): real extraction rate + processed value, EST time saved
+  const actionGroups = [
+    needsReview.length > 0,
+    awaitingApproval.length > 0,
+    failed.length > 0,
+  ].filter(Boolean).length;
+
+  // Weekly footer stats.
   const extractedPct = invoices.length
     ? Math.round(
         (invoices.filter((invoice) => invoice.status !== "uploaded").length /
@@ -45,9 +57,31 @@ export default function HomePage() {
           1000,
       ) / 10
     : 0;
-  const timeSavedHrs = Math.round((invoices.length * 7) / 60);
 
-  // Proactive nudge (spec §5): a vendor whose invoices repeat the same flag
+  // Date and greeting render after mount so the server and client HTML match.
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setNow(new Date()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const today = now
+    ? now.toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      })
+    : "";
+  const hour = now?.getHours() ?? -1;
+  const dayGreeting =
+    hour < 0
+      ? "Welcome back"
+      : hour < 12
+        ? "Good morning"
+        : hour < 17
+          ? "Good afternoon"
+          : "Good evening";
+
+  // Proactive nudge: a vendor whose invoices repeat the same flag.
   const [dismissedNudge, setDismissedNudge] = useState(() =>
     typeof window === "undefined"
       ? true
@@ -70,82 +104,159 @@ export default function HomePage() {
     return repeat ?? null;
   }, [invoices]);
 
+  const reviewVendors = [
+    ...new Set(
+      needsReview
+        .map((invoice) => invoice.supplier.name)
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ].slice(0, 2);
+
   return (
     <div className="min-h-[calc(100vh-68px)] bg-canvas">
       <PageHeader
         title="Home"
-        section="Command center"
-        description="Start the invoice workflow, review exceptions, and keep accounting connections ready."
+        section="Today"
+        description="Everything that needs you, in one glance."
       />
-      <main className="mx-auto max-w-[1440px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-[880px] px-4 py-8 sm:px-6">
         {loading ? (
           <LoadingState label="Loading workspace" />
         ) : (
           <>
             {error && (
-              <div className="rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">
+              <div className="mb-6 rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">
                 {error}
               </div>
             )}
 
-            {/* ROI hero — the one gradient element on this page (spec §5) */}
-            {invoices.length > 0 && (
-              <section className="grid gap-4 rounded-3xl bg-gradient-to-r from-accent via-[#6366F1] to-[#4338CA] px-6 py-6 shadow-glow sm:grid-cols-3">
-                <div>
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-100/90">
-                    Auto-extracted
-                  </p>
-                  <p className="mt-1 font-display text-3xl font-black text-white">
-                    {extractedPct}%
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-100/90">
-                    Processed
-                  </p>
-                  <p className="mt-1 font-display text-3xl font-black text-white">
-                    {formatCurrency(invoiceTotal(invoices), currency)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-100/90">
-                    Time saved · est
-                  </p>
-                  <p className="mt-1 font-display text-3xl font-black text-[#67E8F9]">
-                    {timeSavedHrs} hrs
-                  </p>
-                </div>
-              </section>
-            )}
+            <p className="text-sm font-bold text-ink-muted">{today}</p>
+            <h1 className="mt-2 font-display text-3xl font-black leading-tight text-ink">
+              {invoices.length === 0
+                ? `${dayGreeting} — upload your first invoice.`
+                : actionGroups === 0
+                  ? `${dayGreeting} — you're all clear.`
+                  : `${dayGreeting} — ${actionGroups} thing${actionGroups === 1 ? "" : "s"} need${actionGroups === 1 ? "s" : ""} you.`}
+            </h1>
 
-            {/* approvals shortcut — routes to the mobile-first approvals view */}
-            {awaitingApproval.length > 0 && (
+            {/* Sift hero — the one bold element on this page */}
+            {siftable.length > 0 ? (
               <Link
-                href="/app/approvals"
-                className="flex items-center justify-between rounded-2xl border border-success/30 bg-success-soft px-5 py-4 transition-shadow hover:shadow-card"
+                href="/app/sift"
+                className="mt-6 flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-[#111827] via-[#1E1B4B] to-[#312E81] px-6 py-5 shadow-glow transition-transform hover:scale-[1.005] sm:flex-row sm:items-center sm:justify-between"
               >
-                <p className="text-sm font-black text-success">
-                  <CheckCircle2 size={15} className="mr-1.5 inline" />
-                  {awaitingApproval.length} invoice
-                  {awaitingApproval.length === 1 ? "" : "s"} awaiting your
-                  approval —{" "}
-                  {formatCurrency(invoiceTotal(awaitingApproval), currency)}
-                </p>
-                <span className="inline-flex items-center gap-1 text-sm font-black text-success">
-                  Approve
-                  <ArrowRight size={14} />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-200/80">
+                    Sift mode
+                  </p>
+                  <p className="mt-1 text-lg font-black leading-snug text-white sm:text-xl">
+                    {siftable.length} invoice{siftable.length === 1 ? "" : "s"}{" "}
+                    · {formatCurrency(inFlight, currency)} in flight — clear it
+                    one keypress at a time.
+                  </p>
+                </div>
+                <span className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-white px-5 text-sm font-black text-[#1E1B4B] shadow-sm sm:self-auto">
+                  <Zap size={16} />
+                  Start sifting
+                  <ArrowRight size={15} />
                 </span>
               </Link>
+            ) : (
+              <div className="mt-6 flex flex-col gap-4 rounded-3xl border border-line bg-surface px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                    Queue clear
+                  </p>
+                  <p className="mt-1 text-lg font-black leading-snug text-ink">
+                    Nothing waiting on you right now.
+                  </p>
+                </div>
+                <Link
+                  href="/app/invoices"
+                  className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-accent px-5 text-sm font-black text-white transition-colors hover:bg-accent-hover sm:self-auto"
+                >
+                  <Upload size={16} />
+                  Upload invoices
+                </Link>
+              </div>
             )}
 
-            {/* proactive nudge — pattern detection, opt-in, dismissible (spec §5) */}
+            {/* Glanceable counts — each pill is a one-tap filter */}
+            {invoices.length > 0 && (
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <StatPill
+                  label="Needs review"
+                  value={needsReview.length}
+                  href="/app/invoices?status=needs_review"
+                />
+                <StatPill
+                  label="Awaiting approval"
+                  value={awaitingApproval.length}
+                  href="/app/approvals"
+                />
+                <StatPill
+                  label="Exceptions"
+                  value={failed.length}
+                  href="/app/invoices?status=failed"
+                  tone={failed.length > 0 ? "danger" : "default"}
+                />
+              </div>
+            )}
+
+            {/* Work tray — only rows that need action render */}
+            <div className="mt-8 border-t border-line">
+              {needsReview.length > 0 && (
+                <ActionRow
+                  icon={Eye}
+                  iconClass="text-gold-ink"
+                  title={`${needsReview.length} invoice${needsReview.length === 1 ? "" : "s"} need${needsReview.length === 1 ? "s" : ""} review`}
+                  subtitle={
+                    reviewVendors.length
+                      ? reviewVendors.join(" · ")
+                      : "Extraction ready for a human check"
+                  }
+                  href="/app/invoices?status=needs_review"
+                  cta="Review"
+                />
+              )}
+              {awaitingApproval.length > 0 && (
+                <ActionRow
+                  icon={CheckCircle2}
+                  iconClass="text-success"
+                  title={`${awaitingApproval.length} approval${awaitingApproval.length === 1 ? "" : "s"} waiting — ${formatCurrency(invoiceTotal(awaitingApproval), currency)}`}
+                  subtitle="Validated and ready for sign-off"
+                  href="/app/approvals"
+                  cta="Approve"
+                />
+              )}
+              {failed.length > 0 && (
+                <ActionRow
+                  icon={AlertTriangle}
+                  iconClass="text-danger"
+                  title={`${failed.length} posting${failed.length === 1 ? "" : "s"} failed`}
+                  subtitle="Open the exceptions filter to retry or fix mappings"
+                  href="/app/invoices?status=failed"
+                  cta="Fix"
+                />
+              )}
+              <ActionRow
+                icon={Upload}
+                iconClass="text-ink-muted"
+                title="Upload new invoices"
+                subtitle="PDFs land in the queue for extraction"
+                href="/app/invoices"
+                cta="Upload"
+              />
+            </div>
+
+            {/* Proactive nudge — pattern detection, dismissible */}
             {nudge && !dismissedNudge && (
-              <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-accent/50 bg-accent-soft/60 px-5 py-4 sm:flex-row sm:items-center">
+              <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-dashed border-accent/50 bg-accent-soft/60 px-5 py-4 sm:flex-row sm:items-center">
                 <p className="min-w-0 flex-1 text-sm font-bold text-accent-ink">
-                  <Sparkles size={15} className="mr-1.5 inline" />✦{" "}
+                  <Sparkles size={15} className="mr-1.5 inline" />
                   {nudge.count} {nudge.vendor} invoices carry the same flag —
-                  add the mapping or rule once and every future invoice inherits
-                  the fix.
+                  add the mapping once and every future invoice inherits the
+                  fix.
                 </p>
                 <div className="flex shrink-0 items-center gap-2">
                   <Link
@@ -172,127 +283,20 @@ export default function HomePage() {
               </div>
             )}
 
-            <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div className="rounded-[24px] border border-line bg-surface p-5 shadow-sm shadow-black/[0.03]">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-ink-muted">
-                  Next best action
-                </p>
-                <h2 className="mt-3 max-w-3xl text-3xl font-black leading-tight text-ink">
-                  {invoices.length
-                    ? exceptions.length
-                      ? "Review exceptions before posting."
-                      : ready.length
-                        ? "Post approved invoices to accounting."
-                        : "Validate extracted invoices."
-                    : "Upload invoices to start the workspace."}
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-ink-secondary">
-                  SiftEntry keeps extraction, review, approval, export, and ERP
-                  posting in one profile-aware workflow.
-                </p>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <HomeAction
-                    href="/app/invoices"
-                    label={invoices.length ? "Open invoice queue" : "Upload invoices"}
-                    icon={<Upload size={16} />}
-                    primary
-                  />
-                  <HomeAction
-                    href="/app/settings"
-                    label="Client onboarding"
-                    icon={<Settings2 size={16} />}
-                  />
-                  <HomeAction
-                    href="/app/integrations"
-                    label="Check integrations"
-                    icon={<PlugZap size={16} />}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <HomeMetric label="Invoices" value={String(invoices.length)} />
-                <HomeMetric
-                  label="Ready"
-                  value={String(ready.length)}
-                  tone={ready.length ? "accent" : "default"}
-                />
-                <HomeMetric
-                  label="Posted"
-                  value={`${posted.length} / ${invoices.length}`}
-                  tone={posted.length ? "success" : "default"}
-                />
-                <HomeMetric
-                  label="Exceptions"
-                  value={String(exceptions.length)}
-                  tone={exceptions.length ? "danger" : "success"}
-                />
-              </div>
-            </section>
-
-            <section className="grid gap-6 xl:grid-cols-3">
-              <ContentCard
-                title="Workflow"
-                subtitle="Where the current workspace stands."
-                action={<FileText size={18} className="text-ink-muted" />}
-              >
-                <div className="space-y-3">
-                  <FlowRow label="Uploaded" value={invoices.length} />
-                  <FlowRow
-                    label="Validated or approved"
-                    value={
-                      invoices.filter((invoice) =>
-                        ["validated", "approved", "posted"].includes(
-                          invoice.status,
-                        ),
-                      ).length
-                    }
-                  />
-                  <FlowRow label="Ready to post" value={ready.length} />
-                  <FlowRow label="Posted" value={posted.length} />
-                </div>
-              </ContentCard>
-
-              <ContentCard
-                title="Spend"
-                subtitle="Current extracted invoice value."
-                action={<Sparkles size={18} className="text-ink-muted" />}
-              >
-                <p className="text-3xl font-black text-ink">
-                  {formatCurrency(invoiceTotal(invoices), currency)}
-                </p>
-                <p className="mt-2 text-sm font-semibold text-ink-secondary">
-                  {formatCurrency(postedTotal(invoices), currency)} already
-                  posted to accounting.
-                </p>
+            {/* Quiet weekly footer — depth lives one click away in Insights */}
+            {invoices.length > 0 && (
+              <p className="mt-8 text-sm font-bold text-ink-muted">
+                This week: {invoices.length} processed · {extractedPct}%
+                auto-extracted · {formatCurrency(postedTotal(invoices), currency)}{" "}
+                posted ·{" "}
                 <Link
                   href="/app/analytics"
-                  className="mt-5 inline-flex items-center gap-2 text-sm font-black text-accent dark:text-cyan"
+                  className="font-black text-accent dark:text-cyan"
                 >
-                  View insights <ArrowRight size={15} />
+                  View insights <ArrowRight size={13} className="inline" />
                 </Link>
-              </ContentCard>
-
-              <ContentCard
-                title="Profiles"
-                subtitle="Keep tax, ledgers, and posting mode client-owned."
-                action={<BadgeCheck size={18} className="text-ink-muted" />}
-              >
-                <div className="space-y-3 text-sm font-semibold text-ink-secondary">
-                  <p>
-                    Use onboarding profiles to store each client&apos;s accounting
-                    system, country, currency, taxes, Tally mode, ledgers, and
-                    sample invoices.
-                  </p>
-                  <Link
-                    href="/app/settings"
-                    className="inline-flex items-center gap-2 text-sm font-black text-accent dark:text-cyan"
-                  >
-                    Manage profiles <ArrowRight size={15} />
-                  </Link>
-                </div>
-              </ContentCard>
-            </section>
+              </p>
+            )}
           </>
         )}
       </main>
@@ -300,66 +304,86 @@ export default function HomePage() {
   );
 }
 
-function HomeAction({
-  href,
+function StatPill({
   label,
-  icon,
-  primary = false,
+  value,
+  href,
+  tone = "default",
 }: {
-  href: string;
   label: string;
-  icon: ReactNode;
-  primary?: boolean;
+  value: number;
+  href: string;
+  tone?: "default" | "danger";
 }) {
   return (
     <Link
       href={href}
-      className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition-colors",
-        primary
-          ? "border-accent bg-accent text-white hover:bg-accent-hover"
-          : "border-line-strong bg-canvas text-ink hover:border-accent hover:bg-accent-soft",
-      )}
+      className={
+        tone === "danger"
+          ? "rounded-2xl border border-danger/25 bg-danger-soft px-4 py-3 transition-shadow hover:shadow-card"
+          : "rounded-2xl bg-surface-subtle px-4 py-3 transition-shadow hover:shadow-card"
+      }
     >
-      {icon}
-      {label}
+      <p
+        className={
+          tone === "danger"
+            ? "text-xs font-extrabold text-danger"
+            : "text-xs font-extrabold text-ink-muted"
+        }
+      >
+        {label}
+      </p>
+      <p
+        className={
+          tone === "danger"
+            ? "mt-0.5 font-display text-2xl font-black text-danger"
+            : "mt-0.5 font-display text-2xl font-black text-ink"
+        }
+      >
+        {value}
+      </p>
     </Link>
   );
 }
 
-function HomeMetric({
-  label,
-  value,
-  tone = "default",
+function ActionRow({
+  icon: Icon,
+  iconClass,
+  title,
+  subtitle,
+  href,
+  cta,
 }: {
-  label: string;
-  value: string;
-  tone?: "default" | "accent" | "success" | "danger";
+  icon: LucideIcon;
+  iconClass: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  cta: string;
 }) {
   return (
-    <div className="rounded-[22px] border border-line bg-surface px-4 py-4 shadow-sm shadow-black/[0.03]">
-      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-ink-muted">
-        {label}
-      </p>
-      <p
-        className={cn(
-          "mt-3 text-3xl font-black leading-none text-ink",
-          tone === "accent" && "text-accent dark:text-cyan",
-          tone === "success" && "text-success",
-          tone === "danger" && "text-danger",
-        )}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function FlowRow({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-line pb-3 last:border-b-0 last:pb-0">
-      <span className="text-sm font-semibold text-ink-secondary">{label}</span>
-      <span className="font-mono text-sm font-black text-ink">{value}</span>
-    </div>
+    <Link
+      href={href}
+      className="group flex items-center justify-between gap-4 border-b border-line px-1 py-4 transition-colors hover:bg-surface-subtle"
+    >
+      <span className="flex min-w-0 items-center gap-3.5">
+        <Icon size={19} className={iconClass} />
+        <span className="min-w-0">
+          <span className="block truncate text-[15px] font-black text-ink">
+            {title}
+          </span>
+          <span className="block truncate text-xs font-semibold text-ink-secondary">
+            {subtitle}
+          </span>
+        </span>
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1 text-sm font-black text-accent">
+        {cta}
+        <ArrowRight
+          size={14}
+          className="transition-transform group-hover:translate-x-0.5"
+        />
+      </span>
+    </Link>
   );
 }

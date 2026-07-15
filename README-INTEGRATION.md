@@ -1,77 +1,56 @@
-# SiftEntry — Pilot Readiness + Full QA Pass (July 10, 2026)
+# SiftEntry — Calm Home Redesign (July 15, 2026)
 
-## How to apply
+## What this update does
 
-Unzip `siftentry-pilot-ready-qa.zip` over the repo root, letting it replace
-existing files. Commit in GitHub Desktop and push.
+Home becomes a calm "work tray" modeled on the pattern the best 2026 SaaS
+products use (Linear, Mercury): the page answers "what needs me right
+now?" and nothing else.
 
-**Suggested commit message:**
-`Pilot readiness + QA: worker lifespan fix, hosted Tally connector fix, Resend bridge, e2e QA harness`
+Top to bottom on the new Home:
+1. Date + greeting: "Good morning — 3 things need you." (or "you're all
+   clear." / "upload your first invoice.")
+2. The dark Sift mode hero card: pending count + money in flight + white
+   "Start sifting" button. When the queue is clear it becomes a calm
+   "Queue clear" card with an Upload button instead.
+3. Three stat pills — Needs review / Awaiting approval / Exceptions —
+   each one tap into the matching filtered view. Exceptions turns red
+   only when there are any (color = status, not decoration).
+4. The work tray list: only rows that need action appear (review /
+   approve / fix), plus a permanent "Upload new invoices" row.
+5. The existing dismissible vendor-pattern nudge (unchanged).
+6. A quiet footer: "This week: N processed · X% auto-extracted · Y
+   posted · View insights".
 
-## File count
+The purple ROI hero (auto-extracted %, processed value, time saved) did
+NOT disappear — it moved to the top of Insights → Overview, where
+analysis belongs. Home is for doing; Insights is for measuring.
 
-**10 files** (6 modified, 3 new, plus this note):
+## Files (4)
 
 | # | File | Change |
 |---|------|--------|
-| 1 | `railway.worker.json` | NEW — Railway config for the worker service |
-| 2 | `nixpacks.toml` | Python 3.11 → 3.12 |
-| 3 | `siftentry_app/backend/worker.py` | FIX — standalone worker crashed on first poll (lifespan never entered) |
-| 4 | `siftentry_app/backend/adapters.py` | FIX — hosted Tally posts hit a phantom 127.0.0.1:8765 connector |
-| 5 | `apps/web/src/app/api/inbound/resend/route.ts` | NEW — Resend inbound → SiftEntry intake bridge |
-| 6 | `apps/web/src/components/login-form.tsx` | Honor validated `?next=` redirect |
-| 7 | `tests/pilot_e2e_qa.py` | NEW — 42-check end-to-end pilot QA harness |
-| 8 | `docs/PILOT_INFRA_CHECKLIST.md` | Worker, spend limit, Resend, monitoring, pre-launch QA, signup order |
-| 9 | `CHANGELOG.md` | All entries under [Unreleased] |
-| 10 | `README-INTEGRATION.md` | This note |
+| 1 | apps/web/src/app/(product)/app/page.tsx | Full rewrite: calm work tray (324 lines, was 365) |
+| 2 | apps/web/src/app/(product)/app/analytics/page.tsx | ROI hero added to the Overview tab |
+| 3 | CHANGELOG.md | Entry under [Unreleased] |
+| 4 | README-INTEGRATION.md | This note |
 
-## The two bugs QA caught (both would have hit the pilot on day one)
+## Steps
 
-**1. The worker service crashed instantly.** `python -m
-siftentry_app.backend.worker` — the exact Railway start command — died on
-its first poll with `'State' object has no attribute 'repository'`. The
-repository/storage/adapters are wired inside the FastAPI lifespan, which
-only an ASGI server runs; the standalone worker never entered it. The 54
-unit tests all pass because TestClient enters the lifespan automatically —
-only running the real entrypoint exposed it. Fixed: the worker now enters
-the lifespan context explicitly. Verified by running the actual entrypoint.
+1. GitHub Desktop → Pull first (package built on commit 7a2b5ce).
+2. Unzip over the repo root, replacing files.
+3. Check the diffs: page.tsx is a rewrite so it shows large red AND
+   green blocks — that is expected FOR THIS FILE ONLY. analytics/page.tsx
+   should show one green block (the hero section). CHANGELOG green only.
+4. Commit: Calm home redesign: work tray with Sift hero
+5. Push. Vercel deploys in ~2 minutes.
 
-**2. Hosted Tally posting was broken for profile-based clients.** The
-legacy default connector settings are `enabled: true` at
-`http://127.0.0.1:8765` — correct when the Streamlit pilot runs on the
-client's own Windows machine, wrong on Railway, where every web-initiated
-Tally post or dry run tried to reach a connector bridge on the server
-itself and failed with a confusing connection error. Fixed: client profiles
-that define no local bridge URL now explicitly disable that default. Cloud
-desktop connectors are unaffected (they use the claim/results endpoints).
+## Verify on app.siftentry.com
 
-## The QA harness (keep running this)
-
-`python tests/pilot_e2e_qa.py` from the repo root — 42 checks over the full
-two-client lifecycle on a throwaway SQLite database: auth + session
-rotation, two orgs, Tally + QuickBooks profiles, upload/parse/evidence, the
-reviewer correct→validate→approve flow, send-back, dry-run posting, batch
-jobs through the worker, the Tally connector claim/results loop (with
-wrong-token rejection), document download, inbound email intake (with
-wrong-secret rejection), invitations, password reset, cross-org isolation,
-learning export/import, retention cleanup, and AI-off confirmation.
-
-Final state: **42/42 QA checks, 54/54 unit tests, ruff clean.** Frontend
-unchanged since the previous verified build (typecheck 0, lint 0, 42/42
-routes).
-
-## Required Tally profile values (QA-proven)
-
-Dry-run preflight BLOCKS posting until these are set on a Tally client
-profile: `company_name` (exact TallyPrime company name), plus
-`purchase_ledger`, `tax_mode`, `tax_ledger`, and `round_off_ledger` for
-India GST clients. The checklist section 8 records this.
-
-## Known parser-quality expectation (not a bug)
-
-The deterministic parsers are format-specific. On unfamiliar synthetic
-layouts they misread totals/GSTIN — by design, the review screen exists to
-correct this and corrections feed vendor memory. Onboarding rule: run 5-10
-of each client's REAL invoices through review before go-live and check the
-correction rate; do not judge extraction on invoices the parsers were never
-built for.
+1. Home shows the greeting, the dark Sift card with your real pending
+   count and amount, the three pills, and only the action rows that
+   apply. Check light AND dark mode.
+2. Tap each pill and each row — every one should land on the right
+   filtered view.
+3. With everything cleared, Home should show "you're all clear" and the
+   calm Queue-clear card — that is correct, not a bug.
+4. Insights → Overview now opens with the purple ROI hero.

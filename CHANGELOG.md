@@ -6,6 +6,24 @@ All notable platform changes will be recorded here.
 
 ### Changed
 
+- Home redesigned as a calm work tray: dated greeting summarizing how many
+  things need attention, the Sift mode hero card (count + amount in
+  flight), a glanceable stat-pill row (needs review, awaiting approval,
+  exceptions — each a one-tap filter), an action list that only shows
+  rows needing work, and a quiet weekly footer; the ROI hero (auto-
+  extracted %, processed value, time saved) moved to the Insights
+  overview tab, keeping the daily view about doing and the insights view
+  about analyzing
+
+### Changed
+
+- Home as launchpad: a Sift mode hero card shows the live count of
+  pending invoices and launches the one-keypress triage flow; the
+  Exceptions metric deep-links into the invoice queue with the failed
+  filter preselected (the queue now honors a ?status= query parameter)
+
+### Changed
+
 - Workspace simplification: the Integrations page shows only the
   accounting system configured in the workspace's client profiles (the
   platform owner still sees every posting path); the invoice queue gains
