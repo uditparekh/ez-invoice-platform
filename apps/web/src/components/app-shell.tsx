@@ -145,12 +145,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             size="sm"
-            className="mt-3 h-9 w-full justify-center gap-2 rounded-lg border border-line bg-surface text-xs font-extrabold text-ink-secondary transition hover:border-accent/40 hover:text-accent"
+            className="mt-3 h-10 w-full justify-center gap-2 rounded-xl border border-line bg-surface text-xs font-extrabold text-ink-secondary hover:border-danger/40 hover:bg-danger-soft hover:text-danger"
             onClick={() => void logout()}
             title="Sign out"
             aria-label="Sign out"
           >
-            <LogOut size={14} />
+            <LogOut size={15} />
             Sign out
           </Button>
         </div>
@@ -173,9 +173,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           />
           <aside className="relative flex h-full w-[286px] flex-col border-r border-line bg-shell shadow-pop">
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
-              className="absolute right-3 top-3 z-10 size-9 px-0"
+              className="absolute right-3 top-3 z-10 size-10 rounded-xl px-0"
               onClick={() => setMobileOpen(false)}
               aria-label="Close navigation"
             >
@@ -189,13 +189,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-w-0 lg:pl-[260px]">
         <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-shell/95 px-4 backdrop-blur sm:px-6 lg:px-8">
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            className="mr-3 size-9 px-0 lg:hidden"
+            className="mr-3 size-11 shrink-0 rounded-xl px-0 lg:hidden"
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
           >
-            <Menu size={18} />
+            <Menu size={20} strokeWidth={2.25} />
           </Button>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink-secondary">
             <Building2 size={16} className="shrink-0 text-cyan" />
@@ -242,7 +242,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={openCommandPalette}
-            className="ml-auto mr-2 grid size-10 place-items-center rounded-full border border-line bg-surface-subtle text-ink-secondary transition-colors hover:border-line-strong hover:text-ink xl:hidden"
+            className="ml-auto mr-2 grid size-11 place-items-center rounded-full border border-line bg-surface-subtle text-ink-secondary transition-colors hover:border-line-strong hover:text-ink xl:hidden"
             aria-label="Search invoices, vendors, and pages"
           >
             <Search size={17} />

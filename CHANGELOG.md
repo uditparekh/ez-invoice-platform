@@ -6,6 +6,16 @@ All notable platform changes will be recorded here.
 
 ### Changed
 
+- Mobile navigation and header polish: the hamburger button is now a
+  44px bordered icon button (previously a 36px borderless ghost that
+  was easy to miss), the drawer close and mobile search buttons match
+  the same icon-button language and touch-target size, the sign-out
+  button gets a coherent resting state with a danger-tinted hover (the
+  standard destructive affordance), and the theme toggle collapses to
+  icon-only segments on phones so the header breathes at 360px
+
+### Changed
+
 - Design-system consolidation: eliminated every hardcoded color in the
   app (40 → 0). The Sift review workspace — built "always dark" by
   hand-pasting the dark token values — is now scoped with the dark

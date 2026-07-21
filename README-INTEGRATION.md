@@ -1,61 +1,46 @@
-# SiftEntry — Design-System Consolidation, pkg21 (July 21, 2026)
+# SiftEntry — Mobile Nav & Header Polish, pkg22 (July 21, 2026)
 
 ## APPLY ORDER
-Base: pkg20 shipped (your current main). Unzip over the repo root.
-Frontend-only — 8 files, no backend changes.
+Base: pkg21 shipped (your current main). Unzip over the repo root.
+Frontend-only — 4 files.
 
-## What this changes (structural, not cosmetic)
-The audit found the app's 40 hardcoded hex colors were almost all your
-own design tokens pasted as literals — the Sift page was built "always
-dark" by copying the dark values instead of scoping the dark class.
-This package removes every hardcoded color in the app (40 → 0):
+## What this changes
+1. Hamburger (mobile menu) button: was a 36px borderless ghost icon —
+   nearly invisible next to the logo. Now a 44px bordered icon button
+   (Apple HIG / WCAG minimum touch target), bolder 20px icon, using the
+   Button "secondary" variant so it belongs to the design system.
+2. Drawer close (X) and the mobile search button now share the same
+   icon-button language and target size — the header reads as one
+   family of controls.
+3. Sign out (sidebar account card, same on web and mobile drawer):
+   was a washed-out ghost fighting override classes. Now a clean
+   neutral resting state that turns danger-tinted on hover/press — the
+   standard sign-out affordance — with consistent radius and height.
+4. Theme toggle: Light/Dark labels hide below the sm breakpoint
+   (icon-only pills) so the 360px header fits hamburger + workspace
+   name + search + toggle without crowding.
 
-1. Sift page: root now carries the `dark` scope and every color is a
-   semantic class (bg-surface, border-line, text-ink-secondary, …).
-   Any future token tweak now updates Sift automatically. Bonus fix:
-   chips/gradients that previously resolved LIGHT token values onto the
-   dark background (when the user was in light mode) now resolve
-   correctly.
-2. Training-hero gradient (Client profiles + Home use the same one) is
-   now three named tokens: --hero-from/-via/-to.
-3. Analytics gradients + the cyan stat color on dark banners are named
-   tokens: --accent-grad-via/-to, --stat-on-dark.
-4. Theme toggle: its one literal is now var(--canvas).
-The only remaining hex literals are layout.tsx's meta theme-color tags,
-which cannot use CSS variables.
+Also swept for overlap risks: PageHeader stacks correctly on mobile,
+dropdown panels are already clamped to the viewport, nowrap usages sit
+inside scrollable tables/chips. No further changes needed there.
 
-## Files (8)
-- apps/web/src/app/globals.css                      (6 new tokens)
-- apps/web/src/app/(product)/app/sift/page.tsx      (dark scope + semantic classes)
-- apps/web/src/app/(product)/app/page.tsx           (hero tokens)
-- apps/web/src/app/(product)/app/analytics/page.tsx (gradient tokens)
-- apps/web/src/components/training/format-registry.tsx
+## Files (4)
+- apps/web/src/components/app-shell.tsx
 - apps/web/src/components/theme-toggle.tsx
 - CHANGELOG.md
 - README-INTEGRATION.md (this file)
 
 ## Diff expectations
-Red/green pairs on className strings only — hex arbitrary values
-becoming semantic classes or var() references. globals.css: green-only
-token block insert. Any logic-looking diff: STOP.
-
-## Deliberate visual normalizations (eyeball after deploy)
-Three tiny shifts where literals sat between tokens — all normalized to
-the locked spec:
-- Sift PDF rail background: #0F1524 → shell (#131A2B), slightly lighter
-- Sift empty-panel gradient top: #1B2238 → surface-strong (#212940)
-- Sift "open queue" CTA gradient: light accent/cyan → dark accent/cyan
-  (brighter, now matching the progress bar's gradient)
-If any of these read wrong to you on the live Sift page, tell me which
-and it's a one-line token tweak.
+className-only red/green pairs in the two components. Any logic diff
+beyond the four buttons and the toggle label span: STOP.
 
 ## Commit message
-Design-system consolidation: zero hardcoded colors, Sift on dark tokens
+Mobile nav polish: 44px targets, coherent icon buttons, sign-out affordance
 
 ## Verify steps
 1. From apps/web: pnpm typecheck && pnpm lint && pnpm build → clean.
-2. After deploy, in BOTH light and dark app themes: Sift page (dark
-   focus mode intact, chip/CTA/progress gradients consistent), Home
-   hero, Client profiles training hero, Analytics banner + gradient
-   card.
-3. Optional proof: grep -rn "#[0-9A-Fa-f]\{6\}" apps/web/src --include="*.tsx" | grep -v layout.tsx → nothing.
+2. On your phone (or DevTools at 360px): hamburger clearly visible and
+   easy to tap; drawer opens, X matches; search button same size;
+   theme toggle icon-only; nothing wraps or overlaps in the header.
+3. Desktop: sidebar sign-out looks intentional; hover turns it red-
+   tinted; click still signs out.

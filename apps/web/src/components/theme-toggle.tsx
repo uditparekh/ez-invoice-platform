@@ -70,14 +70,14 @@ function ThemeButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-extrabold transition-colors",
+        "inline-flex h-7 min-w-8 items-center justify-center gap-1.5 rounded-full px-2.5 text-[11px] font-extrabold transition-colors",
         active
           ? "bg-accent text-white shadow-sm shadow-accent/20 dark:bg-cyan dark:text-[var(--canvas)]"
           : "text-ink-muted hover:bg-surface hover:text-ink",
       )}
     >
       {icon}
-      <span>{label}</span>
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }
