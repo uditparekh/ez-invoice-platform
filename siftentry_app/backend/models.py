@@ -727,10 +727,18 @@ class TallyConnectorClaimRequest(BaseModel):
     workspace_id: str = Field(min_length=1, max_length=160)
     limit: int = Field(default=5, ge=1, le=25)
     dry_run: bool = False
+    connector_host: str = Field(default="", max_length=200)
+    connector_version: str = Field(default="", max_length=40)
+    tally_detected: Optional[bool] = None
 
     @field_validator("workspace_id")
     @classmethod
     def clean_workspace_id(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("connector_host", "connector_version")
+    @classmethod
+    def clean_connector_metadata(cls, value: str) -> str:
         return value.strip()
 
 
@@ -785,6 +793,58 @@ class TallyConnectorResultResponse(BaseModel):
     rejected: int = 0
     postings: List[PostingResult] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
+
+
+class TallyConnectorHeartbeatRequest(BaseModel):
+    """Lightweight check-in from the Windows connector.
+
+    Sent when the connector is running but is not claiming jobs — for example
+    when TallyPrime is closed — so the web app can still show it as online.
+    """
+
+    workspace_id: str = Field(min_length=1, max_length=160)
+    connector_host: str = Field(default="", max_length=200)
+    connector_version: str = Field(default="", max_length=40)
+    tally_detected: Optional[bool] = None
+
+    @field_validator("workspace_id", "connector_host", "connector_version")
+    @classmethod
+    def clean_heartbeat_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class TallyConnectorHeartbeatResponse(BaseModel):
+    success: bool = True
+    workspace_id: str
+    recorded_at: datetime
+
+
+class TallyConnectorProfileStatus(BaseModel):
+    """Connection status for one Tally client profile, shown in the web app."""
+
+    client_profile_id: str
+    profile_name: str
+    workspace_id: str = ""
+    connector_enabled: bool = True
+    connector_configured: bool = False
+    connected: bool = False
+    last_seen_at: Optional[datetime] = None
+    seconds_since_seen: Optional[int] = None
+    connector_host: str = ""
+    connector_version: str = ""
+    tally_detected: Optional[bool] = None
+    tally_company: str = ""
+    last_posting_at: Optional[datetime] = None
+    last_posting_success: Optional[bool] = None
+    last_posting_message: str = ""
+    last_posting_invoice_number: str = ""
+
+
+class TallyConnectorStatusResponse(BaseModel):
+    organization_id: str
+    generated_at: datetime
+    connected_window_seconds: int
+    statuses: List[TallyConnectorProfileStatus] = Field(default_factory=list)
 
 
 class DetectedInvoiceProfile(BaseModel):

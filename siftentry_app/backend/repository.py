@@ -409,6 +409,16 @@ class InvoiceRepository:
                     FOREIGN KEY (organization_id) REFERENCES organizations(id),
                     FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS connector_heartbeats (
+                    client_profile_id TEXT PRIMARY KEY,
+                    organization_id TEXT NOT NULL,
+                    workspace_id TEXT NOT NULL,
+                    connector_host TEXT NOT NULL DEFAULT '',
+                    connector_version TEXT NOT NULL DEFAULT '',
+                    tally_detected INTEGER,
+                    last_seen_at TEXT NOT NULL
+                );
                 """
             )
             if db.is_postgres_url(self.database_url):
@@ -2258,6 +2268,84 @@ class InvoiceRepository:
                 (invoice_id, limit),
             ).fetchall()
         return [self._posting_from_row(row) for row in rows]
+
+    def record_connector_heartbeat(
+        self,
+        client_profile_id: str,
+        organization_id: str,
+        workspace_id: str,
+        connector_host: str = "",
+        connector_version: str = "",
+        tally_detected: Optional[bool] = None,
+    ) -> datetime:
+        seen_at = utc_now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO connector_heartbeats (
+                    client_profile_id, organization_id, workspace_id,
+                    connector_host, connector_version, tally_detected, last_seen_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (client_profile_id) DO UPDATE SET
+                    organization_id = excluded.organization_id,
+                    workspace_id = excluded.workspace_id,
+                    connector_host = excluded.connector_host,
+                    connector_version = excluded.connector_version,
+                    tally_detected = excluded.tally_detected,
+                    last_seen_at = excluded.last_seen_at
+                """,
+                (
+                    client_profile_id,
+                    organization_id,
+                    workspace_id,
+                    connector_host,
+                    connector_version,
+                    None if tally_detected is None else int(bool(tally_detected)),
+                    seen_at.isoformat(),
+                ),
+            )
+        return seen_at
+
+    def get_connector_heartbeat(
+        self,
+        client_profile_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM connector_heartbeats WHERE client_profile_id = ?",
+                (client_profile_id,),
+            ).fetchone()
+        if not row:
+            return None
+        detected = row["tally_detected"]
+        return {
+            "client_profile_id": row["client_profile_id"],
+            "organization_id": row["organization_id"],
+            "workspace_id": row["workspace_id"],
+            "connector_host": row["connector_host"],
+            "connector_version": row["connector_version"],
+            "tally_detected": None if detected is None else bool(detected),
+            "last_seen_at": datetime.fromisoformat(row["last_seen_at"]),
+        }
+
+    def get_latest_posting_for_profile(
+        self,
+        client_profile_id: str,
+        target: Optional[str] = None,
+    ) -> Optional[PostingResult]:
+        query = """
+            SELECT *
+            FROM posting_attempts
+            WHERE client_profile_id = ?
+        """
+        params: List[Any] = [client_profile_id]
+        if target:
+            query += " AND target = ?"
+            params.append(target)
+        query += " ORDER BY created_at DESC LIMIT 1"
+        with self._connect() as connection:
+            row = connection.execute(query, tuple(params)).fetchone()
+        return self._posting_from_row(row) if row else None
 
     def _posting_from_row(self, row: sqlite3.Row) -> PostingResult:
         created_at = datetime.fromisoformat(row["created_at"])

@@ -6,6 +6,42 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Tally connector heartbeat and live status: the connector now reports
+  its host, version, and Tally state on every poll; a new
+  POST /api/v1/connectors/tally/heartbeat keeps it visible even while
+  TallyPrime is closed; and a new
+  GET /api/v1/organizations/{id}/connectors/tally/status powers the
+  Integrations → Tally page's live "Windows connector status" card —
+  Connected/Disconnected badge, last check-in, Tally company, connector
+  machine and version, and last posting outcome, auto-refreshing every
+  15 seconds (1 new test, connector_heartbeats table auto-creates on
+  both SQLite and PostgreSQL)
+
+- Client connector kit: packaging/client-kit builds
+  SiftEntry-Tally-Connector-Kit.zip (served at
+  /downloads/SiftEntry-Tally-Connector-Kit.zip and linked from the
+  Tally integration page) — the connector modules, one-time setup and
+  start scripts, optional Windows-startup install, and a plain-language
+  README-START-HERE.txt an accountant can follow end to end
+
+### Changed
+
+- Connector runtime v0.3.0 (now matching the Windows installer):
+  cloud-polling mode only needs the requests package (Flask is optional,
+  legacy local-API mode only), the CLI reuses settings saved once in the
+  status window, and RUN_TALLY_CONNECTOR_WINDOWS.bat starts cloud
+  polling against https://app.siftentry.com; TALLY_DEMO_CHECKLIST.md
+  rewritten for the production flow
+
+### Removed
+
+- The Integrations → Tally "Local connector" test card and its
+  /api/integrations/tally/test-connector route — they tried to reach
+  the connector at 127.0.0.1 from Vercel's servers, which can never
+  work in production; the heartbeat-driven status card replaces them
+
+### Added
+
 - Training mode UI (Phase B): the Client profiles page shows the format
   registry — a training hero with the count of trusted vs in-training
   formats and a Train formats action, a "new formats detected" callout,

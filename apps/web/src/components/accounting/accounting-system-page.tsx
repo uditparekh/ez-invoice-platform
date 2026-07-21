@@ -10,8 +10,9 @@ import {
   RotateCcw,
   ShieldCheck,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { useAuth } from "@/components/auth-provider";
 import { ClientProfilesPanel } from "@/components/client-profiles-panel";
 import { ContentCard } from "@/components/dashboard/content-card";
 import { LoadingState } from "@/components/dashboard/loading-state";
@@ -24,7 +25,11 @@ import {
   invoiceTotal,
   readyInvoices,
 } from "@/lib/invoice-metrics";
-import type { AccountingSystem } from "@/lib/types";
+import type {
+  AccountingSystem,
+  TallyConnectorProfileStatus,
+  TallyConnectorStatusResponse,
+} from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
 export interface AccountingSystemConfig {
@@ -198,92 +203,223 @@ function SystemSetupCard({ config }: { config: AccountingSystemConfig }) {
   );
 }
 
-function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
-  const [connectorUrl, setConnectorUrl] = useState("http://127.0.0.1:8765");
-  const [token, setToken] = useState("");
-  const [testing, setTesting] = useState<"health" | "tally" | null>(null);
-  const [message, setMessage] = useState("");
-  const [ok, setOk] = useState<boolean | null>(null);
+const CONNECTOR_STATUS_REFRESH_MS = 15_000;
 
-  async function runTest(mode: "health" | "tally") {
-    setTesting(mode);
-    setMessage("");
-    setOk(null);
-    try {
-      const response = await fetch("/api/integrations/tally/test-connector", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectorUrl, token, mode }),
-      });
-      const payload = (await response.json()) as {
-        success?: boolean;
-        message?: string;
-      };
-      setOk(Boolean(payload.success && response.ok));
-      setMessage(payload.message ?? "No response returned.");
-    } catch (error) {
-      setOk(false);
-      setMessage((error as Error).message);
-    } finally {
-      setTesting(null);
-    }
+function describeLastSeen(seconds: number | null): string {
+  if (seconds === null) return "Never connected";
+  if (seconds < 5) return "Just now";
+  if (seconds < 90) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  if (seconds < 86_400) return `${Math.round(seconds / 3600)}h ago`;
+  return `${Math.round(seconds / 86_400)}d ago`;
+}
+
+function ConnectorBadge({ status }: { status: TallyConnectorProfileStatus }) {
+  if (!status.connector_enabled) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs font-black text-ink-muted">
+        <CircleDashed size={13} />
+        Disabled
+      </span>
+    );
   }
+  if (status.connected) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success-soft px-3 py-1 text-xs font-black text-success">
+        <span className="size-2 rounded-full bg-success" />
+        Connected
+      </span>
+    );
+  }
+  if (status.last_seen_at) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger-soft px-3 py-1 text-xs font-black text-danger">
+        <span className="size-2 rounded-full bg-danger" />
+        Disconnected
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold-soft px-3 py-1 text-xs font-black text-gold">
+      <CircleDashed size={13} />
+      Waiting for first check-in
+    </span>
+  );
+}
+
+function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
+  const { activeOrganizationId } = useAuth();
+  const [statuses, setStatuses] = useState<TallyConnectorProfileStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+
+  const loadStatus = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!activeOrganizationId) return;
+      try {
+        const response = await fetch(
+          `/api/organizations/${activeOrganizationId}/connectors/tally/status`,
+          { signal, cache: "no-store" },
+        );
+        if (!response.ok) {
+          throw new Error(`Connector status returned HTTP ${response.status}.`);
+        }
+        const payload = (await response.json()) as TallyConnectorStatusResponse;
+        setStatuses(payload.statuses);
+        setError("");
+        setRefreshedAt(new Date());
+      } catch (caught) {
+        if ((caught as Error).name === "AbortError") return;
+        setError((caught as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeOrganizationId],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const kickoff = window.setTimeout(() => {
+      void loadStatus(controller.signal);
+    }, 0);
+    const timer = window.setInterval(() => {
+      void loadStatus(controller.signal);
+    }, CONNECTOR_STATUS_REFRESH_MS);
+    return () => {
+      window.clearTimeout(kickoff);
+      window.clearInterval(timer);
+      controller.abort();
+    };
+  }, [loadStatus]);
 
   return (
     <ContentCard
-      title="Local connector"
-      subtitle="Use this on the Windows computer where TallyPrime is open with HTTP/XML enabled."
-      action={<ShieldCheck size={18} className="text-success" />}
+      title="Windows connector status"
+      subtitle="Live view of the SiftEntry Tally Connector running beside TallyPrime on the client's computer. Updates automatically."
+      action={
+        <button
+          type="button"
+          onClick={() => void loadStatus()}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+        >
+          <RotateCcw size={13} />
+          Refresh
+        </button>
+      }
     >
       <div className="space-y-4">
-        <label className="block">
-          <span className="text-[11px] font-extrabold uppercase text-ink-muted">
-            Connector URL
-          </span>
-          <input
-            value={connectorUrl}
-            onChange={(event) => setConnectorUrl(event.target.value)}
-            className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
-          />
-        </label>
-        <label className="block">
-          <span className="text-[11px] font-extrabold uppercase text-ink-muted">
-            Connector token
-          </span>
-          <input
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-            placeholder="Local test token"
-            className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
-          />
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Button
-            variant="secondary"
-            onClick={() => void runTest("health")}
-            disabled={Boolean(testing)}
-          >
-            {testing === "health" ? "Testing..." : "Test connector"}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => void runTest("tally")}
-            disabled={Boolean(testing)}
-          >
-            {testing === "tally" ? "Testing..." : config.primaryAction}
-          </Button>
-        </div>
-        {message && (
-          <div
-            className={`rounded-xl border px-4 py-3 text-sm font-bold leading-6 ${
-              ok
-                ? "border-success/30 bg-success-soft text-success"
-                : "border-gold/30 bg-gold-soft text-gold"
-            }`}
-          >
-            {message}
+        {loading && activeOrganizationId ? (
+          <p className="text-sm font-semibold text-ink-secondary">
+            Checking connector status…
+          </p>
+        ) : error ? (
+          <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
+            {error}
           </div>
+        ) : statuses.length === 0 ? (
+          <div className="rounded-xl border border-line bg-surface-subtle px-4 py-3 text-sm font-semibold leading-6 text-ink-secondary">
+            No Tally client profiles yet. Create one below with a workspace ID
+            and connector token under connection settings — the connector on the
+            client&apos;s computer uses those two values to check in.
+          </div>
+        ) : (
+          statuses.map((status) => (
+            <div
+              key={status.client_profile_id}
+              className="rounded-xl border border-line bg-surface-subtle px-4 py-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-black text-ink">
+                  {status.profile_name}
+                </p>
+                <ConnectorBadge status={status} />
+              </div>
+              <div className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                <StatusLine
+                  label="Tally company"
+                  value={status.tally_company || "Not set on profile"}
+                />
+                <StatusLine
+                  label="Workspace ID"
+                  value={status.workspace_id || "Not configured"}
+                />
+                <StatusLine
+                  label="Last check-in"
+                  value={describeLastSeen(status.seconds_since_seen)}
+                />
+                <StatusLine
+                  label="TallyPrime"
+                  value={
+                    status.tally_detected === null
+                      ? "Unknown"
+                      : status.tally_detected
+                        ? "Detected (port 9000)"
+                        : "Not detected — open TallyPrime"
+                  }
+                  tone={
+                    status.tally_detected === false && status.connected
+                      ? "warning"
+                      : undefined
+                  }
+                />
+                {status.connector_host && (
+                  <StatusLine
+                    label="Computer"
+                    value={
+                      status.connector_version
+                        ? `${status.connector_host} · v${status.connector_version}`
+                        : status.connector_host
+                    }
+                  />
+                )}
+                {status.last_posting_at && (
+                  <StatusLine
+                    label="Last posting"
+                    value={`${
+                      status.last_posting_invoice_number || "Invoice"
+                    } — ${status.last_posting_success ? "posted" : "failed"}`}
+                    tone={
+                      status.last_posting_success === false
+                        ? "warning"
+                        : undefined
+                    }
+                  />
+                )}
+              </div>
+              {!status.connector_configured && (
+                <p className="mt-3 rounded-lg border border-gold/30 bg-gold-soft px-3 py-2 text-xs font-bold leading-5 text-gold">
+                  Add a workspace ID and connector token to this profile&apos;s
+                  connection settings, then enter the same two values in the
+                  connector on the client&apos;s computer.
+                </p>
+              )}
+            </div>
+          ))
         )}
+        {refreshedAt && !loading && (
+          <p className="text-xs font-semibold text-ink-muted">
+            Auto-refreshes every 15 seconds · Last checked{" "}
+            {refreshedAt.toLocaleTimeString()}
+          </p>
+        )}
+        <a
+          href="/downloads/SiftEntry-Tally-Connector-Kit.zip"
+          download
+          className="flex items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 transition-colors hover:border-accent"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-black text-accent-ink dark:text-cyan">
+              Download the Windows connector kit
+            </span>
+            <span className="mt-0.5 block text-xs font-semibold leading-5 text-ink-secondary">
+              Zip with the connector, setup scripts, and a plain-language guide
+              for the client&apos;s accountant.
+            </span>
+          </span>
+          <ArrowRight size={16} className="shrink-0 text-accent" />
+        </a>
         <div className="space-y-3">
           {config.notes.map((note) => (
             <div
@@ -299,30 +435,56 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
   );
 }
 
+function StatusLine({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "warning";
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-extrabold uppercase text-ink-muted">
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 text-sm font-bold ${
+          tone === "warning" ? "text-gold" : "text-ink"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 const stepperSteps: Record<string, { title: string; detail: string }[]> = {
   tally: [
     {
-      title: "Download the local connector",
+      title: "Install the connector on the client's computer",
       detail:
-        "SiftEntry-Bridge for Windows — runs beside TallyPrime on the client machine.",
+        "Download the SiftEntry Tally Connector kit below and run it on the Windows machine where TallyPrime lives.",
     },
     {
       title: "Enable HTTP/XML in TallyPrime",
       detail: "F1 › Settings › Connectivity — allow local XML requests (port 9000).",
     },
     {
-      title: "Enter connector URL & token",
+      title: "Enter the workspace ID & connector token",
       detail:
-        "Use the Local connector card below — defaults to http://127.0.0.1:8765.",
+        "Copy both values from the client profile below into the connector's settings window, then start it.",
     },
     {
-      title: "Test the connection",
-      detail: "Run \"Test connector\" below — a healthy bridge answers in milliseconds.",
+      title: "Watch the status card turn green",
+      detail:
+        "\"Connected\" plus \"Tally detected\" in the connector status card below means the pipe is live.",
     },
     {
-      title: "Post a sample voucher (sandbox)",
+      title: "Post a sample voucher (dry run)",
       detail:
-        "Run the sample-voucher test below — proves the pipe without touching real books.",
+        "Approve a test invoice with dry run on — proves the flow without touching real books.",
     },
   ],
   cloud: [

@@ -14,12 +14,18 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List
 
-from flask import Flask, jsonify, request
+try:
+    from flask import Flask, jsonify, request
+except ImportError:  # Flask is only needed for legacy local API mode.
+    Flask = None  # type: ignore[assignment]
+    jsonify = None  # type: ignore[assignment]
+    request = None  # type: ignore[assignment]
 
 try:
     from .tally_connector_runtime import (
         APP_VERSION,
         ConnectorConfig,
+        load_config,
         poll_once,
         post_xml_to_tally,
         test_tally_connection,
@@ -29,6 +35,7 @@ except ImportError:
     from tally_connector_runtime import (
         APP_VERSION,
         ConnectorConfig,
+        load_config,
         poll_once,
         post_xml_to_tally,
         test_tally_connection,
@@ -37,19 +44,30 @@ except ImportError:
 
 
 def run_cloud_polling(args: argparse.Namespace) -> None:
-    if not args.token:
-        raise SystemExit("Set --token or EZ_TALLY_CONNECTOR_TOKEN before starting cloud polling.")
+    saved = load_config()
+    token = args.token or saved.token
+    workspace_id = (
+        args.workspace_id
+        if args.workspace_id and args.workspace_id != "local-workspace"
+        else (saved.workspace_id or args.workspace_id)
+    )
+    cloud = args.cloud_url or saved.cloud_url
+    if not token:
+        raise SystemExit(
+            "No connector token found. Set --token, EZ_TALLY_CONNECTOR_TOKEN, or save "
+            "settings once in the SiftEntry Tally Connector status window."
+        )
     print(
         "SiftEntry Tally Connector polling",
-        args.cloud_url,
+        cloud,
         "workspace",
-        args.workspace_id,
+        workspace_id,
     )
     print("Posting to TallyPrime at", args.tally_url)
     config = ConnectorConfig(
-        cloud_url=args.cloud_url,
-        workspace_id=args.workspace_id,
-        token=args.token,
+        cloud_url=cloud,
+        workspace_id=workspace_id,
+        token=token,
         tally_url=args.tally_url,
         poll_interval=args.poll_interval,
         claim_limit=args.claim_limit,
@@ -76,7 +94,12 @@ def run_cloud_polling(args: argparse.Namespace) -> None:
         time.sleep(args.poll_interval)
 
 
-def create_app(config: Dict[str, Any]) -> Flask:
+def create_app(config: Dict[str, Any]) -> "Flask":
+    if Flask is None:
+        raise SystemExit(
+            "Flask is not installed. Local API mode needs it: py -m pip install flask\n"
+            "Cloud polling mode (--poll-cloud) only needs the requests package."
+        )
     app = Flask(__name__)
     token = str(config.get("token") or "")
     tally_url = str(config.get("tally_url") or "http://localhost:9000")

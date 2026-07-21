@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
     requests = None
 
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 
 
 @dataclass(frozen=True)
@@ -201,6 +201,39 @@ def cloud_url(base_url: str, path: str) -> str:
     return base_url.rstrip("/") + "/" + path.lstrip("/")
 
 
+def connector_metadata(tally_detected: Optional[bool] = None) -> Dict[str, Any]:
+    return {
+        "connector_host": socket.gethostname(),
+        "connector_version": APP_VERSION,
+        "tally_detected": tally_detected,
+    }
+
+
+def send_cloud_heartbeat(config: ConnectorConfig, tally_detected: Optional[bool] = None) -> Dict[str, Any]:
+    """Tell SiftEntry the connector is alive even when no jobs can be claimed."""
+    if not requests:
+        return {"success": False, "message": "requests is not installed"}
+    try:
+        response = requests.post(
+            cloud_url(config.cloud_url, "/api/v1/connectors/tally/heartbeat"),
+            json={
+                "workspace_id": config.workspace_id,
+                **connector_metadata(tally_detected),
+            },
+            headers=auth_headers(config.token),
+            timeout=15,
+        )
+    except Exception as exc:
+        return {"success": False, "message": "Cloud heartbeat failed: " + str(exc)}
+    try:
+        data = response.json()
+    except Exception:
+        data = {"message": response.text[:300]}
+    data.setdefault("success", response.status_code < 400)
+    data["status_code"] = response.status_code
+    return data
+
+
 def claim_cloud_jobs(config: ConnectorConfig) -> Dict[str, Any]:
     if not requests:
         return {"success": False, "message": "requests is not installed", "jobs": []}
@@ -211,6 +244,7 @@ def claim_cloud_jobs(config: ConnectorConfig) -> Dict[str, Any]:
                 "workspace_id": config.workspace_id,
                 "limit": config.claim_limit,
                 "dry_run": config.dry_run,
+                **connector_metadata(tally_detected=True),
             },
             headers=auth_headers(config.token),
             timeout=30,
@@ -274,15 +308,19 @@ def poll_once(config: ConnectorConfig) -> Dict[str, Any]:
     if not config.dry_run:
         tally_result = test_tally_connection(config.tally_url)
         if not tally_result.get("success"):
+            # Stay visible to SiftEntry so the web app shows the connector as
+            # online with Tally down, instead of silently disappearing.
+            heartbeat = send_cloud_heartbeat(config, tally_detected=False)
             return {
                 "success": False,
-                "connected_to_siftentry": None,
+                "connected_to_siftentry": bool(heartbeat.get("success")),
                 "tally_detected": False,
                 "message": str(tally_result.get("message") or "TallyPrime is not reachable."),
                 "claimed": 0,
                 "submitted": 0,
                 "failed_jobs": 0,
                 "tally": tally_result,
+                "heartbeat": heartbeat,
                 "updated_at": datetime.now().isoformat(timespec="seconds"),
             }
 

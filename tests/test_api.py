@@ -907,6 +907,142 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
         assert posted_invoice.json()["status"] == InvoiceStatus.POSTED.value
 
 
+def test_tally_connector_heartbeat_and_status(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        profile_response = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json={
+                "name": "Neel Tally Status",
+                "accounting_system": "tally",
+                "is_default": True,
+                "settings": {
+                    "company_name": "NEEL ENTERPRISE",
+                    "country_code": "IN",
+                    "country_name": "India",
+                    "default_currency": "INR",
+                    "posting_mode": "item_invoice",
+                    "voucher_type": "Purchase",
+                    "purchase_ledger": "PURCHASES A/C",
+                    "tax_ledger": "IGST A/C",
+                    "stock_item_name": "PTA SWEEP",
+                    "stock_item_hsn": "29173600",
+                    "stock_item_uom": "KGS",
+                    "tcs_ledger": "TCS",
+                    "round_off_ledger": "ROUND OFF",
+                    "connection_settings": {
+                        "connector_enabled": True,
+                        "workspace_id": "neel-status",
+                        "connector_token": "status-secret",
+                        "tally_url": "http://localhost:9000",
+                    },
+                },
+            },
+            headers=headers,
+        )
+        assert profile_response.status_code == 201
+        profile_id = profile_response.json()["id"]
+
+        # Before any connector activity: configured but never seen.
+        initial = client.get(
+            f"/api/v1/organizations/{org_id}/connectors/tally/status",
+            headers=headers,
+        )
+        assert initial.status_code == 200
+        initial_payload = initial.json()
+        assert initial_payload["organization_id"] == org_id
+        entry = next(
+            item
+            for item in initial_payload["statuses"]
+            if item["client_profile_id"] == profile_id
+        )
+        assert entry["connector_configured"] is True
+        assert entry["connected"] is False
+        assert entry["last_seen_at"] is None
+        assert entry["tally_company"] == "NEEL ENTERPRISE"
+
+        # Heartbeat endpoint rejects a missing/wrong token.
+        assert (
+            client.post(
+                "/api/v1/connectors/tally/heartbeat",
+                json={"workspace_id": "neel-status"},
+            ).status_code
+            == 401
+        )
+        assert (
+            client.post(
+                "/api/v1/connectors/tally/heartbeat",
+                json={"workspace_id": "neel-status"},
+                headers={"Authorization": "Bearer wrong-token"},
+            ).status_code
+            == 401
+        )
+
+        # A valid heartbeat (Tally down) marks the connector online.
+        heartbeat = client.post(
+            "/api/v1/connectors/tally/heartbeat",
+            json={
+                "workspace_id": "neel-status",
+                "connector_host": "ACCOUNTS-PC",
+                "connector_version": "0.3.0",
+                "tally_detected": False,
+            },
+            headers={"Authorization": "Bearer status-secret"},
+        )
+        assert heartbeat.status_code == 200
+        assert heartbeat.json()["success"] is True
+
+        after_heartbeat = client.get(
+            f"/api/v1/organizations/{org_id}/connectors/tally/status",
+            headers=headers,
+        )
+        entry = next(
+            item
+            for item in after_heartbeat.json()["statuses"]
+            if item["client_profile_id"] == profile_id
+        )
+        assert entry["connected"] is True
+        assert entry["connector_host"] == "ACCOUNTS-PC"
+        assert entry["connector_version"] == "0.3.0"
+        assert entry["tally_detected"] is False
+
+        # A claim call also refreshes the heartbeat and implies Tally is up.
+        claimed = client.post(
+            "/api/v1/connectors/tally/jobs/claim",
+            json={
+                "workspace_id": "neel-status",
+                "limit": 5,
+                "connector_host": "ACCOUNTS-PC",
+                "connector_version": "0.3.0",
+            },
+            headers={"Authorization": "Bearer status-secret"},
+        )
+        assert claimed.status_code == 200
+
+        after_claim = client.get(
+            f"/api/v1/organizations/{org_id}/connectors/tally/status",
+            headers=headers,
+        )
+        entry = next(
+            item
+            for item in after_claim.json()["statuses"]
+            if item["client_profile_id"] == profile_id
+        )
+        assert entry["connected"] is True
+        assert entry["tally_detected"] is True
+
+        # The status endpoint requires an authenticated member.
+        assert (
+            client.get(
+                f"/api/v1/organizations/{org_id}/connectors/tally/status"
+            ).status_code
+            == 401
+        )
+
+
 def test_tenant_isolation_and_role_permissions(tmp_path: Path):
     with make_client(tmp_path) as client:
         owner_tokens = bootstrap(client)

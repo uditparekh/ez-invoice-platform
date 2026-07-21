@@ -376,3 +376,29 @@ export interface InvoiceReviewResult {
 export interface ApiErrorPayload {
   detail?: string | Record<string, unknown>;
 }
+
+export interface TallyConnectorProfileStatus {
+  client_profile_id: string;
+  profile_name: string;
+  workspace_id: string;
+  connector_enabled: boolean;
+  connector_configured: boolean;
+  connected: boolean;
+  last_seen_at: string | null;
+  seconds_since_seen: number | null;
+  connector_host: string;
+  connector_version: string;
+  tally_detected: boolean | null;
+  tally_company: string;
+  last_posting_at: string | null;
+  last_posting_success: boolean | null;
+  last_posting_message: string;
+  last_posting_invoice_number: string;
+}
+
+export interface TallyConnectorStatusResponse {
+  organization_id: string;
+  generated_at: string;
+  connected_window_seconds: number;
+  statuses: TallyConnectorProfileStatus[];
+}

@@ -79,9 +79,13 @@ from .models import (
     StorageCleanupResult,
     TallyConnectorClaimRequest,
     TallyConnectorClaimResponse,
+    TallyConnectorHeartbeatRequest,
+    TallyConnectorHeartbeatResponse,
     TallyConnectorJob,
+    TallyConnectorProfileStatus,
     TallyConnectorResultRequest,
     TallyConnectorResultResponse,
+    TallyConnectorStatusResponse,
     ValidationResult,
 )
 from .parser_service import parse_pdf_invoice
@@ -106,6 +110,8 @@ API_VERSION = "0.3.0"
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 
 READ_ROLES = set(OrganizationRole)
+# A connector polling every 15s that misses 4 polls in a row is treated as offline.
+TALLY_CONNECTOR_ONLINE_WINDOW_SECONDS = 60
 EDIT_ROLES = {
     OrganizationRole.OWNER,
     OrganizationRole.ADMIN,
@@ -1763,6 +1769,14 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             authorization,
             x_siftentry_connector_token,
         )
+        _repo(request).record_connector_heartbeat(
+            client_profile_id=profile.id,
+            organization_id=profile.organization_id,
+            workspace_id=body.workspace_id,
+            connector_host=body.connector_host,
+            connector_version=body.connector_version,
+            tally_detected=True if body.tally_detected is None else body.tally_detected,
+        )
         invoices = _repo(request).list_connector_ready_invoices(
             organization_id=profile.organization_id,
             client_profile_id=profile.id,
@@ -1864,6 +1878,100 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             rejected=len(errors),
             postings=postings,
             errors=errors,
+        )
+
+    @app.post(
+        "/api/v1/connectors/tally/heartbeat",
+        response_model=TallyConnectorHeartbeatResponse,
+        tags=["connectors"],
+    )
+    def tally_connector_heartbeat(
+        request: Request,
+        body: TallyConnectorHeartbeatRequest,
+        authorization: Optional[str] = Header(default=None),
+        x_siftentry_connector_token: Optional[str] = Header(default=None),
+    ) -> TallyConnectorHeartbeatResponse:
+        profile = _require_tally_connector_profile(
+            request,
+            body.workspace_id,
+            authorization,
+            x_siftentry_connector_token,
+        )
+        recorded_at = _repo(request).record_connector_heartbeat(
+            client_profile_id=profile.id,
+            organization_id=profile.organization_id,
+            workspace_id=body.workspace_id,
+            connector_host=body.connector_host,
+            connector_version=body.connector_version,
+            tally_detected=body.tally_detected,
+        )
+        return TallyConnectorHeartbeatResponse(
+            workspace_id=body.workspace_id,
+            recorded_at=recorded_at,
+        )
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/connectors/tally/status",
+        response_model=TallyConnectorStatusResponse,
+        tags=["connectors"],
+    )
+    def tally_connector_status(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+    ) -> TallyConnectorStatusResponse:
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        now = datetime.now(timezone.utc)
+        statuses: List[TallyConnectorProfileStatus] = []
+        for profile in _repo(request).list_client_profiles_by_system(
+            AccountingSystem.TALLY.value
+        ):
+            if profile.organization_id != organization_id:
+                continue
+            connection_settings = profile.settings.connection_settings or {}
+            workspace_id = str(connection_settings.get("workspace_id") or "").strip()
+            token = str(connection_settings.get("connector_token") or "").strip()
+            entry = TallyConnectorProfileStatus(
+                client_profile_id=profile.id,
+                profile_name=profile.name,
+                workspace_id=workspace_id,
+                connector_enabled=bool(
+                    connection_settings.get("connector_enabled", True)
+                ),
+                connector_configured=bool(workspace_id and token),
+                tally_company=str(
+                    getattr(profile.settings, "company_name", "") or ""
+                ),
+            )
+            heartbeat = _repo(request).get_connector_heartbeat(profile.id)
+            if heartbeat:
+                last_seen = heartbeat["last_seen_at"]
+                if last_seen.tzinfo is None:
+                    last_seen = last_seen.replace(tzinfo=timezone.utc)
+                elapsed = max(0, int((now - last_seen).total_seconds()))
+                entry.last_seen_at = last_seen
+                entry.seconds_since_seen = elapsed
+                entry.connected = elapsed <= TALLY_CONNECTOR_ONLINE_WINDOW_SECONDS
+                entry.connector_host = str(heartbeat.get("connector_host") or "")
+                entry.connector_version = str(heartbeat.get("connector_version") or "")
+                entry.tally_detected = heartbeat.get("tally_detected")
+            posting = _repo(request).get_latest_posting_for_profile(
+                profile.id,
+                target=PostingTarget.TALLY.value,
+            )
+            if posting:
+                entry.last_posting_at = posting.created_at
+                entry.last_posting_success = posting.success
+                entry.last_posting_message = posting.message
+                invoice = _repo(request).get_invoice(posting.invoice_id)
+                if invoice:
+                    entry.last_posting_invoice_number = invoice.invoice_number
+            statuses.append(entry)
+        return TallyConnectorStatusResponse(
+            organization_id=organization_id,
+            generated_at=now,
+            connected_window_seconds=TALLY_CONNECTOR_ONLINE_WINDOW_SECONDS,
+            statuses=statuses,
         )
 
     return app
