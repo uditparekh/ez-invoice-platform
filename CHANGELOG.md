@@ -4,6 +4,13 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Actions workflow (Build Tally connector installer) that builds
+  the Windows installer .exe on GitHub's Windows runners via PyInstaller
+  and Inno Setup and publishes it as a downloadable artifact — no
+  Windows machine needed; triggered manually from the Actions tab
+
 ### Changed
 
 - Mobile navigation and header polish: the hamburger button is now a
