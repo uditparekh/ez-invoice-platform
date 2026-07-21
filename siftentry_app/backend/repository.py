@@ -2347,6 +2347,65 @@ class InvoiceRepository:
             row = connection.execute(query, tuple(params)).fetchone()
         return self._posting_from_row(row) if row else None
 
+    def list_recent_postings(
+        self,
+        organization_id: str,
+        since: datetime,
+    ) -> List[PostingResult]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM posting_attempts
+                WHERE organization_id = ? AND created_at >= ?
+                ORDER BY created_at DESC
+                """,
+                (organization_id, since.isoformat()),
+            ).fetchall()
+        return [self._posting_from_row(row) for row in rows]
+
+    def record_audit_event(
+        self,
+        organization_id: str,
+        event_type: str,
+        details: Optional[Dict[str, Any]] = None,
+        invoice_id: Optional[str] = None,
+    ) -> None:
+        """Public audit insert for events that happen outside another write."""
+        with self._connect() as connection:
+            self._insert_audit(
+                connection,
+                organization_id,
+                invoice_id,
+                event_type,
+                details or {},
+            )
+
+    def get_latest_audit_event(
+        self,
+        organization_id: str,
+        event_type: str,
+    ) -> Optional[Dict[str, Any]]:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, event_type, details_json, created_at
+                FROM audit_events
+                WHERE organization_id = ? AND event_type = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (organization_id, event_type),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "event_type": row["event_type"],
+            "details": _loads(row["details_json"], {}),
+            "created_at": datetime.fromisoformat(row["created_at"]),
+        }
+
     def _posting_from_row(self, row: sqlite3.Row) -> PostingResult:
         created_at = datetime.fromisoformat(row["created_at"])
         updated_raw = row["updated_at"] or row["created_at"]

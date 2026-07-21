@@ -75,6 +75,39 @@ class EmailService:
         )
         return self._deliver(to_email, subject, text_body, html_body)
 
+    def send_weekly_digest(
+        self,
+        *,
+        to_email: str,
+        full_name: str,
+        organization_name: str,
+        summary_text: str,
+        summary_html: str,
+        dashboard_url: str,
+    ) -> DeliveredEmail:
+        subject = f"Your SiftEntry week — {organization_name}"
+        greeting = full_name.strip() or "there"
+        text_body = (
+            f"Hi {greeting},\n\n"
+            f"Here is the week at {organization_name}:\n\n"
+            f"{summary_text}\n\n"
+            f"Open SiftEntry: {dashboard_url}\n\n"
+            "You receive this because the weekly digest is turned on in "
+            "Settings > Notifications."
+        )
+        html_body = _basic_email_html(
+            eyebrow="Weekly digest",
+            title=f"Your week at {escape(organization_name)}",
+            body=summary_html,
+            action_label="Open SiftEntry",
+            action_url=dashboard_url,
+            footer=(
+                "You receive this because the weekly digest is turned on in "
+                "Settings &rarr; Notifications."
+            ),
+        )
+        return self._deliver(to_email, subject, text_body, html_body)
+
     def send_password_reset(
         self,
         *,

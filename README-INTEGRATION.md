@@ -1,128 +1,103 @@
-# SiftEntry — Tally Connector Productization, pkg18 (July 20, 2026)
+# SiftEntry — Weekly Email Digest, pkg19 (July 20, 2026)
 
 ## APPLY ORDER — read first
-1. Open GitHub Desktop. Confirm your latest commit is "Training mode UI"
-   and that it is pushed (no "Push origin" pending). If pending, push
-   first and verify on github.com.
+IMPORTANT: apply pkg18 (Tally connector productization) FIRST, commit
+and push it, THEN apply this package. Two files in this zip
+(repository.py and CHANGELOG.md) contain pkg18's changes plus pkg19's —
+applying pkg19 without pkg18 would silently include half of pkg18
+without its other files, and the diffs would not match either README.
+
+1. Confirm your latest commit is pkg18
+   ("Tally connector productization: heartbeat, live status card,
+   client kit") and it is pushed.
 2. Unzip this package over the repo root, replacing files when asked.
-3. In GitHub Desktop, review the changed-files list against the counts
-   below. STOP IF YOU SEE RED BLOCKS (deleted lines) in any file NOT
-   listed here — that means the zip landed in the wrong folder.
-4. One deletion is intentional and must be done by hand (zips cannot
-   delete files): in the repo, delete this folder entirely —
-   apps/web/src/app/api/integrations
-   (it contains only tally/test-connector/route.ts, which is dead code
-   that tried to reach the client's 127.0.0.1 from Vercel).
+3. Review the changed-files list in GitHub Desktop against the counts
+   below. STOP IF YOU SEE RED BLOCKS in any file NOT listed here.
 
 ## What this adds
-1. Connector heartbeat: the Windows connector now checks in with
-   SiftEntry on every poll — including when TallyPrime is closed — so
-   the platform always knows it is alive, which machine it is on, and
-   which version it runs.
-2. Live status in the web app: Integrations → Tally now shows a
-   "Windows connector status" card per client profile — Connected /
-   Disconnected / Waiting badge, last check-in, Tally company, computer
-   name + connector version, TallyPrime detected, and last posting —
-   auto-refreshing every 15 seconds. The old localhost test card (which
-   could never work from Vercel) is gone.
-3. Client kit: a downloadable zip your client's accountant can follow
-   solo — linked right on the Tally page and served from
-   app.siftentry.com/downloads/SiftEntry-Tally-Connector-Kit.zip after
-   deploy. Plain-language README, one-time setup script, start script,
-   optional start-with-Windows.
-4. Connector v0.3.0: needs only `requests` on the client PC, reuses the
-   settings saved once in its status window, and the RUN bat starts
-   production cloud polling directly.
+The Settings → Notifications "Weekly digest" toggle has existed since
+the settings page shipped — it saved fine and did nothing. This makes
+it real. Every Monday at 03:00 UTC (08:30 AM IST, chosen for the Tally
+pilot; overridable), the Railway worker emails each active member of
+every workspace that has the toggle on:
 
-## Files (20 changed/added in this zip + 1 manual folder deletion)
+- Invoices received in the last 7 days
+- Posted count and total value (per currency)
+- Failed postings to retry
+- "What needs you": needs-review / awaiting-approval / ready-to-post
+  counts right now
+- Supplier formats still in training + newly detected formats (Phase B)
+- A warning if a configured Tally connector is offline (pkg18's
+  heartbeat data, first reuse)
+
+Safety: workspaces with the toggle off are never touched (today's
+behavior). Completely quiet workspaces are skipped — no empty emails.
+A digest.sent audit event per organization prevents duplicates across
+worker restarts. Recipients are all active members (org-level toggle,
+matching what the UI offers; per-user opt-out is a later pass).
+
+## Files (7 changed/added)
 
 Backend (4):
-- siftentry_app/backend/models.py — claim request carries connector
-  host/version/tally state; new heartbeat + status models
-- siftentry_app/backend/repository.py — connector_heartbeats table
-  (auto-creates on SQLite and PostgreSQL, no manual migration on
-  Railway) + record/read heartbeat + latest-posting-per-profile
-- siftentry_app/backend/main.py — heartbeat recorded on every claim;
-  new POST /api/v1/connectors/tally/heartbeat (connector-token auth);
-  new GET /api/v1/organizations/{id}/connectors/tally/status (member
-  auth); 60-second online window constant
-- tests/test_api.py — new test: heartbeat auth rejected without/with
-  wrong token, never-seen → heartbeat → claim status progression,
-  status endpoint requires sign-in
+- siftentry_app/backend/digest_service.py — NEW: gathers the weekly
+  numbers, renders the text + HTML email, scheduling gate + duplicate
+  guard (maybe_send_weekly_digests)
+- siftentry_app/backend/email_service.py — new send_weekly_digest using
+  the same branded template as invites/resets
+- siftentry_app/backend/worker.py — digest check every 5 minutes
+  alongside job polling (SIFTENTRY_DIGEST_CHECK_SECONDS)
+- siftentry_app/backend/repository.py — list_recent_postings,
+  record_audit_event, get_latest_audit_event
+  (NOTE: this file also carries pkg18's heartbeat methods — apply order
+  above)
 
-Connector (4):
-- siftentry_app/tally_connector_runtime.py — v0.3.0; sends
-  host/version/tally state with claims; sends a heartbeat instead of
-  going silent when Tally is unreachable
-- siftentry_app/tally_connector_agent.py — Flask optional (cloud mode
-  needs only requests); cloud polling falls back to the saved config
-  from the status window
-- siftentry_app/RUN_TALLY_CONNECTOR_WINDOWS.bat — cloud polling against
-  https://app.siftentry.com
-- siftentry_app/TALLY_DEMO_CHECKLIST.md — rewritten for the production
-  flow (app.siftentry.com + connector + TallyPrime, nothing else local)
-
-Client kit (7):
-- packaging/client-kit/README-START-HERE.txt — accountant guide
-- packaging/client-kit/SETUP_WINDOWS.bat — one-time pip install
-- packaging/client-kit/START_CONNECTOR.bat — opens the status window
-- packaging/client-kit/INSTALL_STARTUP.bat / UNINSTALL_STARTUP.bat
-- packaging/client-kit/make_client_kit.py — rebuilds the kit zip
-- apps/web/public/downloads/SiftEntry-Tally-Connector-Kit.zip — the
-  generated kit (committed so Vercel serves it; rerun make_client_kit.py
-  after future connector changes)
-
-Web (3):
-- apps/web/src/lib/types.ts — connector status types
-- apps/web/src/app/api/organizations/[organizationId]/connectors/tally/status/route.ts
-  — new proxy route (net route count unchanged: one added, one deleted)
-- apps/web/src/components/accounting/accounting-system-page.tsx —
-  status card replaces the localhost test card; Tally stepper updated;
-  kit download row added
+Tests (1):
+- tests/test_digest.py — NEW: wrong-day gate, Monday send with correct
+  content and recipient, duplicate guard within the same Monday, resend
+  next Monday, toggle-off skip, quiet-workspace skip
 
 Docs (2):
-- CHANGELOG.md — pkg18 entries
+- CHANGELOG.md — pkg19 entry added above pkg18's (both present)
 - README-INTEGRATION.md — this file
 
 ## Diff expectations
-- Green-only additions everywhere EXCEPT:
-  - accounting-system-page.tsx: large red block removing TallySetupCard's
-    URL/token inputs and test buttons, replaced by the status card
-  - tally_connector_runtime.py: small red blocks in claim_cloud_jobs and
-    poll_once where heartbeat behavior was added
-  - tally_connector_agent.py: red blocks around the Flask import and
-    run_cloud_polling config fallback
-  - RUN_TALLY_CONNECTOR_WINDOWS.bat and TALLY_DEMO_CHECKLIST.md: fully
-    rewritten
-  - CHANGELOG.md: green insert under [Unreleased] only
-- If you see red blocks in backend/main.py beyond small inserts at the
-  claim endpoint and two new endpoint blocks near the end: STOP.
+- All green additions. Small red blocks ONLY in:
+  - worker.py: the _poll_forever loop gains the digest check (its old
+    3-line body is replaced by ~12 lines)
+- If repository.py shows red beyond nothing (it should be green-only on
+  top of pkg18): STOP.
+
+## Environment (all optional, defaults shown)
+- SIFTENTRY_DIGEST_DAY=0            (0=Monday … 6=Sunday)
+- SIFTENTRY_DIGEST_HOUR_UTC=3       (03:00 UTC = 08:30 IST)
+- SIFTENTRY_DIGEST_CHECK_SECONDS=300
+Nothing to add on Railway — the worker service already has the email
+env vars (EZ_EMAIL_PROVIDER=resend, EZ_RESEND_API_KEY, EZ_EMAIL_FROM,
+EZ_APP_BASE_URL). Confirm EZ_APP_BASE_URL=https://app.siftentry.com on
+the WORKER service too, since the digest's button links there.
 
 ## Commit message
-Tally connector productization: heartbeat, live status card, client kit
+Weekly email digest: worker-sent Monday summary honoring the settings toggle
 
 ## Verify steps
-1. Backend: `python3 -m pytest -q` → 62 passed (was 61).
-2. Web, from apps/web: `pnpm typecheck && pnpm lint && pnpm build` →
-   all clean; build lists
-   /api/organizations/[organizationId]/connectors/tally/status and no
-   longer lists /api/integrations/tally/test-connector.
-3. Push, let Railway + Vercel deploy.
-4. Open app.siftentry.com → Integrations → Tally. The status card shows
-   your Tally profile with "Waiting for first check-in" and the correct
-   Tally company name. The "Download the Windows connector kit" link
-   downloads the zip.
-5. On the Tally Windows machine, start the connector (status window or
-   RUN bat). Within ~15s the web card flips to Connected with the
-   machine name and v0.3.0. Close TallyPrime: within ~30s the card shows
-   Connected but "TallyPrime: Not detected — open TallyPrime". Stop the
-   connector: within ~60s the card shows Disconnected.
-6. Optional: rebuild the installer .exe later on Windows — it picks up
-   v0.3.0 automatically; existing installed 0.2.x connectors keep
-   working (they just heartbeat only while Tally is open).
+1. `python3 -m pytest -q` → 65 passed (was 62 after pkg18).
+2. Frontend untouched — no pnpm run needed; route count unchanged.
+3. Push; Railway redeploys API + worker.
+4. In app.siftentry.com → Settings → Notifications, turn ON "Weekly
+   digest" for your workspace.
+5. To see one immediately instead of waiting for Monday: on the Railway
+   worker service, temporarily set SIFTENTRY_DIGEST_DAY to today's
+   weekday number (Mon=0 … Sun=6) and SIFTENTRY_DIGEST_HOUR_UTC=0,
+   redeploy the worker, and within ~5 minutes every member gets the
+   email. Remove both vars afterwards to return to Mondays.
+6. Check the email: counts match the dashboard, the connector-offline
+   line appears only if the Tally connector is stopped, and the button
+   opens app.siftentry.com.
 
 ## Notes
-- The token you already store in each Tally client profile's connection
-  settings is the same one the accountant types into the connector —
-  nothing new to provision.
-- The 60-second "online" window = 4 missed polls at the default 15s.
+- Duplicate guard is 3 days: a digest sent Monday cannot resend before
+  Thursday even if env vars are fiddled — delete-and-resend requires a
+  new week or a fresh workspace.
+- The digest reuses pkg18's heartbeat table; if pkg18 is not deployed
+  the connector-offline line simply never appears (table exists but
+  stays empty until a v0.3.0 connector checks in).

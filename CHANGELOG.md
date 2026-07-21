@@ -6,6 +6,19 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Weekly email digest: the Settings → Notifications "Weekly digest"
+  toggle now works — every Monday at 03:00 UTC (08:30 IST) the worker
+  emails each active member of workspaces with the toggle on: invoices
+  received in the last 7 days, posted count and value by currency,
+  failed postings, what needs review/approval/posting now, supplier
+  formats still in training, and any configured Tally connector that is
+  offline; quiet workspaces are skipped, a per-organization digest.sent
+  audit event prevents duplicates across restarts, and the day/hour are
+  overridable via SIFTENTRY_DIGEST_DAY / SIFTENTRY_DIGEST_HOUR_UTC
+  (3 new tests)
+
+### Added
+
 - Tally connector heartbeat and live status: the connector now reports
   its host, version, and Tally state on every poll; a new
   POST /api/v1/connectors/tally/heartbeat keeps it visible even while

@@ -16,10 +16,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Dict
 
+from .digest_service import maybe_send_weekly_digests
 from .main import _execute_posting, create_app
 from .models import AuthenticatedUser, PostingTarget
 from .settings import ApiSettings
@@ -27,6 +29,9 @@ from .settings import ApiSettings
 logger = logging.getLogger("siftentry.worker")
 
 POLL_SECONDS = float(os.environ.get("SIFTENTRY_WORKER_POLL_SECONDS", "2.0"))
+DIGEST_CHECK_SECONDS = float(
+    os.environ.get("SIFTENTRY_DIGEST_CHECK_SECONDS", "300")
+)
 
 
 def _worker_user(actor_id: str) -> AuthenticatedUser:
@@ -134,7 +139,18 @@ async def _poll_forever(app) -> None:
     # without this, app.state.repository does not exist and the worker
     # crashes on its first poll.
     async with app.router.lifespan_context(app):
+        next_digest_check = 0.0
         while True:
+            if time.monotonic() >= next_digest_check:
+                next_digest_check = time.monotonic() + DIGEST_CHECK_SECONDS
+                try:
+                    outcome = maybe_send_weekly_digests(
+                        app.state.repository, app.state.email
+                    )
+                    if outcome.get("sent_orgs"):
+                        logger.info("weekly digests: %s", outcome)
+                except Exception:
+                    logger.exception("weekly digest check failed")
             if not run_once(app):
                 await asyncio.sleep(POLL_SECONDS)
 
