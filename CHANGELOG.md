@@ -6,6 +6,16 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Training mode UI (Phase B): the Client profiles page shows the format
+  registry — a training hero with the count of trusted vs in-training
+  formats and a Train formats action, a "new formats detected" callout,
+  and a format collection where each supplier shows its Trusted badge or
+  a Training progress bar (clean streak out of five); the invoice queue
+  surfaces a "New format detected — train it" banner whenever invoices
+  arrive from suppliers with no training record
+
+### Added
+
 - Training mode (Phase B backend): a supplier format registry tracks every
   supplier's invoice format per organization; each approved invoice with
   zero corrections extends that format's clean streak, any correction

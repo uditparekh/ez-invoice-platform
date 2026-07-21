@@ -11,6 +11,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { ProfileWizard } from "@/components/client-profiles/profile-wizard";
+import { FormatRegistry } from "@/components/training/format-registry";
 import { ClientProfilesPanel } from "@/components/client-profiles-panel";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { LoadingState } from "@/components/dashboard/loading-state";
@@ -268,6 +269,7 @@ export default function ClientProfilesPage() {
             )}
           </>
         )}
+        <FormatRegistry />
       </main>
 
       <ProfileWizard

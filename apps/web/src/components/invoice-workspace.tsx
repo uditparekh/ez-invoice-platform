@@ -24,6 +24,7 @@ import { InvoiceList } from "@/components/invoices/invoice-list";
 import { QueueMetrics } from "@/components/invoices/queue-metrics";
 import { Button } from "@/components/ui/button";
 import { useClientProfiles } from "@/hooks/use-client-profiles";
+import { useSupplierFormats } from "@/hooks/use-supplier-formats";
 import {
   clearPreviewInvoices,
   prependPreviewInvoices,
@@ -177,6 +178,7 @@ function tallyProfileFromClientProfile(
 export function InvoiceWorkspace() {
   const { activeOrganizationId: organizationId } = useAuth();
   const { profiles: clientProfiles } = useClientProfiles();
+  const { untrained } = useSupplierFormats();
   const fileInput = useRef<HTMLInputElement>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const uploadMenuRef = useRef<HTMLDivElement>(null);
@@ -982,6 +984,21 @@ export function InvoiceWorkspace() {
         {detailMode !== "review" && (
           <InvoiceList
             toolbar={
+              <>
+              {untrained.length > 0 && (
+                <Link
+                  href="/app/client-profiles"
+                  className="flex items-center justify-between gap-3 border-b border-dashed border-accent/40 bg-accent-soft/50 px-4 py-2.5 sm:px-6"
+                >
+                  <span className="min-w-0 truncate text-xs font-black text-accent-ink">
+                    ✨ New format detected: {untrained[0].supplier_name}
+                    {untrained.length > 1 ? ` +${untrained.length - 1} more` : ""}
+                  </span>
+                  <span className="shrink-0 text-xs font-black text-accent">
+                    Train it →
+                  </span>
+                </Link>
+              )}
               <div className="flex flex-wrap gap-2 border-b border-line px-4 py-3 sm:px-6">
               <QueueChip
                 label="All"
@@ -1000,6 +1017,7 @@ export function InvoiceWorkspace() {
                 onClick={() => setStatus("failed")}
               />
               </div>
+              </>
             }
             invoices={visibleInvoices}
             selectedId={selected?.id ?? null}
