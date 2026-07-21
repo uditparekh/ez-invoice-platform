@@ -23,7 +23,7 @@ export function FormatRegistry() {
   return (
     <section className="mt-8">
       {/* Training hero — same visual family as the Sift hero */}
-      <div className="flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-[#111827] via-[#1E1B4B] to-[#312E81] px-6 py-5 shadow-glow sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-[var(--hero-from)] via-[var(--hero-via)] to-[var(--hero-to)] px-6 py-5 shadow-glow sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-200/80">
             Training mode
@@ -36,7 +36,7 @@ export function FormatRegistry() {
         </div>
         <Link
           href="/app/invoices"
-          className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-white px-5 text-sm font-black text-[#1E1B4B] shadow-sm sm:self-auto"
+          className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-white px-5 text-sm font-black text-[var(--hero-via)] shadow-sm sm:self-auto"
         >
           <GraduationCap size={17} />
           Train formats

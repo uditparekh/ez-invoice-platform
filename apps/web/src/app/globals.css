@@ -39,6 +39,14 @@
   --gold-soft: #fef3c7;
   --danger: #dc2626;
   --danger-soft: #fee2e2;
+  /* accent gradient companions + cyan stat color on dark banners */
+  --accent-grad-via: #6366f1;
+  --accent-grad-to: #4338ca;
+  --stat-on-dark: #67e8f9;
+  /* signature: training-hero gradient (same in both modes) */
+  --hero-from: #111827;
+  --hero-via: #1e1b4b;
+  --hero-to: #312e81;
   /* elevation */
   --shadow-card-value: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-pop-value: 0 12px 32px rgba(15, 23, 42, 0.14);

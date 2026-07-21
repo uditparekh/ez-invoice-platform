@@ -4,6 +4,25 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Design-system consolidation: eliminated every hardcoded color in the
+  app (40 → 0). The Sift review workspace — built "always dark" by
+  hand-pasting the dark token values — is now scoped with the dark
+  token set and uses semantic classes throughout, so it stays in
+  lockstep with the locked UI spec; the training-hero gradient (shared
+  by Home) and the analytics accent gradients are named tokens in
+  globals.css (--hero-from/-via/-to, --accent-grad-via/-to,
+  --stat-on-dark) instead of scattered literals
+
+### Changed
+
+- Client-facing copy pass before pilot onboarding: accounting system
+  badges now read "Live" instead of "Pilot ready"; the posting workflow
+  checklist no longer repeats an internal filler sentence under every
+  step; the checklist subtitle, Tally notes, and Zoho card drop
+  owner-voice pilot language for neutral product copy
+
 ### Added
 
 - Weekly email digest: the Settings → Notifications "Weekly digest"

@@ -143,7 +143,7 @@ export default function HomePage() {
             {siftable.length > 0 ? (
               <Link
                 href="/app/sift"
-                className="mt-6 flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-[#111827] via-[#1E1B4B] to-[#312E81] px-6 py-5 shadow-glow transition-transform hover:scale-[1.005] sm:flex-row sm:items-center sm:justify-between"
+                className="mt-6 flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-[var(--hero-from)] via-[var(--hero-via)] to-[var(--hero-to)] px-6 py-5 shadow-glow transition-transform hover:scale-[1.005] sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-200/80">
@@ -155,7 +155,7 @@ export default function HomePage() {
                     one keypress at a time.
                   </p>
                 </div>
-                <span className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-white px-5 text-sm font-black text-[#1E1B4B] shadow-sm sm:self-auto">
+                <span className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-white px-5 text-sm font-black text-[var(--hero-via)] shadow-sm sm:self-auto">
                   <Zap size={16} />
                   Start sifting
                   <ArrowRight size={15} />

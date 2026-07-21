@@ -176,7 +176,7 @@ export default function InsightsPage() {
           />
         ) : tab === "overview" ? (
           <>
-            <section className="grid gap-4 rounded-3xl bg-gradient-to-r from-accent via-[#6366F1] to-[#4338CA] px-6 py-6 shadow-glow sm:grid-cols-3">
+            <section className="grid gap-4 rounded-3xl bg-gradient-to-r from-accent via-[var(--accent-grad-via)] to-[var(--accent-grad-to)] px-6 py-6 shadow-glow sm:grid-cols-3">
               <div>
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-100/90">
                   Auto-extracted
@@ -206,7 +206,7 @@ export default function InsightsPage() {
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-100/90">
                   Time saved · est
                 </p>
-                <p className="mt-1 font-display text-3xl font-black text-[#67E8F9]">
+                <p className="mt-1 font-display text-3xl font-black text-[var(--stat-on-dark)]">
                   {Math.round((invoices.length * 7) / 60)} hrs
                 </p>
               </div>
@@ -733,7 +733,7 @@ function Kpi({
 }) {
   if (hero) {
     return (
-      <article className="rounded-2xl bg-gradient-to-br from-accent to-[#6366F1] p-5 shadow-glow">
+      <article className="rounded-2xl bg-gradient-to-br from-accent to-[var(--accent-grad-via)] p-5 shadow-glow">
         <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-indigo-100/90">
           {label}
           {est && <EstChip light />}

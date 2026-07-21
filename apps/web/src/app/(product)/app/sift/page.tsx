@@ -189,20 +189,20 @@ export default function SiftModePage() {
   const cleared = seeded && !loading && queue.length === 0;
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#0B0F1A] text-[#EEF2F9]">
+    <div className="dark min-h-[calc(100vh-64px)] bg-canvas text-ink">
       <main className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6 lg:px-8">
         {/* chrome: mode label · progress · exit */}
         <div className="flex items-center justify-between gap-4">
-          <div className="inline-flex items-center gap-2 rounded-full border border-cyan/20 bg-cyan/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-[#67E8F9]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-cyan/20 bg-cyan/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-cyan">
             <Sparkles size={14} />
             Sift mode
-            <span className="hidden font-bold normal-case tracking-normal text-[#97A2B8] sm:inline">
+            <span className="hidden font-bold normal-case tracking-normal text-ink-secondary sm:inline">
               · clearing the review queue
             </span>
           </div>
           <div className="flex items-center gap-3">
             {initialTotal > 0 && !cleared && (
-              <span className="font-mono text-sm font-black text-[#97A2B8]">
+              <span className="font-mono text-sm font-black text-ink-secondary">
                 {position} of {initialTotal}
               </span>
             )}
@@ -216,27 +216,27 @@ export default function SiftModePage() {
             </Link>
           </div>
         </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#212940]">
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-strong">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#7B78F5] to-[#67E8F9] transition-all duration-500"
+            className="h-full rounded-full bg-gradient-to-r from-accent to-cyan transition-all duration-500"
             style={{ width: `${cleared ? 100 : progressPct}%` }}
           />
         </div>
 
         {loading ? (
-          <div className="mt-6 rounded-3xl border border-[#2F3A54] bg-[#191F30] p-6">
+          <div className="mt-6 rounded-3xl border border-line bg-surface p-6">
             <LoadingState label="Preparing sift queue" />
           </div>
         ) : cleared ? (
-          <div className="mt-6 grid min-h-[480px] place-items-center rounded-3xl border border-[#2F3A54] bg-[#191F30] px-6 py-14 text-center shadow-2xl shadow-black/30">
+          <div className="mt-6 grid min-h-[480px] place-items-center rounded-3xl border border-line bg-surface px-6 py-14 text-center shadow-2xl shadow-black/30">
             <div>
-              <PartyPopper className="mx-auto text-[#67E8F9]" size={40} />
+              <PartyPopper className="mx-auto text-cyan" size={40} />
               <h1 className="mt-5 text-3xl font-black sm:text-4xl">
                 {initialTotal
                   ? "Queue cleared"
                   : "Nothing needs sifting"}
               </h1>
-              <p className="mx-auto mt-3 max-w-md text-sm font-semibold leading-6 text-[#97A2B8]">
+              <p className="mx-auto mt-3 max-w-md text-sm font-semibold leading-6 text-ink-secondary">
                 {initialTotal
                   ? `${approvedCount} approved${skippedIds.size ? ` · ${skippedIds.size} skipped into the queue` : ""}. Ready invoices can now be posted from the queue.`
                   : error ||
@@ -245,7 +245,7 @@ export default function SiftModePage() {
               <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
                 <Link
                   href="/app/invoices"
-                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-[#4F46E5] to-[#06B6D4] px-5 text-sm font-black text-white shadow-lg shadow-indigo-950/40"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-cyan px-5 text-sm font-black text-white shadow-lg shadow-indigo-950/40"
                 >
                   Back to Invoices
                   <ArrowRight size={16} />
@@ -254,11 +254,11 @@ export default function SiftModePage() {
             </div>
           </div>
         ) : active && flag ? (
-          <div className="mt-6 overflow-hidden rounded-3xl border border-[#2F3A54] bg-[#191F30] shadow-2xl shadow-black/30">
+          <div className="mt-6 overflow-hidden rounded-3xl border border-line bg-surface shadow-2xl shadow-black/30">
             <div className="grid gap-0 xl:grid-cols-[minmax(360px,1.05fr)_minmax(420px,0.95fr)]">
               {/* PDF stage */}
-              <div className="relative border-b border-[#2F3A54] bg-[#0F1524] p-5 xl:border-b-0 xl:border-r">
-                <div className="relative h-[540px] overflow-hidden rounded-2xl border border-[#2F3A54] bg-[#191F30]">
+              <div className="relative border-b border-line bg-shell p-5 xl:border-b-0 xl:border-r">
+                <div className="relative h-[540px] overflow-hidden rounded-2xl border border-line bg-surface">
                   {pdfUrl ? (
                     <object
                       key={pdfUrl}
@@ -278,22 +278,22 @@ export default function SiftModePage() {
                     style={{ animationIterationCount: 1 }}
                   />
                 </div>
-                <p className="mt-3 text-center text-[11px] font-bold text-[#6F7B93]">
+                <p className="mt-3 text-center text-[11px] font-bold text-ink-muted">
                   {active.source_file || "Source document"} · page 1
                 </p>
               </div>
 
               {/* decision column */}
               <div className="flex flex-col p-5">
-                <div className="rounded-2xl border border-[#2F3A54] bg-[#212940] p-5">
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#6F7B93]">
+                <div className="rounded-2xl border border-line bg-surface-strong p-5">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-ink-muted">
                     {active.supplier.name || "Supplier pending"} ·{" "}
                     {formatDate(active.invoice_date)}
                   </p>
                   <h1 className="mt-1.5 break-words font-mono text-3xl font-black tracking-tight sm:text-4xl">
                     {formatCurrency(active.total, active.currency)}
                   </h1>
-                  <p className="mt-1.5 text-sm font-bold text-[#97A2B8]">
+                  <p className="mt-1.5 text-sm font-bold text-ink-secondary">
                     #{active.invoice_number || "Number pending"} ·{" "}
                     {active.lines.length} line
                     {active.lines.length === 1 ? "" : "s"}
@@ -303,13 +303,13 @@ export default function SiftModePage() {
                 <div
                   className={`mt-4 rounded-2xl border p-4 ${
                     flag.tone === "warning"
-                      ? "border-[#4A3A0A] bg-[#241E0A]"
+                      ? "border-gold/30 bg-gold-soft"
                       : "border-cyan/30 bg-cyan/10"
                   }`}
                 >
                   <p
                     className={`text-[11px] font-black uppercase tracking-[0.16em] ${
-                      flag.tone === "warning" ? "text-[#FCD34D]" : "text-[#67E8F9]"
+                      flag.tone === "warning" ? "text-gold" : "text-cyan"
                     }`}
                   >
                     {flag.label}
@@ -319,7 +319,7 @@ export default function SiftModePage() {
                   </p>
                   <p
                     className={`mt-2.5 text-sm font-semibold leading-6 ${
-                      flag.tone === "warning" ? "text-[#FCD34D]" : "text-[#97A2B8]"
+                      flag.tone === "warning" ? "text-gold" : "text-ink-secondary"
                     }`}
                   >
                     {flag.note}
@@ -327,7 +327,7 @@ export default function SiftModePage() {
                 </div>
 
                 {actionError && (
-                  <div className="mt-3 rounded-xl border border-[#F87171]/40 bg-[#3B1012] px-4 py-3 text-sm font-bold text-[#F87171]">
+                  <div className="mt-3 rounded-xl border border-danger/40 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
                     {actionError}
                   </div>
                 )}
@@ -337,7 +337,7 @@ export default function SiftModePage() {
                     type="button"
                     disabled={busy}
                     onClick={() => void approveCurrent()}
-                    className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-[#4F46E5] to-[#06B6D4] text-base font-black text-white shadow-lg shadow-indigo-950/40 transition-transform hover:scale-[1.01] disabled:opacity-60"
+                    className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-base font-black text-white shadow-lg shadow-indigo-950/40 transition-transform hover:scale-[1.01] disabled:opacity-60"
                   >
                     {busy ? (
                       <LoaderCircle size={18} className="animate-spin" />
@@ -367,7 +367,7 @@ export default function SiftModePage() {
                   </div>
                 </div>
 
-                <div className="mt-auto flex flex-wrap items-center justify-center gap-x-5 gap-y-2 pt-6 text-[11px] font-bold text-[#6F7B93]">
+                <div className="mt-auto flex flex-wrap items-center justify-center gap-x-5 gap-y-2 pt-6 text-[11px] font-bold text-ink-muted">
                   <span>
                     <KeyChip>A</KeyChip> approve
                   </span>
@@ -389,7 +389,7 @@ export default function SiftModePage() {
             </div>
           </div>
         ) : (
-          <div className="mt-6 rounded-3xl border border-[#2F3A54] bg-[#191F30] p-6">
+          <div className="mt-6 rounded-3xl border border-line bg-surface p-6">
             <EmptyState
               icon={FileSearch}
               title="No invoices ready for Sift mode"
@@ -439,13 +439,13 @@ function flaggedFieldFor(invoice: Invoice): {
 
 function SiftPdfPlaceholder() {
   return (
-    <div className="grid h-full place-items-center bg-[radial-gradient(circle_at_50%_20%,rgba(103,232,249,0.14),transparent_36%),linear-gradient(180deg,#1B2238,#191F30)] p-6 text-center">
+    <div className="grid h-full place-items-center bg-[radial-gradient(circle_at_50%_20%,rgba(103,232,249,0.14),transparent_36%),linear-gradient(180deg,var(--surface-strong),var(--surface))] p-6 text-center">
       <div>
-        <FileSearch className="mx-auto text-[#6F7B93]" size={30} />
-        <p className="mt-3 text-sm font-black text-[#EEF2F9]">
+        <FileSearch className="mx-auto text-ink-muted" size={30} />
+        <p className="mt-3 text-sm font-black text-ink">
           PDF preview unavailable
         </p>
-        <p className="mt-1 text-xs font-semibold text-[#6F7B93]">
+        <p className="mt-1 text-xs font-semibold text-ink-muted">
           Preview-only upload or unsupported browser — decide from the
           extracted values, or press E for the full Workspace.
         </p>
@@ -456,7 +456,7 @@ function SiftPdfPlaceholder() {
 
 function KeyChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="mx-0.5 inline-grid min-w-6 place-items-center rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[11px] font-black text-[#67E8F9]">
+    <span className="mx-0.5 inline-grid min-w-6 place-items-center rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[11px] font-black text-cyan">
       {children}
     </span>
   );
