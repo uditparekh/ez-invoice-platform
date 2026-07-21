@@ -13,6 +13,11 @@ All notable platform changes will be recorded here.
 
 ### Changed
 
+- Tally page download card now offers the Windows installer
+  (SiftEntry-Tally-Connector-Setup-0.3.0.exe, one-click, no Python) as
+  the primary download with the Python script kit as an IT-policy
+  fallback; setup stepper wording updated to match
+
 - Mobile navigation and header polish: the hamburger button is now a
   44px bordered icon button (previously a 36px borderless ghost that
   was easy to miss), the drawer close and mobile search buttons match

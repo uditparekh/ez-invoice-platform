@@ -405,20 +405,36 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
           </p>
         )}
         <a
-          href="/downloads/SiftEntry-Tally-Connector-Kit.zip"
+          href="/downloads/SiftEntry-Tally-Connector-Setup-0.3.0.exe"
           download
           className="flex items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 transition-colors hover:border-accent"
         >
           <span className="min-w-0">
             <span className="block text-sm font-black text-accent-ink dark:text-cyan">
-              Download the Windows connector kit
+              Download the Windows connector installer
             </span>
             <span className="mt-0.5 block text-xs font-semibold leading-5 text-ink-secondary">
-              Zip with the connector, setup scripts, and a plain-language guide
-              for the client&apos;s accountant.
+              One-click setup — no Python needed. Installs per user, starts
+              with Windows, uninstalls cleanly.
             </span>
           </span>
           <ArrowRight size={16} className="shrink-0 text-accent" />
+        </a>
+        <a
+          href="/downloads/SiftEntry-Tally-Connector-Kit.zip"
+          download
+          className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-subtle px-4 py-3 transition-colors hover:border-line-strong"
+        >
+          <span className="min-w-0">
+            <span className="block text-xs font-black text-ink-secondary">
+              Script kit (fallback)
+            </span>
+            <span className="mt-0.5 block text-xs font-semibold leading-5 text-ink-muted">
+              Python-based zip with a plain-language guide — use if IT policy
+              blocks the installer.
+            </span>
+          </span>
+          <ArrowRight size={14} className="shrink-0 text-ink-muted" />
         </a>
         <div className="space-y-3">
           {config.notes.map((note) => (
@@ -465,7 +481,7 @@ const stepperSteps: Record<string, { title: string; detail: string }[]> = {
     {
       title: "Install the connector on the client's computer",
       detail:
-        "Download the SiftEntry Tally Connector kit below and run it on the Windows machine where TallyPrime lives.",
+        "Download the Windows installer below and run it on the machine where TallyPrime lives — no other software needed.",
     },
     {
       title: "Enable HTTP/XML in TallyPrime",
