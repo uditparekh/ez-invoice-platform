@@ -326,6 +326,23 @@ class InvoiceRepository:
                     FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS supplier_formats (
+                    id TEXT PRIMARY KEY,
+                    organization_id TEXT NOT NULL,
+                    supplier_key TEXT NOT NULL,
+                    supplier_name TEXT NOT NULL,
+                    supplier_tax_id TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'training',
+                    samples_count INTEGER NOT NULL DEFAULT 0,
+                    clean_streak INTEGER NOT NULL DEFAULT 0,
+                    hints_json TEXT NOT NULL DEFAULT '{}',
+                    last_invoice_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE (organization_id, supplier_key),
+                    FOREIGN KEY (organization_id) REFERENCES organizations(id)
+                );
+
                 CREATE TABLE IF NOT EXISTS accounting_mappings (
                     id TEXT PRIMARY KEY,
                     organization_id TEXT NOT NULL,
@@ -2086,6 +2103,116 @@ class InvoiceRepository:
         if not row:
             return None
         return self._posting_from_row(row)
+
+    @staticmethod
+    def supplier_format_key(name: str, tax_id: str = "") -> str:
+        """Stable identity for a supplier's invoice format within an org."""
+        base = (tax_id or "").strip().lower() or (name or "").strip().lower()
+        return " ".join(base.split())
+
+    TRUSTED_AFTER_CLEAN = 5
+
+    def record_supplier_format_outcome(
+        self,
+        organization_id: str,
+        supplier_name: str,
+        supplier_tax_id: str,
+        invoice_id: str,
+        had_corrections: bool,
+    ) -> Dict[str, Any]:
+        """Update a supplier's training record after an invoice is approved.
+
+        A clean approval (no field corrections) extends the streak; any
+        correction resets it. Five consecutive clean approvals graduate the
+        format from `training` to `trusted`; a correction on a trusted
+        format demotes it back to training.
+        """
+        key = self.supplier_format_key(supplier_name, supplier_tax_id)
+        if not key:
+            return {}
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM supplier_formats WHERE organization_id = ? AND supplier_key = ?",
+                (organization_id, key),
+            ).fetchone()
+            if row is None:
+                record = {
+                    "id": str(uuid.uuid4()),
+                    "organization_id": organization_id,
+                    "supplier_key": key,
+                    "supplier_name": supplier_name or key,
+                    "supplier_tax_id": supplier_tax_id or "",
+                    "status": "training",
+                    "samples_count": 0,
+                    "clean_streak": 0,
+                    "created_at": now,
+                }
+            else:
+                record = dict(row)
+            record["samples_count"] = int(record["samples_count"]) + 1
+            if had_corrections:
+                record["clean_streak"] = 0
+                record["status"] = "training"
+            else:
+                record["clean_streak"] = int(record["clean_streak"]) + 1
+                if record["clean_streak"] >= self.TRUSTED_AFTER_CLEAN:
+                    record["status"] = "trusted"
+            record["last_invoice_id"] = invoice_id
+            record["updated_at"] = now
+            connection.execute(
+                """
+                INSERT INTO supplier_formats (
+                    id, organization_id, supplier_key, supplier_name,
+                    supplier_tax_id, status, samples_count, clean_streak,
+                    hints_json, last_invoice_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE((
+                    SELECT hints_json FROM supplier_formats
+                    WHERE organization_id = ? AND supplier_key = ?
+                ), '{}'), ?, ?, ?)
+                ON CONFLICT (organization_id, supplier_key) DO UPDATE SET
+                    status = excluded.status,
+                    samples_count = excluded.samples_count,
+                    clean_streak = excluded.clean_streak,
+                    last_invoice_id = excluded.last_invoice_id,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    record["id"],
+                    organization_id,
+                    key,
+                    record["supplier_name"],
+                    record["supplier_tax_id"],
+                    record["status"],
+                    record["samples_count"],
+                    record["clean_streak"],
+                    organization_id,
+                    key,
+                    record["last_invoice_id"],
+                    record.get("created_at", now),
+                    record["updated_at"],
+                ),
+            )
+        return {
+            "supplier_key": key,
+            "status": record["status"],
+            "samples_count": record["samples_count"],
+            "clean_streak": record["clean_streak"],
+        }
+
+    def list_supplier_formats(self, organization_id: str) -> List[Dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT supplier_key, supplier_name, supplier_tax_id, status,
+                       samples_count, clean_streak, last_invoice_id, updated_at
+                FROM supplier_formats
+                WHERE organization_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (organization_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def list_corrections_for_invoice(
         self,

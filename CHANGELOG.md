@@ -6,6 +6,17 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Training mode (Phase B backend): a supplier format registry tracks every
+  supplier's invoice format per organization; each approved invoice with
+  zero corrections extends that format's clean streak, any correction
+  resets it, and five consecutive clean approvals graduate the format
+  from `training` to `trusted` (corrections demote trusted formats back);
+  GET /api/v1/organizations/{id}/supplier-formats returns all formats
+  plus a "new formats detected" feed of suppliers with no training record
+  (3 new tests)
+
+### Added
+
 - Invoice activity timeline: every invoice detail now shows its audit
   trail — upload, each field correction with the person who made it, and
   every posting attempt (dry runs, successes, failures) — served by a new

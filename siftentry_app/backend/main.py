@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import base64
 import binascii
 import hashlib
@@ -565,6 +567,42 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> List[Organization]:
         return _repo(request).list_organizations_for_user(current_user.id)
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/supplier-formats",
+        tags=["organizations"],
+    )
+    def list_supplier_formats(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+    ) -> Dict[str, Any]:
+        """Training-mode registry: every supplier format with its training or
+        trusted status, plus suppliers seen in invoices that have no format
+        record yet (the "new format detected" feed)."""
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        repository = _repo(request)
+        formats = repository.list_supplier_formats(organization_id)
+        known = {record["supplier_key"] for record in formats}
+        untrained: Dict[str, Dict[str, Any]] = {}
+        for invoice in repository.list_invoices(organization_id):
+            name = invoice.supplier.name or ""
+            tax_id = getattr(invoice.supplier, "tax_id", "") or ""
+            key = repository.supplier_format_key(name, tax_id)
+            if not key or key in known:
+                continue
+            entry = untrained.setdefault(
+                key,
+                {"supplier_key": key, "supplier_name": name or key, "supplier_tax_id": tax_id, "invoice_count": 0},
+            )
+            entry["invoice_count"] += 1
+        return {
+            "trusted_after_clean": repository.TRUSTED_AFTER_CLEAN,
+            "formats": formats,
+            "untrained": sorted(
+                untrained.values(), key=lambda item: -item["invoice_count"]
+            ),
+        }
 
     @app.get(
         "/api/v1/organizations/{organization_id}/corrections/learning",
@@ -1289,7 +1327,24 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 status_code=409,
                 detail="Only a validated invoice can be approved.",
             )
-        return _repo(request).set_status(invoice_id, InvoiceStatus.APPROVED) or invoice
+        approved = _repo(request).set_status(invoice_id, InvoiceStatus.APPROVED) or invoice
+        # Training-mode signal: a clean approval (zero corrections) extends
+        # this supplier format's trusted streak; corrections reset it.
+        try:
+            repository = _repo(request)
+            corrections = repository.list_corrections_for_invoice(invoice_id)
+            repository.record_supplier_format_outcome(
+                organization_id=invoice.organization_id,
+                supplier_name=invoice.supplier.name or "",
+                supplier_tax_id=getattr(invoice.supplier, "tax_id", "") or "",
+                invoice_id=invoice_id,
+                had_corrections=bool(corrections),
+            )
+        except Exception:  # noqa: BLE001 - never block approval on telemetry
+            logging.getLogger(__name__).exception(
+                "supplier format outcome update failed"
+            )
+        return approved
 
     @app.post(
         "/api/v1/invoices/{invoice_id}/send-back",
