@@ -2087,6 +2087,33 @@ class InvoiceRepository:
             return None
         return self._posting_from_row(row)
 
+    def list_corrections_for_invoice(
+        self,
+        invoice_id: str,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """Field corrections recorded against one invoice, oldest first."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, field_path, actor_id, created_at
+                FROM corrections
+                WHERE invoice_id = ?
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (invoice_id, limit),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "field_path": row["field_path"],
+                "actor_id": row["actor_id"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
     def list_postings_for_invoice(
         self,
         invoice_id: str,

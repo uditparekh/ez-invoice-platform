@@ -1318,6 +1318,11 @@ function ReviewWorkspace({
             editable={!saving && !previewOnly}
             onLinesChange={(lines) => updateDraft("lines", lines)}
           />
+          {!previewOnly && (
+            <div className="rounded-2xl border border-line bg-surface shadow-card">
+              <ActivityTimeline key={invoice.id} invoiceId={invoice.id} />
+            </div>
+          )}
         </div>
       </ResizableSplit>
     </section>
@@ -2160,6 +2165,84 @@ function ReviewLineItemsPanel({
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+function ActivityTimeline({ invoiceId }: { invoiceId: string }) {
+  const [events, setEvents] = useState<
+    {
+      id: string;
+      type: string;
+      at: string;
+      actor: string;
+      title: string;
+      detail: string;
+    }[]
+  >([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/invoices/${invoiceId}/activity`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!cancelled && payload?.events) setEvents(payload.events);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [invoiceId]);
+
+  if (!loaded || !events.length) return null;
+
+  return (
+    <section className="border-t border-line px-4 py-5 sm:px-6">
+      <h3 className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+        Activity
+      </h3>
+      <ol className="mt-3 space-y-0">
+        {events.map((event, index) => (
+          <li key={event.id} className="relative flex gap-3 pb-4 last:pb-0">
+            {index < events.length - 1 && (
+              <span
+                aria-hidden
+                className="absolute left-[7px] top-5 h-full w-px bg-line"
+              />
+            )}
+            <span
+              className={cn(
+                "relative mt-1 inline-block size-[15px] shrink-0 rounded-full border-2 border-surface",
+                event.type === "posting_failure"
+                  ? "bg-danger"
+                  : event.type === "posting_success"
+                    ? "bg-success"
+                    : event.type === "correction"
+                      ? "bg-gold"
+                      : "bg-accent",
+              )}
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-black leading-5 text-ink">
+                {event.title}
+              </span>
+              <span className="block text-xs font-semibold text-ink-secondary">
+                {event.actor ? `${event.actor} · ` : ""}
+                {new Date(event.at).toLocaleString()}
+              </span>
+              {event.detail ? (
+                <span className="mt-0.5 block break-words font-mono text-xs font-semibold text-ink-muted">
+                  {event.detail}
+                </span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

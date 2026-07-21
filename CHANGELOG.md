@@ -4,6 +4,13 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Invoice activity timeline: every invoice detail now shows its audit
+  trail — upload, each field correction with the person who made it, and
+  every posting attempt (dry runs, successes, failures) — served by a new
+  GET /api/v1/invoices/{id}/activity endpoint
+
 ### Fixed
 
 - /health answers HEAD requests (uptime checkers such as UptimeRobot

@@ -1064,6 +1064,60 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> Invoice:
         return _require_invoice(request, invoice_id, current_user, READ_ROLES)
 
+    @app.get("/api/v1/invoices/{invoice_id}/activity", tags=["invoices"])
+    def invoice_activity(
+        request: Request,
+        invoice_id: str,
+        current_user: CurrentUser,
+    ) -> Dict[str, Any]:
+        """Chronological audit trail for one invoice: upload, every field
+        correction, and every posting attempt, each with its actor."""
+        invoice = _require_invoice(request, invoice_id, current_user, READ_ROLES)
+        repository = request.app.state.repository
+
+        def actor_name(actor_id: str) -> str:
+            if not actor_id:
+                return "System"
+            user = repository.get_user(actor_id)
+            return (user.full_name or user.email) if user else "Removed user"
+
+        events: List[Dict[str, Any]] = [
+            {
+                "id": f"uploaded-{invoice.id}",
+                "type": "uploaded",
+                "at": invoice.created_at.isoformat(),
+                "actor": "",
+                "title": "Invoice uploaded",
+                "detail": invoice.source_file or "",
+            }
+        ]
+        for correction in repository.list_corrections_for_invoice(invoice_id):
+            events.append(
+                {
+                    "id": correction["id"],
+                    "type": "correction",
+                    "at": correction["created_at"],
+                    "actor": actor_name(correction["actor_id"]),
+                    "title": f"Corrected {correction['field_path']}",
+                    "detail": "",
+                }
+            )
+        for posting in repository.list_postings_for_invoice(invoice_id, limit=50):
+            label = "Dry run" if posting.dry_run else "Posting"
+            outcome = "succeeded" if posting.success else "failed"
+            events.append(
+                {
+                    "id": posting.id,
+                    "type": "posting_success" if posting.success else "posting_failure",
+                    "at": posting.created_at.isoformat(),
+                    "actor": actor_name(posting.actor_id),
+                    "title": f"{label} to {posting.target} {outcome}",
+                    "detail": (posting.message or "")[:300],
+                }
+            )
+        events.sort(key=lambda event: event["at"])
+        return {"invoice_id": invoice.id, "status": invoice.status, "events": events}
+
     @app.get("/api/v1/invoices/{invoice_id}/document", tags=["invoices"])
     def get_invoice_document(
         request: Request,
