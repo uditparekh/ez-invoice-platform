@@ -26,7 +26,7 @@ Baseline: user upload, 2026-07-02 · UI Spec v1.0 (siftentry-ui-spec.html) is th
 | apps/web/src/components/review/resizable-split.tsx | NEW | Reusable two-pane resizable split: pointer-drag handle, min/max %, double-click reset, localStorage persistence, ArrowLeft/Right a11y, stacks below xl. |
 | apps/web/src/components/invoices/invoice-detail.tsx | EDITED | (1) Review grid → ResizableSplit (38% default, 24–58%, key "siftentry.review.split"). (2) Evidence beacon: one-shot cyan scan-line sweep + pulsing "Evidence · p.N · snippet" chip over the PDF on every field selection. (3) ReviewDraft gains lines[]; seeded from invoice; included in PATCH (renumbered). (4) ReviewLineItemsPanel rewritten: inline-editable cells (description/qty/UOM/unit price/amount), Add row, per-row delete, live totals/variance from draft. (5) Mapping chips per row: gl_code → chip label, else heuristic Tax ledger / Stock item / Expense ledger / Ledger; tooltip names active client profile. (6) Vendor-memory toggle in save row (default on, remembered via localStorage "siftentry.review.learnVendor"); save PATCH body now includes learn_vendor_memory. New imports: Plus, Trash2, InvoiceLine, ResizableSplit. New helpers: lineMappingChip, parseLineAmount, LineCellInput. onSave signature: () => void → (options:{learnVendor:boolean}) => void. |
 
-BACKEND TODO: honor `learn_vendor_memory` in the invoice PATCH handler when writing correction-learning records (currently safe to ignore).
+Historical note: `learn_vendor_memory` was frontend-only at this step; it is implemented end-to-end in the later workspace-features pass.
 
 ## Step 2 — Sift mode real loop (siftentry-step2-sift-loop.zip)
 
@@ -260,8 +260,10 @@ integrations hub, exceptions page). The zip below contains ONLY this pass's chan
 ### Parity verdict on your baseline (checked page-by-page vs the locked spec)
 ✓ Shell/nav (8 items incl. Client profiles) · ✓ tokens/dark/fonts · ✓ Invoices queue + Sift launcher · ✓ Sift loop · ✓ Review Workspace depth · ✓ Insights 4-tab · ✓ Rules 4-tab · ✓ History + posting log · ✓ Integrations hub grid + detail steppers · ✓ Approvals route. Gaps closed this pass: Home hero/nudge, Client profiles overview + wizard + approve flow, Settings rail.
 
-### Backend TODOs (unchanged + new)
-1. Honor `learn_vendor_memory` on invoice PATCH. 2. Org-settings + notification-preferences endpoints (Settings panes are pre-wired to swap localStorage → API). 3. Bounding boxes from extraction → unlocks teach-fields + true PDF coordinate highlighting.
+### Backend TODOs at this step
+1. Org-settings + notification-preferences endpoints (Settings panes are pre-wired to swap localStorage → API). 2. Bounding boxes from extraction → unlocks teach-fields + true PDF coordinate highlighting.
+
+Resolved later: `learn_vendor_memory` is now honored on invoice PATCH.
 
 ## Step 7 — Compile verification pass (2026-07-03) ✅
 First fully compiler-verified delivery. Environment: Node 22 · pnpm 9 · fresh `pnpm install`.
