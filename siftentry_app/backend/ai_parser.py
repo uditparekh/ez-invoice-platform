@@ -94,7 +94,10 @@ class AiExtractorConfig:
                 or os.getenv("ANTHROPIC_API_KEY", "")
                 or os.getenv("OPENAI_API_KEY", "")
             ).strip(),
-            model=str(getattr(settings, "ai_model", "") or "").strip(),
+            model=str(
+                getattr(settings, "ai_model", "")
+                or os.getenv("SIFTENTRY_AI_MODEL", "")
+            ).strip(),
             base_url=str(
                 getattr(settings, "ai_base_url", "")
                 or os.getenv("SIFTENTRY_AI_BASE_URL", "")

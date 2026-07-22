@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..accounting_routing import apply_accounting_route
 from ..gst_invoice_parser import looks_like_gst_invoice, parse_gst_invoice
@@ -56,6 +56,7 @@ def parse_pdf_invoice(
     client_profile: Optional[ClientProfile] = None,
     correction_signals: Optional[List[CorrectionLearningSignal]] = None,
     ai_config: Optional[AiExtractorConfig] = None,
+    ai_gate: Optional[Callable[[str, str], bool]] = None,
 ) -> InvoiceCreate:
     text, engine, pages = extract_pdf_text(pdf_bytes)
     extracted_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -88,15 +89,34 @@ def parse_pdf_invoice(
         )
 
     apply_accounting_route(payload, homes=legal_names)
+
+    # Phase B routing: in `auto` mode with a live provider configured, the
+    # deterministic parse runs first so the supplier is known, then the gate
+    # decides — external AI only for training/unseen formats, never trusted.
+    effective_mode = parser_mode
+    if (
+        normalized_mode == "auto"
+        and ai_gate is not None
+        and ai_config is not None
+        and ai_config.live_provider
+    ):
+        supplier_name, supplier_tax_id = _supplier_identity(payload)
+        if ai_gate(supplier_name, supplier_tax_id):
+            effective_mode = "ai"
+
     apply_ai_parser_context(
         payload,
-        parser_mode=parser_mode,
+        parser_mode=effective_mode,
         client_profile=client_profile,
         correction_signals=correction_signals or [],
         ai_config=ai_config,
         document_text=text,
         pdf_bytes=pdf_bytes,
     )
+    if effective_mode != parser_mode:
+        document = (payload.get("INVOICE", payload) or {}).get("DOCUMENT")
+        if isinstance(document, dict):
+            document["AI/OCR TRIGGER"] = "training_format"
     invoice_create = legacy_payload_to_invoice(
         payload,
         organization_id=organization_id,
@@ -105,6 +125,17 @@ def parse_pdf_invoice(
     )
     invoice_create.evidence = build_parse_evidence(pdf_bytes, invoice_create)
     return invoice_create
+
+
+def _supplier_identity(payload: Dict[str, Any]) -> Tuple[str, str]:
+    """Supplier name + tax id from the parsed payload (same keys domain uses)."""
+    invoice = payload.get("INVOICE", payload) or {}
+    seller = invoice.get("SELLER", {}) or {}
+    name = str(seller.get("NAME") or seller.get("LEGAL NAME") or "").strip()
+    tax_id = str(
+        seller.get("GSTIN") or seller.get("GSTIN/UIN") or seller.get("TAX ID") or ""
+    ).strip()
+    return name, tax_id
 
 
 def build_parse_evidence(pdf_bytes: bytes, invoice) -> list:

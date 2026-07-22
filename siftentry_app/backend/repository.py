@@ -2210,6 +2210,28 @@ class InvoiceRepository:
             "clean_streak": record["clean_streak"],
         }
 
+    def get_supplier_format(
+        self,
+        organization_id: str,
+        supplier_name: str,
+        supplier_tax_id: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        """One supplier's format record, or None if the format is unseen."""
+        key = self.supplier_format_key(supplier_name, supplier_tax_id)
+        if not key:
+            return None
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT supplier_key, supplier_name, supplier_tax_id, status,
+                       samples_count, clean_streak, last_invoice_id, updated_at
+                FROM supplier_formats
+                WHERE organization_id = ? AND supplier_key = ?
+                """,
+                (organization_id, key),
+            ).fetchone()
+        return dict(row) if row else None
+
     def list_supplier_formats(self, organization_id: str) -> List[Dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(

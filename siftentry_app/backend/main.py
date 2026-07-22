@@ -2017,11 +2017,31 @@ def _process_invoice_pdf_bytes(
         parser_mode,
         current_user,
     )
+    ai_config = request.app.state.ai_extractor_config
+    auto_ai_candidate = (
+        (parser_mode or "").strip().lower() == "auto" and ai_config.live_provider
+    )
     correction_signals = (
         _repo(request).list_correction_learning_signals(organization_id, limit=50)
-        if is_ai_parser_mode(parser_mode)
+        if is_ai_parser_mode(parser_mode) or auto_ai_candidate
         else []
     )
+
+    def _training_format_gate(supplier_name: str, supplier_tax_id: str) -> bool:
+        """Phase B routing: external AI for training/unseen formats only.
+
+        Trusted formats parse deterministically with zero provider calls. A
+        format that graduated under its name before a tax id ever parsed
+        stays trusted (name-only fallback lookup), and any correction demotes
+        via record_supplier_format_outcome, which re-opens this gate.
+        """
+        repository = _repo(request)
+        record = repository.get_supplier_format(
+            organization_id, supplier_name, supplier_tax_id
+        )
+        if record is None and supplier_tax_id:
+            record = repository.get_supplier_format(organization_id, supplier_name)
+        return record is None or record.get("status") != "trusted"
 
     retention_policy, retention_until = _resolve_pdf_retention(
         request,
@@ -2048,7 +2068,8 @@ def _process_invoice_pdf_bytes(
             parser_mode=parser_mode,
             client_profile=client_profile,
             correction_signals=correction_signals,
-            ai_config=request.app.state.ai_extractor_config,
+            ai_config=ai_config,
+            ai_gate=_training_format_gate,
         )
         if source_metadata:
             parsed.raw_payload = {**parsed.raw_payload, **source_metadata}

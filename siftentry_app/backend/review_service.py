@@ -66,6 +66,9 @@ def build_invoice_review(
 
     insights = _build_insights(invoice, fields, detected, profile_result)
     suggested_patch = _suggest_patch(invoice, detected, fields)
+    ai_insight = _apply_ai_suggestions(invoice, fields)
+    if ai_insight is not None:
+        insights.insert(0, ai_insight)
     needs_attention = sum(
         1 for field in fields if field.severity != InvoiceReviewSeverity.OK
     ) + sum(1 for insight in insights if insight.severity != InvoiceReviewSeverity.OK)
@@ -348,6 +351,99 @@ def _build_insights(
             )
         )
     return insights
+
+
+_AI_FIELD_PATHS = {
+    "invoice_number": "invoice_number",
+    "invoice_date": "invoice_date",
+    "due_date": "due_date",
+    "supplier_name": "supplier.name",
+    "currency": "currency",
+    "tax_total": "tax_total",
+    "total": "total",
+}
+
+
+def _ai_comparable(value: str) -> str:
+    """Normalize a value for parser-vs-AI comparison (case, spacing, amounts)."""
+    text = " ".join(str(value or "").strip().lower().split())
+    numeric = text.replace(",", "").replace("₹", "").replace("$", "").strip()
+    try:
+        return f"{float(numeric):.2f}"
+    except ValueError:
+        return text
+
+
+def _apply_ai_suggestions(
+    invoice: Invoice,
+    fields: List[InvoiceReviewField],
+) -> Optional[InvoiceReviewInsight]:
+    """Surface stored AI/OCR suggestions on review fields (review_only policy).
+
+    AI never changes values: agreements annotate the field's suggestion text,
+    disagreements raise the field to `review` severity with the AI's value,
+    confidence, and reason, and one summary insight (pinned first so the UI's
+    three-insight window always shows it) reports provider, model, and the
+    training-format trigger. Runs after _suggest_patch on purpose: an AI
+    disagreement must not feed the auto-apply patch.
+    """
+    payload = invoice.raw_payload or {}
+    document = (payload.get("INVOICE", payload) or {}).get("DOCUMENT", {}) or {}
+    suggestions = document.get("AI/OCR SUGGESTIONS")
+    if not isinstance(suggestions, dict) or not suggestions:
+        return None
+    provider = str(document.get("AI/OCR PROVIDER", "")).strip()
+    model = str(document.get("AI/OCR MODEL", "")).strip()
+    trigger = str(document.get("AI/OCR TRIGGER", "")).strip()
+    by_path = {field.field_path: field for field in fields}
+    offered = 0
+    differing = 0
+    for name, path in _AI_FIELD_PATHS.items():
+        entry = suggestions.get(name)
+        if not isinstance(entry, dict):
+            continue
+        value = str(entry.get("value", "")).strip()
+        if not value:
+            continue
+        offered += 1
+        field = by_path.get(path)
+        if field is None:
+            continue
+        if _ai_comparable(value) == _ai_comparable(field.value):
+            if not field.suggestion:
+                field.suggestion = f"AI agrees: “{value}”."
+            continue
+        differing += 1
+        confidence = entry.get("confidence")
+        pct = (
+            f"{round(float(confidence) * 100)}%"
+            if isinstance(confidence, (int, float))
+            else "n/a"
+        )
+        reason = str(entry.get("reason", "")).strip()[:80]
+        note = f"AI read “{value}” ({pct}{f' · {reason}' if reason else ''})."
+        if field.value:
+            field.issue = f"{field.issue} {note}".strip()
+        else:
+            field.issue = f"Parser left this empty. {note}"
+        if field.severity == InvoiceReviewSeverity.OK:
+            field.severity = InvoiceReviewSeverity.REVIEW
+    detail_parts = [part for part in (provider, model) if part]
+    if trigger == "training_format":
+        detail_parts.append("training format")
+    return InvoiceReviewInsight(
+        title="AI extraction ran",
+        detail=" · ".join(detail_parts) if detail_parts else "AI suggestions stored",
+        severity=(
+            InvoiceReviewSeverity.REVIEW if differing else InvoiceReviewSeverity.OK
+        ),
+        action=(
+            f"{offered} field suggestion{'s' if offered != 1 else ''} · "
+            f"{differing} differ from the parser"
+            if offered
+            else "No usable field suggestions returned"
+        ),
+    )
 
 
 def _suggest_patch(

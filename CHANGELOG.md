@@ -6,10 +6,38 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Phase B AI routing (pkg25): in `auto` parser mode with a live AI
+  provider configured, the deterministic parse runs first and external
+  AI is invoked only when the supplier's format is in training or has
+  never been seen — trusted formats parse with zero provider calls, and
+  any reviewer correction demotes the format and re-opens AI routing.
+  Auto-triggered runs are marked `AI/OCR TRIGGER: training_format` in
+  the invoice document metadata. New repository lookup
+  `get_supplier_format` backs the gate; three new tests cover
+  unseen→AI, trusted→skip, demoted→AI-again, and explicit
+  `parser_mode=ai` bypass (68 backend tests total)
+
+- AI suggestions surfaced in review (pkg25): stored `AI/OCR SUGGESTIONS`
+  now flow into the invoice review — a pinned "AI extraction ran" insight
+  reports provider, model, and the training-format trigger, agreements
+  annotate fields with "AI agrees", and disagreements raise the field to
+  review severity showing the AI's value, confidence, and reason. AI
+  values never enter the auto-apply suggested patch (review_only policy
+  preserved). Two more tests cover end-to-end surfacing and the
+  disagreement/no-patch-leak path (70 backend tests total)
+
 - GitHub Actions workflow (Build Tally connector installer) that builds
   the Windows installer .exe on GitHub's Windows runners via PyInstaller
   and Inno Setup and publishes it as a downloadable artifact — no
   Windows machine needed; triggered manually from the Actions tab
+
+### Fixed
+
+- AI activation config: `SIFTENTRY_AI_MODEL` is now honored by the
+  deployed configuration path (`AiExtractorConfig.from_settings`).
+  Previously only local `from_environment` read it, so a hosted Groq
+  deployment would silently send the default `gpt-4o-mini` model name
+  and fail every call
 
 ### Changed
 
