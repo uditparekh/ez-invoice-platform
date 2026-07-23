@@ -73,15 +73,15 @@ export default function HistoryPage() {
         section="Audit trail"
         description="Every extraction, approval, posting attempt, and correction — recorded, never overwritten."
         action={
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-success-soft px-3.5 text-xs font-black text-success">
+          <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
+            <span className="inline-flex h-8 items-center gap-1.5 self-start rounded-full bg-success-soft px-3 text-[11px] font-black text-success sm:h-9 sm:px-3.5 sm:text-xs">
               <Lock size={13} />
               APPEND-ONLY · AUDIT-GRADE
             </span>
             <button
               type="button"
               onClick={exportAudit}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+              className="inline-flex h-11 items-center gap-2 self-start rounded-xl bg-accent px-4 text-sm font-black text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover"
             >
               <FileDown size={16} />
               Export audit log

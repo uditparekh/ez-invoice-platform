@@ -6,6 +6,11 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Route-level loading screen (pkg27): navigating into /app (e.g. right
+  after login) now shows an instant branded spinner ("Opening your
+  workspace") instead of the old frozen-page feeling while the workspace
+  renders
+
 - Phase B AI routing (pkg25): in `auto` parser mode with a live AI
   provider configured, the deterministic parse runs first and external
   AI is invoked only when the supplier's format is in training or has
@@ -40,6 +45,16 @@ All notable platform changes will be recorded here.
   and fail every call
 
 ### Changed
+
+- History header polish (pkg27, supersedes pkg26): on mobile the
+  audit-grade badge sits above the "Export audit log" button instead of
+  colliding with it; the button now matches the Insights "Board pack"
+  style — solid accent, content-width — on all screen sizes
+
+- Sidebar account block redesign (pkg27): the card-in-card arrangement is
+  replaced with a single row — avatar, name, role, and a compact labeled
+  "Sign out" button with icon, visible resting border, and danger-tinted
+  hover; applies to both the desktop sidebar and the mobile drawer
 
 - Tally page download card now offers the Windows installer
   (SiftEntry-Tally-Connector-Setup-0.3.0.exe, one-click, no Python) as
