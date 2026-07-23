@@ -124,26 +124,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ))}
       </div>
       <div className="border-t border-line p-3">
-        <div className="flex items-center gap-3 rounded-xl border border-transparent p-2 pr-1.5 transition-colors hover:border-line hover:bg-surface-subtle">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-black text-accent-ink">
-            {(user?.full_name || user?.email || "SE")
-              .split(/\s|@/)
-              .slice(0, 2)
-              .map((part) => part[0]?.toUpperCase())
-              .join("")}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-bold text-ink">
-              {loading ? "Loading account" : user?.full_name || user?.email}
+        <div className="flex flex-col items-stretch gap-2 rounded-xl border border-transparent p-2 transition-colors hover:border-line hover:bg-surface-subtle lg:flex-row lg:items-center lg:gap-3 lg:pr-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-black text-accent-ink">
+              {(user?.full_name || user?.email || "SE")
+                .split(/\s|@/)
+                .slice(0, 2)
+                .map((part) => part[0]?.toUpperCase())
+                .join("")}
             </span>
-            <span className="block truncate text-[11px] capitalize text-ink-muted">
-              {membership?.role ?? "workspace member"}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-bold text-ink">
+                {loading ? "Loading account" : user?.full_name || user?.email}
+              </span>
+              <span className="block truncate text-[11px] capitalize text-ink-muted">
+                {membership?.role ?? "workspace member"}
+              </span>
             </span>
-          </span>
+          </div>
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 shrink-0 gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-extrabold text-ink-secondary transition-colors hover:border-danger/40 hover:bg-danger-soft hover:text-danger"
+            className="h-9 w-full shrink-0 justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-extrabold text-ink-secondary transition-colors hover:border-danger/40 hover:bg-danger-soft hover:text-danger lg:w-auto"
             onClick={() => void logout()}
             title="Sign out"
             aria-label="Sign out"
