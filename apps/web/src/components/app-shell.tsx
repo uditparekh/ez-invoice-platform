@@ -145,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 w-full shrink-0 justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-extrabold text-ink-secondary transition-colors hover:border-danger/40 hover:bg-danger-soft hover:text-danger lg:w-auto"
+            className="h-9 w-32 shrink-0 self-start justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-extrabold text-ink-secondary transition-colors hover:border-danger/40 hover:bg-danger-soft hover:text-danger lg:w-auto lg:self-auto"
             onClick={() => void logout()}
             title="Sign out"
             aria-label="Sign out"

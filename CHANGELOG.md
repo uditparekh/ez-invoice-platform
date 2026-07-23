@@ -54,8 +54,8 @@ All notable platform changes will be recorded here.
 - Sidebar account block redesign (pkg27): the card-in-card arrangement is
   replaced with a single row — avatar, name, role, and a compact labeled
   "Sign out" button with icon, visible resting border, and danger-tinted
-  hover; the mobile drawer stacks that button below the account identity
-  while desktop keeps the compact row
+  hover; the mobile drawer stacks a compact, identity-width button below
+  the account details while desktop keeps the compact row
 
 - Tally page download card now offers the Windows installer
   (SiftEntry-Tally-Connector-Setup-0.3.0.exe, one-click, no Python) as
