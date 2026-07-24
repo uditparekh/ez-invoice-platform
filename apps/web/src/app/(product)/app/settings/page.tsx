@@ -64,9 +64,9 @@ export default function SettingsPage() {
         <div className="grid min-w-0 gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
           {/* two-group rail */}
           <nav className="min-w-0 lg:sticky lg:top-24 lg:self-start">
-            <div className="flex min-w-0 gap-1 overflow-x-auto lg:flex-col lg:gap-0">
+            <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:flex-col lg:gap-0">
               {(["WORKSPACE", "MY ACCOUNT"] as const).map((group) => (
-                <div key={group} className="flex gap-1 lg:block">
+                <div key={group} className="contents lg:block">
                   <p className="hidden px-3 pb-2 pt-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted first:pt-0 lg:block">
                     {group}
                   </p>
@@ -78,7 +78,7 @@ export default function SettingsPage() {
                         type="button"
                         onClick={() => setSection(item.id)}
                         className={cn(
-                          "flex w-full shrink-0 items-center gap-2.5 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-bold transition-colors",
+                          "flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-bold leading-4 transition-colors sm:text-sm lg:min-h-0 lg:whitespace-nowrap",
                           section === item.id
                             ? "bg-accent-soft text-accent-ink"
                             : "text-ink-secondary hover:bg-surface-strong hover:text-ink",

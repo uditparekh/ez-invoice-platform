@@ -975,7 +975,7 @@ export function InvoiceWorkspace() {
 
       <section
         className={cn(
-          "mx-auto grid min-h-[640px] max-w-[1440px]",
+          "mx-auto grid min-h-[640px] w-full min-w-0 max-w-[1440px] grid-cols-[minmax(0,1fr)]",
           detailMode === "review"
             ? "lg:grid-cols-1"
             : "lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]",
@@ -1237,14 +1237,14 @@ function QueueTabsStrip({
   ];
   return (
     <section className="bg-canvas px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1440px] min-w-0 gap-2 overflow-x-auto py-4">
+      <div className="mx-auto grid max-w-[1440px] min-w-0 grid-cols-3 gap-2 py-3 sm:flex sm:overflow-x-auto sm:py-4">
         {tabs.map((tab) => (
           <button
             key={tab.label}
             type="button"
             onClick={() => onStatusChange(tab.status)}
             className={cn(
-              "relative h-11 shrink-0 rounded-xl px-3 text-sm font-black text-ink-secondary transition-colors hover:bg-surface hover:text-ink",
+              "relative min-h-11 min-w-0 rounded-xl px-2 text-xs font-black leading-4 text-ink-secondary transition-colors hover:bg-surface hover:text-ink sm:h-11 sm:shrink-0 sm:px-3 sm:text-sm",
               status === tab.status && "bg-accent-soft text-accent-ink",
             )}
           >

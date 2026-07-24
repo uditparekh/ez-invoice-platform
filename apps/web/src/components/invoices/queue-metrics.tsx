@@ -34,7 +34,7 @@ function QueueMetric({
   return (
     <div
       className={cn(
-        "relative flex min-h-[92px] items-center gap-3 border-b border-line px-5 py-4 sm:border-r lg:border-b-0",
+        "relative flex min-h-[92px] items-center gap-3 border-b border-line px-5 py-4 last:col-span-2 sm:border-r lg:last:col-span-1 lg:border-b-0",
         active && "bg-accent-soft/70 dark:bg-accent-soft",
       )}
     >

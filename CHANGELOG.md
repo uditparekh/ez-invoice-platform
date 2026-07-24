@@ -44,6 +44,12 @@ All notable platform changes will be recorded here.
 
 ### Fixed
 
+- Mobile workspace polish: invoice totals and statuses no longer clip in
+  the demo queue, compact navigation tabs remain fully reachable without
+  horizontal scrolling, settings navigation fits phone widths, summary
+  metrics balance cleanly, and History activity metadata wraps without
+  hiding invoice numbers or amounts.
+
 - AI activation config: `SIFTENTRY_AI_MODEL` is now honored by the
   deployed configuration path (`AiExtractorConfig.from_settings`).
   Previously only local `from_environment` read it, so a hosted Groq

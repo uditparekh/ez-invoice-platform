@@ -153,7 +153,10 @@ export default function HistoryPage() {
               {filtered.length ? (
                 <div className="divide-y divide-line">
                   {filtered.slice(0, 30).map((event) => (
-                    <div key={event.id} className="flex gap-4 px-5 py-4">
+                    <div
+                      key={event.id}
+                      className="flex items-start gap-3 px-4 py-4 sm:gap-4 sm:px-5"
+                    >
                       <span
                         className={cn(
                           "grid size-9 shrink-0 place-items-center rounded-xl",
@@ -169,19 +172,29 @@ export default function HistoryPage() {
                         {event.icon}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-black text-ink">
-                          {event.title}{" "}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-black text-ink">
+                          <span>{event.title}</span>
                           <StatusBadge status={event.status} />
-                        </p>
-                        <p className="mt-0.5 truncate text-sm font-semibold text-ink-secondary">
-                          {event.supplier} ·{" "}
-                          <span className="font-mono">{event.invoiceNumber}</span> ·{" "}
-                          <span className="font-mono">
+                        </div>
+                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-ink-secondary">
+                          <span className="min-w-0 break-words">
+                            {event.supplier}
+                          </span>
+                          <span aria-hidden="true" className="text-ink-muted">
+                            ·
+                          </span>
+                          <span className="break-all font-mono">
+                            {event.invoiceNumber}
+                          </span>
+                          <span aria-hidden="true" className="text-ink-muted">
+                            ·
+                          </span>
+                          <span className="whitespace-nowrap font-mono">
                             {formatCurrency(event.amount, event.currency)}
                           </span>
-                        </p>
+                        </div>
                       </div>
-                      <span className="shrink-0 text-xs font-bold text-ink-muted">
+                      <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs font-bold text-ink-muted">
                         {timeAgo(event.at)}
                       </span>
                     </div>

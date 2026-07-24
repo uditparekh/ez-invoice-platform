@@ -86,7 +86,7 @@ export default function RulesPage() {
       />
 
       <div className="border-b border-line bg-shell/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1440px] gap-1 overflow-x-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-[1440px] grid-cols-2 gap-2 px-4 py-3 sm:flex sm:gap-1 sm:overflow-x-auto sm:px-6 sm:py-0 lg:px-8">
           <TabButton active={tab === "mapping"} onClick={() => setTab("mapping")}>
             GL mapping
             {unmapped.length > 0 && <CountBadge tone="warning">{unmapped.length}</CountBadge>}
@@ -789,8 +789,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-12 shrink-0 items-center border-b-2 px-4 text-sm font-black transition-colors",
-        active ? "border-accent text-accent" : "border-transparent text-ink-secondary hover:text-ink",
+        "inline-flex min-h-11 min-w-0 items-center justify-center rounded-xl border px-3 text-center text-xs font-black transition-colors sm:h-12 sm:shrink-0 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-4 sm:text-sm",
+        active
+          ? "border-accent bg-accent-soft text-accent sm:bg-transparent"
+          : "border-line bg-surface text-ink-secondary hover:text-ink sm:border-transparent sm:bg-transparent",
       )}
     >
       {children}

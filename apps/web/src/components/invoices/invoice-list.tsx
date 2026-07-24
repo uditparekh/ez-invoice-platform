@@ -18,7 +18,7 @@ export function InvoiceList({
   toolbar?: React.ReactNode;
 }) {
   return (
-    <div className="border-b border-line bg-surface lg:border-b-0 lg:border-r lg:border-line">
+    <div className="min-w-0 border-b border-line bg-surface lg:border-b-0 lg:border-r lg:border-line">
       {toolbar}
       <div className="flex h-14 items-center justify-between border-b border-line px-4 sm:px-6">
         <span className="text-sm font-extrabold text-ink-secondary">
@@ -37,7 +37,7 @@ export function InvoiceList({
               key={invoice.id}
               onClick={() => onSelect(invoice.id)}
               className={cn(
-                "grid w-full grid-cols-[minmax(0,1fr)_minmax(118px,auto)] gap-x-4 border-b border-line px-4 py-5 text-left transition-colors sm:px-6",
+                "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-3 border-b border-line px-4 py-5 text-left transition-colors sm:grid-cols-[minmax(0,1fr)_minmax(118px,auto)] sm:gap-x-4 sm:px-6",
                 selectedId === invoice.id
                   ? "border-l-[4px] border-l-accent bg-accent-soft"
                   : "border-l-[4px] border-l-transparent bg-surface hover:bg-surface-subtle",
@@ -46,7 +46,7 @@ export function InvoiceList({
               <span className="truncate text-base font-black text-ink">
                 {invoice.invoice_number || "Number pending"}
               </span>
-              <span className="truncate text-right font-mono text-sm font-black text-ink">
+              <span className="whitespace-nowrap text-right font-mono text-xs font-black text-ink sm:text-sm">
                 {formatCurrency(invoice.total, invoice.currency)}
               </span>
               <span className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-ink-secondary">
