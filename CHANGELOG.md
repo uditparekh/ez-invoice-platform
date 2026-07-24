@@ -6,6 +6,12 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Public demo access: the sign-in page can open an isolated viewer-only
+  workspace without signup. The workspace is seeded idempotently with two
+  clearly synthetic USD invoices successfully posted to QuickBooks and Zoho
+  so Home, Invoices, History, Vendors, and Insights show a realistic processed
+  workflow while all mutating invoice APIs remain forbidden to the demo user.
+
 - Route-level loading screen (pkg27): navigating into /app (e.g. right
   after login) now shows an instant branded spinner ("Opening your
   workspace") instead of the old frozen-page feeling while the workspace

@@ -1,6 +1,12 @@
 "use client";
 
-import { ArrowRight, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
+import {
+  ArrowRight,
+  Eye,
+  LoaderCircle,
+  LockKeyhole,
+  Mail,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,6 +18,7 @@ import { apiErrorMessage } from "@/lib/utils";
 export function LoginForm() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [openingDemo, setOpeningDemo] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -57,6 +64,26 @@ export function LoginForm() {
     } catch {
       setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
       setSubmitting(false);
+    }
+  }
+
+  async function openDemo() {
+    setOpeningDemo(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/auth/demo", { method: "POST" });
+      if (!response.ok) {
+        const payload = (await response.json()) as ApiErrorPayload;
+        setError(apiErrorMessage(payload, "Unable to open the demo workspace."));
+        setOpeningDemo(false);
+        return;
+      }
+      router.replace("/app");
+      router.refresh();
+    } catch {
+      setError("The SiftEntry demo is temporarily unavailable.");
+      setOpeningDemo(false);
     }
   }
 
@@ -120,7 +147,7 @@ export function LoginForm() {
         type="submit"
         variant="primary"
         className="w-full"
-        disabled={submitting}
+        disabled={submitting || openingDemo}
       >
         {submitting ? (
           <LoaderCircle size={17} className="animate-spin" />
@@ -129,6 +156,28 @@ export function LoginForm() {
         )}
         {submitting ? "Opening workspace" : "Continue"}
       </Button>
+      <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+        <span className="h-px flex-1 bg-line" />
+        Or
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        disabled={submitting || openingDemo}
+        onClick={openDemo}
+      >
+        {openingDemo ? (
+          <LoaderCircle size={17} className="animate-spin" />
+        ) : (
+          <Eye size={17} />
+        )}
+        {openingDemo ? "Preparing demo" : "Explore demo workspace"}
+      </Button>
+      <p className="-mt-2 text-center text-xs leading-5 text-ink-muted">
+        Read-only access · two synthetic processed invoices · no signup
+      </p>
     </form>
   );
 }

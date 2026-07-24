@@ -2392,6 +2392,7 @@ class InvoiceRepository:
         event_type: str,
         details: Optional[Dict[str, Any]] = None,
         invoice_id: Optional[str] = None,
+        created_at: Optional[datetime] = None,
     ) -> None:
         """Public audit insert for events that happen outside another write."""
         with self._connect() as connection:
@@ -2401,6 +2402,7 @@ class InvoiceRepository:
                 invoice_id,
                 event_type,
                 details or {},
+                created_at=created_at,
             )
 
     def get_latest_audit_event(
@@ -2654,6 +2656,7 @@ class InvoiceRepository:
         invoice_id: Optional[str],
         event_type: str,
         details: Dict[str, Any],
+        created_at: Optional[datetime] = None,
     ) -> None:
         connection.execute(
             """
@@ -2668,6 +2671,6 @@ class InvoiceRepository:
                 invoice_id,
                 event_type,
                 _json(details),
-                utc_now().isoformat(),
+                (created_at or utc_now()).isoformat(),
             ),
         )

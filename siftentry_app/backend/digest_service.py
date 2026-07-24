@@ -279,6 +279,7 @@ def send_digest_for_organization(
             "awaiting_approval": digest.awaiting_approval,
             "ready_to_post": digest.ready_to_post,
         },
+        created_at=now,
     )
     return recipients
 

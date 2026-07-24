@@ -24,6 +24,7 @@ from fastapi.responses import FileResponse
 from .adapters import _profiled_legacy_payload, _tally_settings_from_profile, default_adapters
 from .ai_parser import AiExtractorConfig, is_ai_parser_mode
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
+from .demo_seed import ensure_public_demo_workspace
 from .email_service import EmailDeliveryError, EmailService
 from .models import (
     AccountingSystem,
@@ -280,6 +281,25 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password.",
             )
+        repository.mark_user_login(user.id)
+        return issue_tokens(repository, user.id, request.app.state.settings)
+
+    @app.post(
+        "/api/v1/auth/demo",
+        response_model=AuthTokens,
+        tags=["authentication"],
+    )
+    def public_demo_access(request: Request) -> AuthTokens:
+        """Open the isolated, viewer-only workspace containing synthetic data."""
+        repository = _repo(request)
+        try:
+            user = ensure_public_demo_workspace(repository)
+        except Exception as exc:
+            logging.exception("Unable to prepare the public demo workspace.")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="The demo workspace is temporarily unavailable.",
+            ) from exc
         repository.mark_user_login(user.id)
         return issue_tokens(repository, user.id, request.app.state.settings)
 

@@ -297,6 +297,75 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
         ).json() == []
 
 
+def test_public_demo_is_seeded_once_and_remains_read_only(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        first = client.post("/api/v1/auth/demo")
+        assert first.status_code == 200
+        tokens = first.json()
+        assert tokens["user"]["email"] == "public-demo@siftentry.invalid"
+        assert len(tokens["user"]["memberships"]) == 1
+        membership = tokens["user"]["memberships"][0]
+        assert membership["role"] == "viewer"
+
+        headers = authorization(tokens)
+        org_id = membership["organization_id"]
+        invoices = client.get(
+            "/api/v1/invoices",
+            params={"organization_id": org_id},
+            headers=headers,
+        )
+        assert invoices.status_code == 200
+        invoice_rows = invoices.json()
+        assert {row["invoice_number"] for row in invoice_rows} == {
+            "DEMO-QB-1001",
+            "DEMO-ZOHO-1002",
+        }
+        assert {row["status"] for row in invoice_rows} == {"posted"}
+        assert {row["currency"] for row in invoice_rows} == {"USD"}
+        assert all(
+            row["source_path"].startswith("synthetic-demo/")
+            for row in invoice_rows
+        )
+        assert {row["supplier"]["name"] for row in invoice_rows} == {
+            "Northwind Office Supply Inc.",
+            "BrightPath Cloud Services LLC",
+        }
+
+        for invoice in invoice_rows:
+            activity = client.get(
+                f"/api/v1/invoices/{invoice['id']}/activity",
+                headers=headers,
+            )
+            assert activity.status_code == 200
+            assert any(
+                event["type"] == "posting_success"
+                for event in activity.json()["events"]
+            )
+
+        denied = client.post(
+            "/api/v1/invoices/import",
+            json={
+                "organization_id": org_id,
+                "source_file": "not-allowed.pdf",
+            },
+            headers=headers,
+        )
+        assert denied.status_code == 403
+
+        second = client.post("/api/v1/auth/demo")
+        assert second.status_code == 200
+        second_headers = authorization(second.json())
+        seeded_again = client.get(
+            "/api/v1/invoices",
+            params={"organization_id": org_id},
+            headers=second_headers,
+        )
+        assert seeded_again.status_code == 200
+        assert {row["id"] for row in seeded_again.json()} == {
+            row["id"] for row in invoice_rows
+        }
+
+
 def test_password_reset_flow(tmp_path: Path):
     with make_client(tmp_path) as client:
         bootstrap(client)
