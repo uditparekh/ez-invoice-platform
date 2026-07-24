@@ -303,7 +303,7 @@ def test_public_demo_is_seeded_once_and_remains_read_only(tmp_path: Path):
             client,
             email="demo@siftentry.com",
             password="existing-demo-password",
-            organization_name="SiftEntry Demo Workspace",
+            organization_name="Public Product Tour",
         )
         first = client.post("/api/v1/auth/demo")
         assert first.status_code == 200
