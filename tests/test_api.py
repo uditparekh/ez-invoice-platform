@@ -299,10 +299,17 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
 
 def test_public_demo_is_seeded_once_and_remains_read_only(tmp_path: Path):
     with make_client(tmp_path) as client:
+        original = bootstrap(
+            client,
+            email="demo@siftentry.com",
+            password="existing-demo-password",
+            organization_name="SiftEntry Demo Workspace",
+        )
         first = client.post("/api/v1/auth/demo")
         assert first.status_code == 200
         tokens = first.json()
-        assert tokens["user"]["email"] == "public-demo@siftentry.invalid"
+        assert tokens["user"]["id"] == original["user"]["id"]
+        assert tokens["user"]["email"] == "demo@siftentry.com"
         assert len(tokens["user"]["memberships"]) == 1
         membership = tokens["user"]["memberships"][0]
         assert membership["role"] == "viewer"
@@ -331,6 +338,13 @@ def test_public_demo_is_seeded_once_and_remains_read_only(tmp_path: Path):
             "BrightPath Cloud Services LLC",
         }
 
+        organization = client.get(
+            "/api/v1/organizations",
+            headers=headers,
+        )
+        assert organization.status_code == 200
+        assert organization.json()[0]["default_currency"] == "USD"
+
         for invoice in invoice_rows:
             activity = client.get(
                 f"/api/v1/invoices/{invoice['id']}/activity",
@@ -351,6 +365,16 @@ def test_public_demo_is_seeded_once_and_remains_read_only(tmp_path: Path):
             headers=headers,
         )
         assert denied.status_code == 403
+
+        password_still_works = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "demo@siftentry.com",
+                "password": "existing-demo-password",
+            },
+        )
+        assert password_still_works.status_code == 200
+        assert password_still_works.json()["user"]["id"] == original["user"]["id"]
 
         second = client.post("/api/v1/auth/demo")
         assert second.status_code == 200

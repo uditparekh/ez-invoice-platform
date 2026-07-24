@@ -21,8 +21,8 @@ from .repository import InvoiceRepository
 from .security import hash_password
 
 
-PUBLIC_DEMO_EMAIL = "public-demo@siftentry.invalid"
-PUBLIC_DEMO_ORGANIZATION = "SiftEntry Public Demo · Synthetic Data Only"
+PUBLIC_DEMO_EMAIL = "demo@siftentry.com"
+PUBLIC_DEMO_ORGANIZATION = "SiftEntry Demo Workspace"
 
 
 def _demo_invoice_specs(organization_id: str) -> list[dict[str, Any]]:
@@ -200,7 +200,7 @@ def _demo_invoice_specs(organization_id: str) -> list[dict[str, Any]]:
 
 
 def ensure_public_demo_workspace(repository: InvoiceRepository) -> User:
-    """Create the isolated viewer account and its showcase records once."""
+    """Prepare the existing isolated demo account and its showcase records."""
 
     user = repository.get_user_by_email(PUBLIC_DEMO_EMAIL)
     if user is None:
@@ -210,27 +210,31 @@ def ensure_public_demo_workspace(repository: InvoiceRepository) -> User:
             full_name="SiftEntry Demo",
         )
 
-    organization = repository.get_organization_by_name(PUBLIC_DEMO_ORGANIZATION)
-    if organization is None:
-        organization = repository.create_organization(
-            OrganizationCreate(
-                name=PUBLIC_DEMO_ORGANIZATION,
-                legal_names=["SiftEntry Demo Operations Inc."],
-                default_currency="USD",
-            )
-        )
+    memberships = repository.list_memberships(user.id)
+    if len(memberships) > 1:
+        raise RuntimeError("The public demo account must have exactly one workspace.")
 
-    other_memberships = [
-        membership
-        for membership in repository.list_memberships(user.id)
-        if membership.organization_id != organization.id
-    ]
+    if memberships:
+        organization = repository.get_organization(memberships[0].organization_id)
+        if organization is None or "demo" not in organization.name.lower():
+            raise RuntimeError("The public demo account is linked to a non-demo workspace.")
+    else:
+        organization = repository.get_organization_by_name(PUBLIC_DEMO_ORGANIZATION)
+        if organization is None:
+            organization = repository.create_organization(
+                OrganizationCreate(
+                    name=PUBLIC_DEMO_ORGANIZATION,
+                    legal_names=["SiftEntry Demo Operations Inc."],
+                    default_currency="USD",
+                )
+            )
+
     other_members = [
         member
         for member in repository.list_organization_members(organization.id)
         if member.user_id != user.id
     ]
-    if other_memberships or other_members:
+    if other_members:
         raise RuntimeError("The reserved public demo identity is not isolated.")
 
     membership = repository.get_membership(user.id, organization.id)
@@ -241,7 +245,19 @@ def ensure_public_demo_workspace(repository: InvoiceRepository) -> User:
             OrganizationRole.VIEWER,
         )
     elif membership.role != OrganizationRole.VIEWER:
-        raise RuntimeError("The public demo account must remain viewer-only.")
+        repository.create_membership(
+            user.id,
+            organization.id,
+            OrganizationRole.VIEWER,
+        )
+
+    if organization.default_currency != "USD":
+        updated = repository.set_organization_default_currency(
+            organization.id,
+            "USD",
+        )
+        if updated is None:
+            raise RuntimeError("The demo workspace currency could not be updated.")
 
     existing = {
         invoice.invoice_number: invoice

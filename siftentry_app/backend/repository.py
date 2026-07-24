@@ -917,6 +917,34 @@ class InvoiceRepository:
             ).fetchone()
         return self._organization_from_row(row) if row else None
 
+    def set_organization_default_currency(
+        self,
+        organization_id: str,
+        currency: str,
+    ) -> Optional[Organization]:
+        organization = self.get_organization(organization_id)
+        if organization is None:
+            return None
+        normalized = (currency or "USD").strip().upper()
+        now = utc_now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE organizations
+                SET default_currency = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (normalized, now.isoformat(), organization_id),
+            )
+            self._insert_audit(
+                connection,
+                organization_id,
+                None,
+                "organization.default_currency_updated",
+                {"default_currency": normalized},
+            )
+        return self.get_organization(organization_id)
+
     def _organization_from_row(self, row: sqlite3.Row) -> Organization:
         return Organization(
             id=row["id"],
