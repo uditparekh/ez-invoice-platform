@@ -309,6 +309,14 @@ function MobileTabBar({
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-shell/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
     >
       <div className="mx-auto grid h-16 max-w-lg grid-cols-5">
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          className="flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-ink-muted transition-colors hover:text-ink-secondary"
+        >
+          <Menu size={20} strokeWidth={1.8} />
+          Menu
+        </button>
         {navGroups[0].items.map((item) => {
           const active = isActivePath(pathname, item.href);
           const Icon = item.icon;
@@ -329,14 +337,6 @@ function MobileTabBar({
             </Link>
           );
         })}
-        <button
-          type="button"
-          onClick={onOpenMenu}
-          className="flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-ink-muted transition-colors hover:text-ink-secondary"
-        >
-          <Menu size={20} strokeWidth={1.8} />
-          Menu
-        </button>
       </div>
     </nav>
   );

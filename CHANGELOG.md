@@ -4,6 +4,11 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Mobile tab bar (pkg30): the Menu tab moved from the right end to the
+  left end of the bottom navigation bar
+
 ### Added
 
 - Navigation performance pass (pkg29): workspace invoices are now served
