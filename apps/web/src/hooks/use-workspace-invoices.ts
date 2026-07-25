@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { invoiceCache } from "@/lib/invoice-cache";
 import { mergePreviewInvoices } from "@/lib/preview-invoices";
 import type { Invoice, InvoiceStatus } from "@/lib/types";
 
@@ -16,8 +17,10 @@ export function useWorkspaceInvoices({
   limit = 100,
 }: UseWorkspaceInvoicesOptions = {}) {
   const { activeOrganizationId: organizationId } = useAuth();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `${organizationId ?? ""}|${status ?? ""}|${limit}`;
+  const cached = invoiceCache.get(cacheKey);
+  const [invoices, setInvoices] = useState<Invoice[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState("");
 
   const loadInvoices = useCallback(
@@ -28,7 +31,13 @@ export function useWorkspaceInvoices({
         return;
       }
 
-      setLoading(true);
+      const hit = invoiceCache.get(cacheKey);
+      if (hit) {
+        setInvoices(hit);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setError("");
       try {
         const query = new URLSearchParams({
@@ -41,7 +50,9 @@ export function useWorkspaceInvoices({
           signal,
         });
         if (!response.ok) throw new Error("Unable to load invoice workspace.");
-        setInvoices(mergePreviewInvoices((await response.json()) as Invoice[]));
+        const fresh = mergePreviewInvoices((await response.json()) as Invoice[]);
+        invoiceCache.set(cacheKey, fresh);
+        setInvoices(fresh);
       } catch (loadError) {
         if ((loadError as Error).name !== "AbortError") {
           setError((loadError as Error).message);
@@ -50,7 +61,7 @@ export function useWorkspaceInvoices({
         setLoading(false);
       }
     },
-    [organizationId, limit, status],
+    [organizationId, limit, status, cacheKey],
   );
 
   useEffect(() => {

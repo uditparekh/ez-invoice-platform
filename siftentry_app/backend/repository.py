@@ -2319,6 +2319,25 @@ class InvoiceRepository:
             ).fetchall()
         return [self._posting_from_row(row) for row in rows]
 
+    def list_postings_for_organization(
+        self,
+        organization_id: str,
+        limit: int = 200,
+    ) -> List[PostingResult]:
+        """All posting attempts in one query — replaces per-invoice fan-out."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM posting_attempts
+                WHERE organization_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (organization_id, limit),
+            ).fetchall()
+        return [self._posting_from_row(row) for row in rows]
+
     def record_connector_heartbeat(
         self,
         client_profile_id: str,

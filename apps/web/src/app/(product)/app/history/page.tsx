@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+
+import { useAuth } from "@/components/auth-provider";
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -218,15 +220,7 @@ export default function HistoryPage() {
 /* ================= posting log & retry ================= */
 
 function PostingLog({ invoices }: { invoices: Invoice[] }) {
-  const targets = useMemo(
-    () =>
-      invoices
-        .filter((invoice) =>
-          ["posted", "failed", "approved"].includes(invoice.status),
-        )
-        .slice(0, 12),
-    [invoices],
-  );
+  const { activeOrganizationId: organizationId } = useAuth();
   const [postings, setPostings] = useState<PostingResult[] | null>(null);
   const [retrying, setRetrying] = useState<string>("");
   const [notice, setNotice] = useState("");
@@ -234,32 +228,31 @@ function PostingLog({ invoices }: { invoices: Invoice[] }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const results = await Promise.all(
-        targets.map(async (invoice) => {
-          try {
-            const response = await fetch(`/api/invoices/${invoice.id}/postings`);
-            if (!response.ok) return [] as PostingResult[];
-            const payload = (await response.json()) as unknown;
-            return (Array.isArray(payload) ? payload : []) as PostingResult[];
-          } catch {
-            return [] as PostingResult[];
-          }
-        }),
-      );
-      if (!cancelled)
-        setPostings(
-          results
-            .flat()
-            .sort(
-              (a, b) =>
-                new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-            ),
+      if (!organizationId) return;
+      try {
+        const response = await fetch(
+          `/api/organizations/${organizationId}/postings?limit=300`,
         );
+        const payload = response.ok ? ((await response.json()) as unknown) : [];
+        const results = (
+          Array.isArray(payload) ? payload : []
+        ) as PostingResult[];
+        if (!cancelled)
+          setPostings(
+            results.sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime(),
+            ),
+          );
+      } catch {
+        if (!cancelled) setPostings([]);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [targets]);
+  }, [organizationId]);
 
   async function retry(posting: PostingResult) {
     setRetrying(posting.id);

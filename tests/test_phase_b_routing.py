@@ -267,3 +267,19 @@ def test_explicit_ai_mode_still_works_without_gate(live_ai_client):
     document = response.json()["raw_payload"]["INVOICE"]["DOCUMENT"]
     assert document["AI/OCR PROVIDER"] == "openai_compatible"
     assert "AI/OCR TRIGGER" not in document  # explicit mode, not auto-gated
+
+
+def test_organization_postings_endpoint(live_ai_client):
+    """Bulk postings endpoint returns org-scoped attempts in one call."""
+    client, _calls = live_ai_client
+    headers, org_id = _bootstrap(client)
+    response = client.get(
+        f"/api/v1/organizations/{org_id}/postings?limit=50", headers=headers
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+
+    other = client.get(
+        "/api/v1/organizations/not-my-org/postings", headers=headers
+    )
+    assert other.status_code in (403, 404)

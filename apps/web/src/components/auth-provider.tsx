@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 
+import { clearWorkspaceInvoiceCache } from "@/lib/invoice-cache";
 import type { AuthenticatedUser } from "@/lib/types";
 
 interface AuthContextValue {
@@ -144,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Even if the network is unavailable, clear this browser session.
     }
+    clearWorkspaceInvoiceCache();
     setUser(null);
     setActiveOrganizationId(null);
     setIdleWarningOpen(false);

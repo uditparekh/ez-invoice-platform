@@ -6,6 +6,14 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Navigation performance pass (pkg29): workspace invoices are now served
+  from a shared stale-while-revalidate cache — switching pages renders
+  the last known data instantly while a silent background refresh keeps
+  it current, instead of blocking every page behind a full network round
+  trip. The cache is cleared on sign-out. A new bulk endpoint
+  (`GET /api/v1/organizations/{id}/postings`) replaces the posting log's
+  one-request-per-invoice fan-out with a single call
+
 - Mobile bottom tab bar (pkg28): Home, Invoices, History, and Insights
   are now one thumb-tap away in a fixed bottom navigation bar with icons
   and labels, active-state highlighting, and iPhone safe-area padding.

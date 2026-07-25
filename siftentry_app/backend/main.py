@@ -1681,6 +1681,22 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         return OrganizationSettings.model_validate(saved)
 
     @app.get(
+        "/api/v1/organizations/{organization_id}/postings",
+        response_model=List[PostingResult],
+        tags=["workflow"],
+    )
+    def list_organization_postings(
+        request: Request,
+        organization_id: str,
+        current_user: CurrentUser,
+        limit: int = Query(default=200, ge=1, le=500),
+    ) -> List[PostingResult]:
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        return _repo(request).list_postings_for_organization(
+            organization_id, limit=limit
+        )
+
+    @app.get(
         "/api/v1/invoices/{invoice_id}/postings",
         response_model=List[PostingResult],
         tags=["workflow"],
