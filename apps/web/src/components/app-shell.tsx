@@ -106,7 +106,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-6">
         {navGroups.map((group, groupIndex) => (
-          <div key={group.label} className={groupIndex ? "mt-8" : ""}>
+          <div
+            key={group.label}
+            className={cn(
+              groupIndex ? "mt-8 max-lg:mt-0" : "",
+              group.label === "Work" && "max-lg:hidden",
+            )}
+          >
             <p className="px-3 text-[11px] font-extrabold uppercase tracking-[0.18em] text-ink-muted">
               {group.label}
             </p>
@@ -188,15 +194,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="min-w-0 lg:pl-[260px]">
         <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-shell/95 px-4 backdrop-blur sm:px-6 lg:px-8">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="mr-3 size-11 shrink-0 rounded-xl px-0 lg:hidden"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Open navigation"
-          >
-            <Menu size={20} strokeWidth={2.25} />
-          </Button>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink-secondary">
             <Building2 size={16} className="shrink-0 text-cyan" />
             {user && user.memberships.length > 1 ? (
@@ -251,8 +248,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ThemeToggle />
           </div>
         </header>
-        <main className="min-w-0 overflow-x-hidden">{children}</main>
+        <main className="min-w-0 overflow-x-hidden pb-24 lg:pb-0">
+          {children}
+        </main>
       </div>
+      <MobileTabBar
+        pathname={pathname}
+        onOpenMenu={() => setMobileOpen(true)}
+      />
       <CommandCenter />
     </div>
   );
@@ -291,4 +294,50 @@ function NavLink({
 function isActivePath(pathname: string, href: string) {
   if (href === "/app") return pathname === "/app";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function MobileTabBar({
+  pathname,
+  onOpenMenu,
+}: {
+  pathname: string;
+  onOpenMenu: () => void;
+}) {
+  return (
+    <nav
+      aria-label="Primary"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-shell/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+    >
+      <div className="mx-auto grid h-16 max-w-lg grid-cols-5">
+        {navGroups[0].items.map((item) => {
+          const active = isActivePath(pathname, item.href);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-colors",
+                active
+                  ? "text-accent-ink"
+                  : "text-ink-muted hover:text-ink-secondary",
+              )}
+            >
+              <Icon size={20} strokeWidth={active ? 2.4 : 1.8} />
+              {item.label}
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          className="flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-ink-muted transition-colors hover:text-ink-secondary"
+        >
+          <Menu size={20} strokeWidth={1.8} />
+          Menu
+        </button>
+      </div>
+    </nav>
+  );
 }

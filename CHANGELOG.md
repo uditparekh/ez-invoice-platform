@@ -6,6 +6,15 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Mobile bottom tab bar (pkg28): Home, Invoices, History, and Insights
+  are now one thumb-tap away in a fixed bottom navigation bar with icons
+  and labels, active-state highlighting, and iPhone safe-area padding.
+  The fifth tab, Menu, opens the drawer, which on mobile now shows only
+  Configure pages and the account row (the Work pages live in the tab
+  bar). The redundant top-left hamburger is removed on mobile, and page
+  content reserves space so the bar never covers it. Desktop navigation
+  is unchanged
+
 - Public demo access: the sign-in page can open an isolated viewer-only
   workspace without signup. The workspace is seeded idempotently with two
   clearly synthetic USD invoices successfully posted to QuickBooks and Zoho
