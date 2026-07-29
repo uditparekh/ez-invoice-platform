@@ -75,7 +75,8 @@ All notable platform changes will be recorded here.
   Legacy duplicate memberships are collapsed to one isolated demo tenant
   without deleting legitimate invoices from any detached workspace. Guarded
   failures include a non-sensitive exception-class response header for
-  production diagnosis while keeping the public error message generic.
+  production diagnosis while keeping the public error message generic. The
+  cleanup wildcard is passed as a bound value for PostgreSQL/SQLite parity.
 
 - Login feedback now appears on the first rendered frame after submission:
   the primary action holds focus, swaps to a stable "Signing in…" spinner,

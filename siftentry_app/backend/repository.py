@@ -1451,9 +1451,9 @@ class InvoiceRepository:
                 SELECT id, source_path, raw_payload_json
                 FROM invoices
                 WHERE organization_id = ?
-                  AND source_path LIKE 'synthetic-demo/%'
+                  AND source_path LIKE ?
                 """,
-                (organization_id,),
+                (organization_id, "synthetic-demo/%"),
             ).fetchall()
             invoice_ids = []
             for row in rows:
