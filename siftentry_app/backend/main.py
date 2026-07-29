@@ -299,6 +299,9 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="The demo workspace is temporarily unavailable.",
+                headers={
+                    "X-SiftEntry-Demo-Error": type(exc).__name__,
+                },
             ) from exc
         repository.mark_user_login(user.id)
         return issue_tokens(repository, user.id, request.app.state.settings)

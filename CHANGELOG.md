@@ -73,7 +73,9 @@ All notable platform changes will be recorded here.
   the sample-invoice action is visible only in the public demo account, and a
   conflict-safe display name supports databases with unique-name enforcement.
   Legacy duplicate memberships are collapsed to one isolated demo tenant
-  without deleting legitimate invoices from any detached workspace.
+  without deleting legitimate invoices from any detached workspace. Guarded
+  failures include a non-sensitive exception-class response header for
+  production diagnosis while keeping the public error message generic.
 
 - Login feedback now appears on the first rendered frame after submission:
   the primary action holds focus, swaps to a stable "Signing in…" spinner,
