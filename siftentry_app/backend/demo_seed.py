@@ -244,11 +244,21 @@ def ensure_public_demo_workspace(repository: InvoiceRepository) -> User:
             continue
         isolated_organizations.append(candidate)
 
-    if len(isolated_organizations) > 1:
-        raise RuntimeError("The public demo account must have exactly one workspace.")
-
     if isolated_organizations:
+        preferred_names = {
+            PUBLIC_DEMO_ORGANIZATION: 0,
+            PUBLIC_DEMO_FALLBACK_ORGANIZATION: 1,
+        }
+        isolated_organizations.sort(
+            key=lambda item: (
+                preferred_names.get(item.name, 2),
+                item.created_at,
+            )
+        )
         organization = isolated_organizations[0]
+        for extra_organization in isolated_organizations[1:]:
+            repository.delete_seeded_demo_invoices(extra_organization.id)
+            repository.delete_membership(user.id, extra_organization.id)
     else:
         organization = repository.create_organization(
             OrganizationCreate(

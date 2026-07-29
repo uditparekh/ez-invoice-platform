@@ -16,6 +16,7 @@ from siftentry_app.backend.main import create_app
 from siftentry_app.backend.models import (
     InvoiceCreate,
     InvoiceStatus,
+    OrganizationCreate,
     OrganizationRole,
 )
 from siftentry_app.backend.security import hash_password
@@ -450,6 +451,30 @@ def test_public_demo_repairs_legacy_shared_workspace_without_touching_real_data(
             owner_org_id,
             OrganizationRole.VIEWER,
         )
+        primary_demo_org = repository.create_organization(
+            OrganizationCreate(
+                name=PUBLIC_DEMO_ORGANIZATION,
+                legal_names=["SiftEntry Demo Operations Inc."],
+                default_currency="USD",
+            )
+        )
+        extra_demo_org = repository.create_organization(
+            OrganizationCreate(
+                name=PUBLIC_DEMO_FALLBACK_ORGANIZATION,
+                legal_names=["SiftEntry Demo Operations Inc."],
+                default_currency="USD",
+            )
+        )
+        repository.create_membership(
+            demo_user.id,
+            primary_demo_org.id,
+            OrganizationRole.VIEWER,
+        )
+        repository.create_membership(
+            demo_user.id,
+            extra_demo_org.id,
+            OrganizationRole.VIEWER,
+        )
         repository.create_invoice(
             InvoiceCreate(
                 organization_id=owner_org_id,
@@ -472,9 +497,10 @@ def test_public_demo_repairs_legacy_shared_workspace_without_touching_real_data(
         assert repaired.status_code == 200
         membership = repaired.json()["user"]["memberships"]
         assert len(membership) == 1
-        assert membership[0]["organization_id"] != owner_org_id
+        assert membership[0]["organization_id"] == primary_demo_org.id
         assert membership[0]["role"] == "viewer"
         assert repository.get_membership(demo_user.id, owner_org_id) is None
+        assert repository.get_membership(demo_user.id, extra_demo_org.id) is None
 
         owner_invoices = client.get(
             "/api/v1/invoices",

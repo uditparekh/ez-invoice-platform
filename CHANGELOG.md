@@ -72,6 +72,8 @@ All notable platform changes will be recorded here.
   from the real workspace, browser preview invoices are organization-scoped,
   the sample-invoice action is visible only in the public demo account, and a
   conflict-safe display name supports databases with unique-name enforcement.
+  Legacy duplicate memberships are collapsed to one isolated demo tenant
+  without deleting legitimate invoices from any detached workspace.
 
 - Login feedback now appears on the first rendered frame after submission:
   the primary action holds focus, swaps to a stable "Signing in…" spinner,
