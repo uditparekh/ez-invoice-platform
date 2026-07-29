@@ -59,8 +59,9 @@ const parserOptions = [
   { label: "Universal extraction", value: "universal" },
 ];
 
-const previewOnlyUploads =
+const previewUploadsEnabled =
   process.env.NEXT_PUBLIC_DEMO_PREVIEW_UPLOADS !== "false";
+const publicDemoEmail = "demo@siftentry.com";
 
 const targetSystems = [
   "QuickBooks",
@@ -176,7 +177,15 @@ function tallyProfileFromClientProfile(
 }
 
 export function InvoiceWorkspace() {
-  const { activeOrganizationId: organizationId } = useAuth();
+  const { activeOrganizationId: organizationId, user } = useAuth();
+  const isPublicDemo =
+    user?.email.trim().toLowerCase() === publicDemoEmail &&
+    user.memberships.some(
+      (membership) =>
+        membership.organization_id === organizationId &&
+        membership.role === "viewer",
+    );
+  const previewOnlyUploads = previewUploadsEnabled && isPublicDemo;
   const { profiles: clientProfiles } = useClientProfiles();
   const { untrained } = useSupplierFormats();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -456,7 +465,9 @@ export function InvoiceWorkspace() {
       }
 
       const newestFirst = [...uploadedInvoices].reverse();
-      if (previewOnlyUploads) prependPreviewInvoices(newestFirst);
+      if (previewOnlyUploads) {
+        prependPreviewInvoices(organizationId, newestFirst);
+      }
       setInvoices((current) => [...newestFirst, ...current]);
       setSelectedId(newestFirst[0]?.id ?? null);
       setDetailMode("detail");
@@ -490,7 +501,7 @@ export function InvoiceWorkspace() {
       setProfileRecommendation(null);
       setSelectedFiles([]);
       setUploadOpen(false);
-      clearPreviewInvoices();
+      clearPreviewInvoices(organizationId);
     } catch (clearError) {
       setError((clearError as Error).message);
     } finally {
@@ -531,11 +542,12 @@ export function InvoiceWorkspace() {
   }
 
   function addSampleInvoice() {
+    if (!organizationId || !isPublicDemo) return;
     const now = new Date().toISOString();
     const sampleId = "sample-neel-gst-2620002662";
     const sampleInvoice: Invoice = {
       id: sampleId,
-      organization_id: organizationId ?? "demo-workspace",
+      organization_id: organizationId,
       source_file: "sample-india-gst-invoice.pdf",
       source_path: "",
       parser: "demo_sample",
@@ -603,7 +615,7 @@ export function InvoiceWorkspace() {
       updated_at: now,
     };
 
-    prependPreviewInvoices([sampleInvoice]);
+    prependPreviewInvoices(organizationId, [sampleInvoice]);
     setInvoices((current) => [
       sampleInvoice,
       ...current.filter((invoice) => invoice.id !== sampleId),
@@ -920,14 +932,16 @@ export function InvoiceWorkspace() {
                       <Mail size={15} />
                       Import from email
                     </a>
-                    <button
-                      type="button"
-                      onClick={addSampleInvoice}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
-                    >
-                      <PlayCircle size={15} />
-                      Try sample invoice
-                    </button>
+                    {isPublicDemo && (
+                      <button
+                        type="button"
+                        onClick={addSampleInvoice}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                      >
+                        <PlayCircle size={15} />
+                        Try sample invoice
+                      </button>
+                    )}
                   </div>
                 </DropdownPanel>
               )}

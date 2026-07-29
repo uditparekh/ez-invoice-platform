@@ -6,9 +6,18 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
+from siftentry_app.backend.demo_seed import (
+    PUBLIC_DEMO_EMAIL,
+    PUBLIC_DEMO_ORGANIZATION,
+)
 from siftentry_app.backend.domain import legacy_payload_to_invoice
 from siftentry_app.backend.main import create_app
-from siftentry_app.backend.models import InvoiceStatus
+from siftentry_app.backend.models import (
+    InvoiceCreate,
+    InvoiceStatus,
+    OrganizationRole,
+)
+from siftentry_app.backend.security import hash_password
 from siftentry_app.backend.settings import ApiSettings
 
 from .test_domain import sample_legacy_payload
@@ -388,6 +397,98 @@ def test_public_demo_is_seeded_once_and_remains_read_only(tmp_path: Path):
         assert {row["id"] for row in seeded_again.json()} == {
             row["id"] for row in invoice_rows
         }
+
+
+def test_public_demo_never_reuses_same_named_customer_workspace(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        owner = bootstrap(
+            client,
+            organization_name=PUBLIC_DEMO_ORGANIZATION,
+        )
+        owner_org_id = organization_id(owner, PUBLIC_DEMO_ORGANIZATION)
+
+        demo = client.post("/api/v1/auth/demo")
+        assert demo.status_code == 200
+        demo_org_id = demo.json()["user"]["memberships"][0]["organization_id"]
+        assert demo_org_id != owner_org_id
+
+        owner_invoices = client.get(
+            "/api/v1/invoices",
+            params={"organization_id": owner_org_id},
+            headers=authorization(owner),
+        )
+        assert owner_invoices.status_code == 200
+        assert owner_invoices.json() == []
+        assert {
+            member.email
+            for member in client.app.state.repository.list_organization_members(
+                owner_org_id
+            )
+        } == {"owner@example.com"}
+
+
+def test_public_demo_repairs_legacy_shared_workspace_without_touching_real_data(
+    tmp_path: Path,
+):
+    with make_client(tmp_path) as client:
+        owner = bootstrap(client, organization_name="Owner Workspace")
+        owner_org_id = organization_id(owner, "Owner Workspace")
+        repository = client.app.state.repository
+        demo_user = repository.create_user(
+            email=PUBLIC_DEMO_EMAIL,
+            password_hash=hash_password("legacy-demo-password"),
+            full_name="SiftEntry Demo",
+        )
+        repository.create_membership(
+            demo_user.id,
+            owner_org_id,
+            OrganizationRole.VIEWER,
+        )
+        repository.create_invoice(
+            InvoiceCreate(
+                organization_id=owner_org_id,
+                source_file="northwind-office-supply-demo.pdf",
+                source_path="synthetic-demo/northwind-office-supply-demo.pdf",
+                invoice_number="DEMO-QB-1001",
+                raw_payload={"demo": True, "demo_seed_version": 1},
+            )
+        )
+        repository.create_invoice(
+            InvoiceCreate(
+                organization_id=owner_org_id,
+                source_file="real-customer-invoice.pdf",
+                source_path="uploads/real-customer-invoice.pdf",
+                invoice_number="REAL-1001",
+            )
+        )
+
+        repaired = client.post("/api/v1/auth/demo")
+        assert repaired.status_code == 200
+        membership = repaired.json()["user"]["memberships"]
+        assert len(membership) == 1
+        assert membership[0]["organization_id"] != owner_org_id
+        assert membership[0]["role"] == "viewer"
+        assert repository.get_membership(demo_user.id, owner_org_id) is None
+
+        owner_invoices = client.get(
+            "/api/v1/invoices",
+            params={"organization_id": owner_org_id},
+            headers=authorization(owner),
+        )
+        assert owner_invoices.status_code == 200
+        assert {
+            invoice["invoice_number"] for invoice in owner_invoices.json()
+        } == {"REAL-1001"}
+
+        demo_invoices = client.get(
+            "/api/v1/invoices",
+            params={"organization_id": membership[0]["organization_id"]},
+            headers=authorization(repaired.json()),
+        )
+        assert demo_invoices.status_code == 200
+        assert {
+            invoice["invoice_number"] for invoice in demo_invoices.json()
+        } == {"DEMO-QB-1001", "DEMO-ZOHO-1002"}
 
 
 def test_password_reset_flow(tmp_path: Path):

@@ -66,6 +66,12 @@ All notable platform changes will be recorded here.
 
 ### Fixed
 
+- Demo data isolation now uses tenant IDs and membership ownership instead of
+  organization display names. Any legacy shared demo membership is repaired
+  automatically, only explicitly marked synthetic seed invoices are removed
+  from the real workspace, browser preview invoices are organization-scoped,
+  and the sample-invoice action is visible only in the public demo account.
+
 - Login feedback now appears on the first rendered frame after submission:
   the primary action holds focus, swaps to a stable "Signing in…" spinner,
   prevents duplicate authentication requests, announces progress to assistive

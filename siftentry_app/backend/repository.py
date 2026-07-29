@@ -612,6 +612,16 @@ class InvoiceRepository:
             ).fetchall()
         return [self._membership_from_row(row) for row in rows]
 
+    def delete_membership(self, user_id: str, organization_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                DELETE FROM organization_memberships
+                WHERE user_id = ? AND organization_id = ?
+                """,
+                (user_id, organization_id),
+            )
+
     def list_organization_members(
         self,
         organization_id: str,
@@ -1431,6 +1441,43 @@ class InvoiceRepository:
                 {"deleted": deleted},
             )
         return deleted
+
+    def delete_seeded_demo_invoices(self, organization_id: str) -> int:
+        """Remove only invoices carrying SiftEntry's explicit demo marker."""
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, source_path, raw_payload_json
+                FROM invoices
+                WHERE organization_id = ?
+                  AND source_path LIKE 'synthetic-demo/%'
+                """,
+                (organization_id,),
+            ).fetchall()
+            invoice_ids = []
+            for row in rows:
+                payload = _loads(row["raw_payload_json"], {})
+                if (
+                    payload.get("demo") is True
+                    and payload.get("demo_seed_version") == 1
+                ):
+                    invoice_ids.append(str(row["id"]))
+
+            for invoice_id in invoice_ids:
+                connection.execute(
+                    "DELETE FROM invoices WHERE id = ? AND organization_id = ?",
+                    (invoice_id, organization_id),
+                )
+            if invoice_ids:
+                self._insert_audit(
+                    connection,
+                    organization_id,
+                    None,
+                    "demo.seed_removed",
+                    {"deleted": len(invoice_ids)},
+                )
+        return len(invoice_ids)
 
     def create_invoice_file(
         self,

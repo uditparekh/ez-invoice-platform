@@ -210,24 +210,38 @@ def ensure_public_demo_workspace(repository: InvoiceRepository) -> User:
             full_name="SiftEntry Demo",
         )
 
-    memberships = repository.list_memberships(user.id)
-    if len(memberships) > 1:
+    # Never identify a tenant by its display name. An owner is allowed to use
+    # the same name, and reusing that organization would seed showcase records
+    # into a real workspace. Repair any legacy shared membership by removing
+    # only positively marked demo invoices and moving the demo user out.
+    isolated_organizations = []
+    for membership in repository.list_memberships(user.id):
+        candidate = repository.get_organization(membership.organization_id)
+        if candidate is None:
+            raise RuntimeError("The public demo workspace is unavailable.")
+        members = repository.list_organization_members(candidate.id)
+        shared_with_another_user = any(
+            member.user_id != user.id for member in members
+        )
+        if shared_with_another_user:
+            repository.delete_seeded_demo_invoices(candidate.id)
+            repository.delete_membership(user.id, candidate.id)
+            continue
+        isolated_organizations.append(candidate)
+
+    if len(isolated_organizations) > 1:
         raise RuntimeError("The public demo account must have exactly one workspace.")
 
-    if memberships:
-        organization = repository.get_organization(memberships[0].organization_id)
-        if organization is None:
-            raise RuntimeError("The public demo workspace is unavailable.")
+    if isolated_organizations:
+        organization = isolated_organizations[0]
     else:
-        organization = repository.get_organization_by_name(PUBLIC_DEMO_ORGANIZATION)
-        if organization is None:
-            organization = repository.create_organization(
-                OrganizationCreate(
-                    name=PUBLIC_DEMO_ORGANIZATION,
-                    legal_names=["SiftEntry Demo Operations Inc."],
-                    default_currency="USD",
-                )
+        organization = repository.create_organization(
+            OrganizationCreate(
+                name=PUBLIC_DEMO_ORGANIZATION,
+                legal_names=["SiftEntry Demo Operations Inc."],
+                default_currency="USD",
             )
+        )
 
     membership = repository.get_membership(user.id, organization.id)
     if membership is None:

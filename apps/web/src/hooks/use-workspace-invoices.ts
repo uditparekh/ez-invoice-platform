@@ -50,7 +50,10 @@ export function useWorkspaceInvoices({
           signal,
         });
         if (!response.ok) throw new Error("Unable to load invoice workspace.");
-        const fresh = mergePreviewInvoices((await response.json()) as Invoice[]);
+        const fresh = mergePreviewInvoices(
+          organizationId,
+          (await response.json()) as Invoice[],
+        );
         invoiceCache.set(cacheKey, fresh);
         setInvoices(fresh);
       } catch (loadError) {

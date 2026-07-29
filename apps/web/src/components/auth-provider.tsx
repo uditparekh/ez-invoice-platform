@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { clearWorkspaceInvoiceCache } from "@/lib/invoice-cache";
+import { clearPreviewInvoices } from "@/lib/preview-invoices";
 import type { AuthenticatedUser } from "@/lib/types";
 
 interface AuthContextValue {
@@ -146,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Even if the network is unavailable, clear this browser session.
     }
     clearWorkspaceInvoiceCache();
+    clearPreviewInvoices();
     setUser(null);
     setActiveOrganizationId(null);
     setIdleWarningOpen(false);
