@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ApiErrorPayload } from "@/lib/types";
@@ -17,6 +18,7 @@ import { apiErrorMessage } from "@/lib/utils";
 
 export function LoginForm() {
   const router = useRouter();
+  const requestInFlight = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [openingDemo, setOpeningDemo] = useState(false);
   const [error, setError] = useState("");
@@ -28,10 +30,27 @@ export function LoginForm() {
       : "";
   });
 
-  async function submit(formData: FormData) {
+  function releaseRequest() {
+    requestInFlight.current = false;
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (requestInFlight.current) return;
+
+    requestInFlight.current = true;
+    const formData = new FormData(event.currentTarget);
     setSubmitting(true);
     setError("");
     setNotice("");
+
+    // Let React commit the busy state before authentication begins. Function
+    // form actions can otherwise defer this paint until after the request,
+    // making a responsive login feel frozen on slower connections.
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -44,6 +63,7 @@ export function LoginForm() {
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
         setError(apiErrorMessage(payload, "Unable to sign in."));
+        releaseRequest();
         setSubmitting(false);
         return;
       }
@@ -63,11 +83,15 @@ export function LoginForm() {
       // feeling this state exists to prevent.
     } catch {
       setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
+      releaseRequest();
       setSubmitting(false);
     }
   }
 
   async function openDemo() {
+    if (requestInFlight.current) return;
+
+    requestInFlight.current = true;
     setOpeningDemo(true);
     setError("");
     setNotice("");
@@ -76,6 +100,7 @@ export function LoginForm() {
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
         setError(apiErrorMessage(payload, "Unable to open the demo workspace."));
+        releaseRequest();
         setOpeningDemo(false);
         return;
       }
@@ -83,12 +108,17 @@ export function LoginForm() {
       router.refresh();
     } catch {
       setError("The SiftEntry demo is temporarily unavailable.");
+      releaseRequest();
       setOpeningDemo(false);
     }
   }
 
   return (
-    <form action={submit} className="mt-8 space-y-5">
+    <form
+      onSubmit={submit}
+      aria-busy={submitting || openingDemo}
+      className="mt-8 space-y-5"
+    >
       <label className="block">
         <span className="mb-2 block text-xs font-bold text-ink-secondary">
           Work email
@@ -146,16 +176,24 @@ export function LoginForm() {
       <Button
         type="submit"
         variant="primary"
-        className="w-full"
-        disabled={submitting || openingDemo}
+        className="w-full aria-disabled:cursor-wait aria-disabled:opacity-80"
+        aria-busy={submitting}
+        aria-disabled={submitting || openingDemo}
       >
         {submitting ? (
-          <LoaderCircle size={17} className="animate-spin" />
+          <LoaderCircle
+            size={17}
+            className="animate-spin"
+            aria-hidden="true"
+          />
         ) : (
-          <ArrowRight size={17} />
+          <ArrowRight size={17} aria-hidden="true" />
         )}
-        {submitting ? "Opening workspace" : "Continue"}
+        {submitting ? "Signing in…" : "Continue"}
       </Button>
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {submitting ? "Signing in and opening your workspace." : ""}
+      </span>
       <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
         <span className="h-px flex-1 bg-line" />
         Or
@@ -164,8 +202,8 @@ export function LoginForm() {
       <Button
         type="button"
         variant="secondary"
-        className="w-full"
-        disabled={submitting || openingDemo}
+        className="w-full aria-disabled:cursor-wait aria-disabled:opacity-80"
+        aria-disabled={submitting || openingDemo}
         onClick={openDemo}
       >
         {openingDemo ? (

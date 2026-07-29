@@ -66,6 +66,11 @@ All notable platform changes will be recorded here.
 
 ### Fixed
 
+- Login feedback now appears on the first rendered frame after submission:
+  the primary action holds focus, swaps to a stable "Signing in…" spinner,
+  prevents duplicate authentication requests, announces progress to assistive
+  technology, and returns to its ready state when authentication fails.
+
 - Mobile workspace polish: invoice totals and statuses no longer clip in
   the demo queue, compact navigation tabs remain fully reachable without
   horizontal scrolling, settings navigation fits phone widths, summary
