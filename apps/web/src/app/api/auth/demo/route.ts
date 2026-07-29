@@ -9,18 +9,6 @@ export async function POST() {
   });
   const payload = await upstream.json();
   const response = NextResponse.json(payload, { status: upstream.status });
-  const diagnostic = upstream.headers.get("X-SiftEntry-Demo-Error");
-  if (diagnostic) {
-    response.headers.set("X-SiftEntry-Demo-Error", diagnostic);
-  }
-  const sqlstate = upstream.headers.get("X-SiftEntry-Demo-SQLState");
-  if (sqlstate) {
-    response.headers.set("X-SiftEntry-Demo-SQLState", sqlstate);
-  }
-  const stage = upstream.headers.get("X-SiftEntry-Demo-Stage");
-  if (stage) {
-    response.headers.set("X-SiftEntry-Demo-Stage", stage);
-  }
 
   if (upstream.ok) setAuthCookies(response, payload as AuthTokens);
   return response;

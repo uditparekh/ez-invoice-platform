@@ -9,7 +9,6 @@ import binascii
 import hashlib
 import secrets
 import sqlite3
-import traceback
 import uuid
 import hmac
 from contextlib import asynccontextmanager
@@ -297,22 +296,9 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             user = ensure_public_demo_workspace(repository)
         except Exception as exc:
             logging.exception("Unable to prepare the public demo workspace.")
-            diagnostic_headers = {
-                "X-SiftEntry-Demo-Error": type(exc).__name__,
-            }
-            sqlstate = str(getattr(exc, "sqlstate", "") or "")
-            if len(sqlstate) == 5 and sqlstate.isalnum():
-                diagnostic_headers["X-SiftEntry-Demo-SQLState"] = sqlstate
-            frames = traceback.extract_tb(exc.__traceback__)
-            if frames:
-                frame = frames[-1]
-                diagnostic_headers["X-SiftEntry-Demo-Stage"] = (
-                    f"{frame.name}:{frame.lineno}"
-                )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="The demo workspace is temporarily unavailable.",
-                headers=diagnostic_headers,
             ) from exc
         repository.mark_user_login(user.id)
         return issue_tokens(repository, user.id, request.app.state.settings)
