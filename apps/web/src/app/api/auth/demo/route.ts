@@ -13,6 +13,10 @@ export async function POST() {
   if (diagnostic) {
     response.headers.set("X-SiftEntry-Demo-Error", diagnostic);
   }
+  const sqlstate = upstream.headers.get("X-SiftEntry-Demo-SQLState");
+  if (sqlstate) {
+    response.headers.set("X-SiftEntry-Demo-SQLState", sqlstate);
+  }
 
   if (upstream.ok) setAuthCookies(response, payload as AuthTokens);
   return response;
