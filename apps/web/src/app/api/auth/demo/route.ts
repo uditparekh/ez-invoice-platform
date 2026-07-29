@@ -17,6 +17,10 @@ export async function POST() {
   if (sqlstate) {
     response.headers.set("X-SiftEntry-Demo-SQLState", sqlstate);
   }
+  const stage = upstream.headers.get("X-SiftEntry-Demo-Stage");
+  if (stage) {
+    response.headers.set("X-SiftEntry-Demo-Stage", stage);
+  }
 
   if (upstream.ok) setAuthCookies(response, payload as AuthTokens);
   return response;

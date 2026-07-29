@@ -9,6 +9,7 @@ import binascii
 import hashlib
 import secrets
 import sqlite3
+import traceback
 import uuid
 import hmac
 from contextlib import asynccontextmanager
@@ -302,6 +303,12 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             sqlstate = str(getattr(exc, "sqlstate", "") or "")
             if len(sqlstate) == 5 and sqlstate.isalnum():
                 diagnostic_headers["X-SiftEntry-Demo-SQLState"] = sqlstate
+            frames = traceback.extract_tb(exc.__traceback__)
+            if frames:
+                frame = frames[-1]
+                diagnostic_headers["X-SiftEntry-Demo-Stage"] = (
+                    f"{frame.name}:{frame.lineno}"
+                )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="The demo workspace is temporarily unavailable.",
