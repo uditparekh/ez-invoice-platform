@@ -9,6 +9,10 @@ export async function POST() {
   });
   const payload = await upstream.json();
   const response = NextResponse.json(payload, { status: upstream.status });
+  const diagnostic = upstream.headers.get("X-SiftEntry-Demo-Error");
+  if (diagnostic) {
+    response.headers.set("X-SiftEntry-Demo-Error", diagnostic);
+  }
 
   if (upstream.ok) setAuthCookies(response, payload as AuthTokens);
   return response;
