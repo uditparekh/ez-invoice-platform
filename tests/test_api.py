@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from siftentry_app.backend.demo_seed import (
     PUBLIC_DEMO_EMAIL,
+    PUBLIC_DEMO_FALLBACK_ORGANIZATION,
     PUBLIC_DEMO_ORGANIZATION,
 )
 from siftentry_app.backend.domain import legacy_payload_to_invoice
@@ -409,8 +410,13 @@ def test_public_demo_never_reuses_same_named_customer_workspace(tmp_path: Path):
 
         demo = client.post("/api/v1/auth/demo")
         assert demo.status_code == 200
-        demo_org_id = demo.json()["user"]["memberships"][0]["organization_id"]
+        demo_membership = demo.json()["user"]["memberships"][0]
+        demo_org_id = demo_membership["organization_id"]
         assert demo_org_id != owner_org_id
+        assert (
+            demo_membership["organization_name"]
+            == PUBLIC_DEMO_FALLBACK_ORGANIZATION
+        )
 
         owner_invoices = client.get(
             "/api/v1/invoices",

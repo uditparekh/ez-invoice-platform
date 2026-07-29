@@ -23,6 +23,21 @@ from .security import hash_password
 
 PUBLIC_DEMO_EMAIL = "demo@siftentry.com"
 PUBLIC_DEMO_ORGANIZATION = "SiftEntry Demo Workspace"
+PUBLIC_DEMO_FALLBACK_ORGANIZATION = "SiftEntry Public Demo Workspace"
+
+
+def _available_demo_organization_name(
+    repository: InvoiceRepository,
+) -> str:
+    """Choose a display name without ever reusing an existing tenant."""
+
+    for candidate in (
+        PUBLIC_DEMO_ORGANIZATION,
+        PUBLIC_DEMO_FALLBACK_ORGANIZATION,
+    ):
+        if repository.get_organization_by_name(candidate) is None:
+            return candidate
+    return f"{PUBLIC_DEMO_FALLBACK_ORGANIZATION} {secrets.token_hex(4)}"
 
 
 def _demo_invoice_specs(organization_id: str) -> list[dict[str, Any]]:
@@ -237,7 +252,7 @@ def ensure_public_demo_workspace(repository: InvoiceRepository) -> User:
     else:
         organization = repository.create_organization(
             OrganizationCreate(
-                name=PUBLIC_DEMO_ORGANIZATION,
+                name=_available_demo_organization_name(repository),
                 legal_names=["SiftEntry Demo Operations Inc."],
                 default_currency="USD",
             )
