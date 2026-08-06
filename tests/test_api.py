@@ -401,6 +401,81 @@ def test_public_demo_is_seeded_once_and_remains_read_only(tmp_path: Path):
         }
 
 
+def test_public_demo_guard_blocks_every_mutation(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = client.post("/api/v1/auth/demo").json()
+        headers = authorization(tokens)
+        org_id = tokens["user"]["memberships"][0]["organization_id"]
+
+        # Reads keep working.
+        assert (
+            client.get(
+                "/api/v1/invoices",
+                params={"organization_id": org_id},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+
+        # Escape hatches are closed regardless of role logic:
+        # creating a new organization (would make demo an owner)...
+        created = client.post(
+            "/api/v1/organizations",
+            json={"name": "Demo Escape Attempt"},
+            headers=headers,
+        )
+        assert created.status_code == 403
+        assert "read-only" in created.json()["detail"]
+
+        # ...changing workspace settings...
+        assert (
+            client.put(
+                f"/api/v1/organizations/{org_id}/settings",
+                json={"notifications": {"digest": True}},
+                headers=headers,
+            ).status_code
+            == 403
+        )
+
+        # ...creating client profiles.
+        assert (
+            client.post(
+                f"/api/v1/organizations/{org_id}/client-profiles",
+                json={"name": "x", "accounting_system": "tally"},
+                headers=headers,
+            ).status_code
+            == 403
+        )
+
+        # ...or changing the password shared by every demo visitor.
+        changed_password = client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": "demo-password",
+                "new_password": "attacker-controlled-password",
+            },
+            headers=headers,
+        )
+        assert changed_password.status_code == 403
+        assert "read-only" in changed_password.json()["detail"]
+
+        # Auth flows stay usable: refresh and logout.
+        refreshed = client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": tokens["refresh_token"]},
+        )
+        assert refreshed.status_code == 200
+        fresh = refreshed.json()
+        assert (
+            client.post(
+                "/api/v1/auth/logout",
+                json={"refresh_token": fresh["refresh_token"]},
+                headers=authorization(fresh),
+            ).status_code
+            == 204
+        )
+
+
 def test_public_demo_never_reuses_same_named_customer_workspace(tmp_path: Path):
     with make_client(tmp_path) as client:
         owner = bootstrap(

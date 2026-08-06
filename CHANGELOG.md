@@ -4,6 +4,16 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Security
+
+- Public demo hardening: the shared demo account is now read-only at
+  the auth layer, not just by role — every mutating request from the
+  demo login is rejected with 403 except auth flows (refresh/logout),
+  closing the remaining escape hatches: creating a new organization
+  (where the demo would have become an owner), accepting invitations,
+  and changing the shared demo password. Demo data stays synthetic by
+  construction since nothing can be uploaded or modified (1 new test)
+
 ### Changed
 
 - Mobile tab bar (pkg30): the Menu tab moved from the right end to the

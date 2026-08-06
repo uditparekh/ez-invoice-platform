@@ -1,46 +1,53 @@
-# SiftEntry — Mobile Nav & Header Polish, pkg22 (July 21, 2026)
+# SiftEntry — Demo Read-Only Hardening, pkg31 (July 24, 2026)
 
 ## APPLY ORDER
-Base: pkg21 shipped (your current main). Unzip over the repo root.
-Frontend-only — 4 files.
+Base: current main (the one with pkg30 + demo workspace). Unzip over
+the repo root. Backend-only — 5 files, no frontend or env changes.
 
 ## What this changes
-1. Hamburger (mobile menu) button: was a 36px borderless ghost icon —
-   nearly invisible next to the logo. Now a 44px bordered icon button
-   (Apple HIG / WCAG minimum touch target), bolder 20px icon, using the
-   Button "secondary" variant so it belongs to the design system.
-2. Drawer close (X) and the mobile search button now share the same
-   icon-button language and target size — the header reads as one
-   family of controls.
-3. Sign out (sidebar account card, same on web and mobile drawer):
-   was a washed-out ghost fighting override classes. Now a clean
-   neutral resting state that turns danger-tinted on hover/press — the
-   standard sign-out affordance — with consistent radius and height.
-4. Theme toggle: Light/Dark labels hide below the sm breakpoint
-   (icon-only pills) so the 360px header fits hamburger + workspace
-   name + search + toggle without crowding.
+Your ask: the public demo must be view-only with fake invoices only.
+The viewer role already blocked most org-scoped writes, but the shared
+demo login could still: create a NEW organization (becoming its owner,
+able to upload anything under the public demo credentials), accept
+invitations into other workspaces, and change the shared demo
+password. This package closes all of it with one guard at the auth
+chokepoint every authenticated endpoint passes through: the demo
+account can read anything it can see, and every write returns 403
+("The public demo is read-only...") — except the exact refresh and
+logout routes. Because nothing can be uploaded or modified,
+the demo's data stays the synthetic seed (DEMO-QB-1001 / DEMO-ZOHO-1002
+etc.) by construction. Future endpoints are covered automatically —
+the guard sits in get_current_user, not per-route.
 
-Also swept for overlap risks: PageHeader stacks correctly on mobile,
-dropdown panels are already clamped to the viewport, nowrap usages sit
-inside scrollable tables/chips. No further changes needed there.
-
-## Files (4)
-- apps/web/src/components/app-shell.tsx
-- apps/web/src/components/theme-toggle.tsx
+## Files (5)
+- siftentry_app/backend/auth.py        (the guard)
+- tests/test_api.py                    (new guard test)
 - CHANGELOG.md
-- README-INTEGRATION.md (this file)
+- docs/SIFTENTRY_CHANGELOG.md          (pkg31 row)
+- README-INTEGRATION.md                (this file)
 
 ## Diff expectations
-className-only red/green pairs in the two components. Any logic diff
-beyond the four buttons and the toggle label span: STOP.
+auth.py: one green helper block + a 2-line change where
+get_current_user returns (return authenticated_user(...) becomes
+user = ... / guard / return user). tests/test_api.py: one green test
+inserted between the existing demo tests, including a change-password
+escape attempt. Any red beyond that: STOP.
 
 ## Commit message
-Mobile nav polish: 44px targets, coherent icon buttons, sign-out affordance
+Demo hardening: read-only enforced at auth layer for the public demo
 
 ## Verify steps
-1. From apps/web: pnpm typecheck && pnpm lint && pnpm build → clean.
-2. On your phone (or DevTools at 360px): hamburger clearly visible and
-   easy to tap; drawer opens, X matches; search button same size;
-   theme toggle icon-only; nothing wraps or overlaps in the header.
-3. Desktop: sidebar sign-out looks intentional; hover turns it red-
-   tinted; click still signs out.
+1. `python3 -m pytest -q` → 75 passed (was 74).
+2. Push; Railway deploys.
+3. In production: open the demo (Try demo), confirm browsing works,
+   then try any write — e.g. open Settings and attempt a save — expect
+   a clear "read-only" error. Sign out from the demo still works.
+4. Optional adversarial minute: as demo, attempt to create a workspace
+   if the UI offers it anywhere — expect the same 403.
+
+## Notes
+- UI may still SHOW some buttons to the demo viewer; pressing them now
+  fails safely server-side. Hiding them is cosmetic polish for later.
+- Still open from our earlier review (next package, not this one):
+  the guard against connector-enabled settings on a second Tally
+  profile per org, and the profile-aware claiming audit.

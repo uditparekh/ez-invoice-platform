@@ -98,6 +98,39 @@ def rotate_refresh_token(
     )
 
 
+_READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_DEMO_ALLOWED_MUTATION_PATHS = frozenset(
+    {"/api/v1/auth/refresh", "/api/v1/auth/logout"}
+)
+
+
+def _enforce_demo_read_only(user: AuthenticatedUser, request: Request) -> None:
+    """The public demo account can look at everything and change nothing.
+
+    Role checks already stop most org-scoped writes, but the shared demo
+    login must also never create organizations, accept invitations, or
+    change its own account (e.g. the password everyone shares). This
+    blanket guard at the auth chokepoint covers every authenticated
+    endpoint, including ones added in the future. Only the exact refresh
+    and logout routes stay allowed so sessions keep working.
+    """
+    from .demo_seed import PUBLIC_DEMO_EMAIL
+
+    if user.email.strip().lower() != PUBLIC_DEMO_EMAIL:
+        return
+    if request.method.upper() in _READ_ONLY_METHODS:
+        return
+    if request.url.path in _DEMO_ALLOWED_MUTATION_PATHS:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "The public demo is read-only. Create your own SiftEntry "
+            "workspace to upload and manage invoices."
+        ),
+    )
+
+
 def get_current_user(
     request: Request,
     credentials: Annotated[
@@ -124,7 +157,9 @@ def get_current_user(
             or session.expires_at <= now
         ):
             raise AuthenticationError("The authentication session is no longer active.")
-        return authenticated_user(repository, str(payload["sub"]))
+        user = authenticated_user(repository, str(payload["sub"]))
+        _enforce_demo_read_only(user, request)
+        return user
     except AuthenticationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

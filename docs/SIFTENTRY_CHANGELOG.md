@@ -294,3 +294,13 @@ over the repo root; no step ordering needed. The per-step zips are superseded.
 
 ## Remaining build order
 All spec build-order items are now delivered or explicitly deferred (see Step 5 notes). Backlog wow items (⌘K palette, saved views, shortcuts overlay) remain available as post-v1 enhancements.
+
+---
+
+## pkg31 — Demo read-only hardening (2026-07-24)
+
+| File | Status | Change |
+|---|---|---|
+| siftentry_app/backend/auth.py | EDITED | `_enforce_demo_read_only` guard at the `get_current_user` chokepoint: demo account (demo@siftentry.com) may GET/HEAD/OPTIONS anything it can see, but every other method returns 403 unless the path is exactly /api/v1/auth/refresh or /api/v1/auth/logout. Covers all current and future authenticated endpoints, including create-organization, invitation acceptance, and password change on the shared demo login. |
+| tests/test_api.py | EDITED | New `test_public_demo_guard_blocks_every_mutation`: reads 200; create-organization, settings PUT, client-profile POST, and change-password POST all return 403 with the read-only message; refresh 200 and logout 204 still work. Suite 74 → 75. |
+| CHANGELOG.md | EDITED | Security entry under [Unreleased]. |
