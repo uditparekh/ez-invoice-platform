@@ -32,7 +32,7 @@ SIFTENTRY_PDF_RETENTION_DAYS=3
 EZ_API_ALLOW_DEV_BOOTSTRAP=false
 EZ_API_CORS_ORIGINS=https://app.siftentry.com
 EZ_APP_BASE_URL=https://app.siftentry.com
-EZ_API_PUBLIC_BASE_URL=https://api.siftentry.com
+EZ_API_PUBLIC_BASE_URL=https://siftentry-api-production.up.railway.app
 EZ_EMAIL_PROVIDER=smtp
 EZ_EMAIL_FROM="SiftEntry <no-reply@siftentry.com>"
 EZ_EMAIL_REPLY_TO=support@siftentry.com
@@ -54,7 +54,7 @@ SIFTENTRY_AI_POLICY=review_only
 Vercel frontend:
 
 ```bash
-EZ_WEB_API_BASE_URL=https://api.siftentry.com
+EZ_WEB_API_BASE_URL=https://siftentry-api-production.up.railway.app
 NEXT_PUBLIC_APP_NAME=SiftEntry
 ```
 
@@ -62,8 +62,8 @@ Accounting connectors:
 
 ```bash
 QB_ENVIRONMENT=production
-QB_REDIRECT_URI=https://api.siftentry.com/callback
-ZOHO_REDIRECT_URI=https://api.siftentry.com/zoho/callback
+QB_REDIRECT_URI=https://app.siftentry.com/callback
+ZOHO_REDIRECT_URI=https://app.siftentry.com/zoho/callback
 ```
 
 Never store real client ERP credentials in Git, client profile exports, screenshots,
@@ -91,7 +91,7 @@ Production additions still required:
 After FastAPI starts, call:
 
 ```bash
-curl https://api.siftentry.com/health/deployment
+curl https://siftentry-api-production.up.railway.app/health/deployment
 ```
 
 The endpoint returns non-secret checks for JWT configuration, CORS, email,
@@ -103,7 +103,7 @@ For authenticated product diagnostics, call:
 
 ```bash
 curl -H "Authorization: Bearer $ACCESS_TOKEN" \
-  https://api.siftentry.com/api/v1/system/ai-extraction
+  https://siftentry-api-production.up.railway.app/api/v1/system/ai-extraction
 ```
 
 This returns non-secret provider state such as `profile_context_fallback` or

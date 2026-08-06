@@ -11,7 +11,7 @@ def _production_settings(tmp_path: Path, **overrides) -> ApiSettings:
         "max_upload_bytes": 25 * 1024 * 1024,
         "cors_origins": ("https://app.siftentry.com",),
         "app_base_url": "https://app.siftentry.com",
-        "api_public_base_url": "https://api.siftentry.com",
+        "api_public_base_url": "https://siftentry-api-production.up.railway.app",
         "jwt_secret": "x" * 64,
         "allow_dev_bootstrap": False,
         "environment": "production",
