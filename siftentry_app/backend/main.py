@@ -66,6 +66,7 @@ from .models import (
     PasswordResetRequest,
     PasswordResetResponse,
     PdfRetentionPolicy,
+    ProfilePostingMode,
     BatchPostRequest,
     BatchPostResult,
     BatchPostSkip,
@@ -125,6 +126,57 @@ APPROVE_ROLES = {
     OrganizationRole.APPROVER,
 }
 MANAGE_ROLES = {OrganizationRole.OWNER, OrganizationRole.ADMIN}
+# Posting modes that move stock in Tally and therefore need stock item + UOM.
+INVENTORY_POSTING_MODES = {
+    ProfilePostingMode.ITEM_INVOICE.value,
+    ProfilePostingMode.VOUCHER_WITH_INVENTORY.value,
+}
+
+
+def _connector_is_enabled(profile: ClientProfile) -> bool:
+    connection_settings = profile.settings.connection_settings or {}
+    return bool(connection_settings.get("connector_enabled", True))
+
+
+def _guard_single_connector_profile(
+    request: Request,
+    organization_id: str,
+    accounting_system: Any,
+    connection_settings: Optional[Dict[str, Any]],
+    exclude_profile_id: Optional[str] = None,
+) -> None:
+    """Reject a second connector-enabled Tally profile in one organization.
+
+    Connector auth matches on workspace id + token across every Tally profile
+    in the organization and returns the first enabled match. Two enabled
+    profiles therefore make claim ownership ambiguous, which can post the same
+    approved invoice into Tally twice. One enabled profile per organization is
+    the invariant that keeps posting unambiguous.
+    """
+
+    system = getattr(accounting_system, "value", accounting_system)
+    if system != AccountingSystem.TALLY.value:
+        return
+    if not bool((connection_settings or {}).get("connector_enabled", True)):
+        return
+
+    for existing in _repo(request).list_client_profiles(
+        organization_id,
+        AccountingSystem.TALLY.value,
+    ):
+        if exclude_profile_id and existing.id == exclude_profile_id:
+            continue
+        if _connector_is_enabled(existing):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Client profile '{existing.name}' already has the Tally connector "
+                    "enabled. Only one connector-enabled Tally profile is allowed per "
+                    "organization, because two would make connector job ownership "
+                    "ambiguous and could post the same invoice twice. Disable the "
+                    "connector on that profile first."
+                ),
+            )
 
 
 def _profile_export_payload(profile: ClientProfile) -> ClientProfileCreate:
@@ -678,6 +730,12 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> ClientProfile:
         _require_membership(request, current_user, organization_id, EDIT_ROLES)
         _get_organization(request, organization_id)
+        _guard_single_connector_profile(
+            request,
+            organization_id,
+            body.accounting_system,
+            body.settings.connection_settings if body.settings else None,
+        )
         try:
             return _repo(request).create_client_profile(
                 organization_id,
@@ -723,13 +781,21 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         body: ClientProfilePatch,
         current_user: CurrentUser,
     ) -> ClientProfile:
-        _require_client_profile(
+        existing_profile = _require_client_profile(
             request,
             organization_id,
             profile_id,
             current_user,
             EDIT_ROLES,
         )
+        if body.settings is not None:
+            _guard_single_connector_profile(
+                request,
+                organization_id,
+                body.accounting_system or existing_profile.accounting_system,
+                body.settings.connection_settings,
+                exclude_profile_id=profile_id,
+            )
         try:
             profile = _repo(request).update_client_profile(
                 profile_id,
@@ -2629,15 +2695,15 @@ def _tally_activation_issues(
             issue("tally_sgst_ledger_missing", "SGST ledger is required for CGST/SGST posting.", "settings.tax_settings.sgst_ledger")
 
     posting_mode = str(settings.posting_mode or "").lower()
-    if posting_mode == "item_invoice":
+    if posting_mode in INVENTORY_POSTING_MODES:
         if not settings.stock_item_name.strip() and not settings.item_mappings:
-            issue("tally_stock_item_missing", "Item Invoice mode needs an exact stock item or item mapping.", "settings.stock_item_name")
+            issue("tally_stock_item_missing", "Inventory-backed posting needs an exact stock item or item mapping.", "settings.stock_item_name")
         if not settings.stock_item_uom.strip():
-            issue("tally_stock_uom_missing", "Item Invoice mode needs the exact Tally UOM.", "settings.stock_item_uom")
+            issue("tally_stock_uom_missing", "Inventory-backed posting needs the exact Tally UOM.", "settings.stock_item_uom")
         if not settings.stock_item_hsn.strip():
             issue(
                 "tally_stock_hsn_missing",
-                "HSN/SAC is recommended for India Item Invoice GST validation.",
+                "HSN/SAC is recommended for India inventory-backed GST validation.",
                 "settings.stock_item_hsn",
                 blocking=False,
             )

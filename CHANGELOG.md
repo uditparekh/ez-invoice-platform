@@ -4,6 +4,35 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Tally "Voucher with stock allocation" posting mode (pkg32): a third
+  posting mode for clients who enter purchases in Tally's voucher mode
+  (Dr/Cr accounting voucher screen) but allocate stock items through
+  the ledger allocation sub-screen. The generated XML posts as
+  ISINVOICE=No / Accounting Voucher View with INVENTORYALLOCATIONS
+  nested inside each purchase ledger debit, grouped by ledger so both
+  single-ledger and split-ledger clients post correctly. Stock item,
+  UOM, and godown preflight requirements now apply to both
+  inventory-backed modes. Selectable in the onboarding wizard (three
+  posting-mode cards) and the client profile editor
+- Golden XML tests for all three Tally posting modes (pkg32):
+  build_tally_xml previously had no direct test coverage; seven new
+  tests pin each mode's discriminating markers (ISINVOICE, voucher
+  view, inventory element shape and nesting), debit/credit balance,
+  ledger grouping, godown emission, and new-mode preflight
+- Connector double-posting guard (pkg32): creating or updating a
+  second connector-enabled Tally profile in the same organization is
+  rejected with 409 naming the conflicting profile. Connector auth
+  matches workspace+token across all Tally profiles and returns the
+  first enabled match, so two enabled profiles made claim ownership
+  ambiguous and could post the same invoice twice (4 new tests)
+- PWA build refresh (pkg32): a no-store /api/system/build endpoint
+  exposes the deployed build id, and a client poller (60s interval,
+  plus focus/visibility checks) reloads installed PWA sessions once
+  when a new deployment lands, so fixes reach clients without a
+  manual hard refresh or reinstall. No service worker is involved
+
 ### Security
 
 - Public demo hardening: the shared demo account is now read-only at

@@ -1782,3 +1782,116 @@ def test_preview_upload_does_not_persist_invoice_or_pdf(tmp_path: Path):
         assert saved.status_code == 200
         assert saved.json() == []
         assert not any((tmp_path / "uploads").rglob("preview.pdf"))
+
+
+def _tally_profile_body(name: str, connector_enabled: bool) -> dict:
+    return {
+        "name": name,
+        "accounting_system": "tally",
+        "settings": {
+            "company_name": "NEEL ENTERPRISE",
+            "posting_mode": "voucher_with_inventory",
+            "voucher_type": "Purchase",
+            "purchase_ledger": "PURCHASES A/C",
+            "connection_settings": {
+                "connector_enabled": connector_enabled,
+                "workspace_id": "neel-prod",
+                "connector_token": "connector-secret",
+                "tally_url": "http://localhost:9000",
+            },
+        },
+    }
+
+
+def test_second_connector_enabled_tally_profile_is_rejected(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        first = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json=_tally_profile_body("Primary Tally", True),
+            headers=headers,
+        )
+        assert first.status_code == 201
+
+        second = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json=_tally_profile_body("Second Tally", True),
+            headers=headers,
+        )
+        assert second.status_code == 409
+        assert "Primary Tally" in second.json()["detail"]
+
+
+def test_second_tally_profile_allowed_when_connector_disabled(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        first = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json=_tally_profile_body("Primary Tally", True),
+            headers=headers,
+        )
+        assert first.status_code == 201
+
+        second = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json=_tally_profile_body("Reporting Only Tally", False),
+            headers=headers,
+        )
+        assert second.status_code == 201
+
+
+def test_enabling_connector_on_second_profile_is_rejected_on_update(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json=_tally_profile_body("Primary Tally", True),
+            headers=headers,
+        )
+        second = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json=_tally_profile_body("Backup Tally", False),
+            headers=headers,
+        )
+        second_id = second.json()["id"]
+
+        promote = client.patch(
+            f"/api/v1/organizations/{org_id}/client-profiles/{second_id}",
+            json={"settings": _tally_profile_body("Backup Tally", True)["settings"]},
+            headers=headers,
+        )
+        assert promote.status_code == 409
+
+
+def test_updating_the_only_connector_profile_still_succeeds(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+
+        created = client.post(
+            f"/api/v1/organizations/{org_id}/client-profiles",
+            json=_tally_profile_body("Primary Tally", True),
+            headers=headers,
+        )
+        profile_id = created.json()["id"]
+
+        settings = _tally_profile_body("Primary Tally", True)["settings"]
+        settings["purchase_ledger"] = "RAW MATERIAL A/C"
+        updated = client.patch(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}",
+            json={"settings": settings},
+            headers=headers,
+        )
+        assert updated.status_code == 200
+        assert updated.json()["settings"]["purchase_ledger"] == "RAW MATERIAL A/C"
+        assert updated.json()["settings"]["posting_mode"] == "voucher_with_inventory"

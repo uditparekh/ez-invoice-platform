@@ -9,6 +9,7 @@ import type {
   AccountingSystem,
   ClientProfile,
   ClientProfilePayload,
+  ProfilePostingMode,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -78,8 +79,14 @@ type Draft = {
   name: string;
   system: AccountingSystem;
   country: (typeof countryOptions)[number]["id"];
-  voucherMode: "item_invoice" | "accounting_voucher";
+  voucherMode: ProfilePostingMode;
   expectations: string;
+};
+
+const VOUCHER_MODE_LABELS: Record<string, string> = {
+  item_invoice: "Item invoice",
+  voucher_with_inventory: "Voucher with stock allocation",
+  accounting_voucher: "Accounting voucher",
 };
 
 const emptyDraft: Draft = {
@@ -306,17 +313,23 @@ export function ProfileWizard({
             }
           >
             {isTally ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <OptionCard
                   active={draft.voucherMode === "item_invoice"}
                   label="Item invoice"
-                  detail="Line items → stock items · best when inventory is tracked"
+                  detail="Invoice-style item grid in Tally · stock updates"
                   onClick={() => patch({ voucherMode: "item_invoice" })}
+                />
+                <OptionCard
+                  active={draft.voucherMode === "voucher_with_inventory"}
+                  label="Voucher with stock allocation"
+                  detail="Dr/Cr voucher screen, items entered in the allocation sub-screen · stock updates"
+                  onClick={() => patch({ voucherMode: "voucher_with_inventory" })}
                 />
                 <OptionCard
                   active={draft.voucherMode === "accounting_voucher"}
                   label="Accounting voucher"
-                  detail="Ledger-only entries · services & expenses"
+                  detail="Ledger-only entries · no stock movement · services & expenses"
                   onClick={() => patch({ voucherMode: "accounting_voucher" })}
                 />
               </div>
@@ -412,7 +425,7 @@ export function ProfileWizard({
                 → {systemOptions.find((o) => o.value === draft.system)?.label} ·{" "}
                 {country.label}
                 {isTally &&
-                  ` · ${draft.voucherMode === "item_invoice" ? "Item invoice" : "Accounting voucher"}`}
+                  ` · ${VOUCHER_MODE_LABELS[draft.voucherMode] ?? "Accounting voucher"}`}
               </p>
               <p>
                 Tax handling: {country.settings.tax_registration_label} ·{" "}

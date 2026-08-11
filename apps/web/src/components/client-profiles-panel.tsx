@@ -54,6 +54,7 @@ const accountingSystems: { label: string; value: AccountingSystem }[] = [
 const postingModes: { label: string; value: ProfilePostingMode }[] = [
   { label: "Accounting voucher", value: "accounting_voucher" },
   { label: "Item invoice", value: "item_invoice" },
+  { label: "Voucher with stock allocation", value: "voucher_with_inventory" },
   { label: "Supplier bill", value: "supplier_bill" },
   { label: "Export package", value: "export_package" },
   { label: "Custom", value: "custom" },
@@ -1449,7 +1450,9 @@ function getOnboardingChecklist(
   const taxSettings = settings.tax_settings ?? {};
   const taxMode = (settings.tax_mode || "").toLowerCase();
   const isTally = system === "tally";
-  const isItemInvoice = settings.posting_mode === "item_invoice";
+  const isItemInvoice =
+    settings.posting_mode === "item_invoice" ||
+    settings.posting_mode === "voucher_with_inventory";
   const expectedText = [
     trainingProfile.extraction_instructions,
     trainingProfile.posting_expectations,

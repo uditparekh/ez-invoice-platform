@@ -18,6 +18,7 @@ export type AccountingSystem =
 export type ProfilePostingMode =
   | "accounting_voucher"
   | "item_invoice"
+  | "voucher_with_inventory"
   | "supplier_bill"
   | "export_package"
   | "custom";

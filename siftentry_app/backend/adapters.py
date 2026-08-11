@@ -303,16 +303,22 @@ def default_adapters() -> Dict[PostingTarget, PostingAdapter]:
     return {adapter.target: adapter for adapter in adapters}
 
 
+_TALLY_POSTING_MODE_LABELS = {
+    "item_invoice": "Item Invoice",
+    "voucher_with_inventory": "Voucher with stock allocation",
+    "accounting_voucher": "Accounting Voucher",
+}
+
+
 def _tally_settings_from_profile(
     client_profile: Optional[ClientProfile],
 ) -> Optional[Dict[str, Any]]:
     if not client_profile:
         return None
     settings = client_profile.settings
-    posting_mode = (
-        "Item Invoice"
-        if settings.posting_mode == "item_invoice"
-        else "Accounting Voucher"
+    posting_mode = _TALLY_POSTING_MODE_LABELS.get(
+        str(settings.posting_mode or ""),
+        "Accounting Voucher",
     )
     connection_settings = settings.connection_settings or {}
     return {

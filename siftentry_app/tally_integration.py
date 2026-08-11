@@ -229,8 +229,38 @@ def _line_category_note(row: Dict[str, Any]) -> str:
     return ""
 
 
+ITEM_INVOICE_ALIASES = {
+    "item invoice",
+    "item_invoice",
+    "inventory",
+    "inventory invoice",
+}
+
+VOUCHER_WITH_INVENTORY_ALIASES = {
+    "voucher with stock allocation",
+    "voucher with inventory",
+    "voucher_with_inventory",
+    "voucher_with_stock_allocation",
+    "accounting voucher with inventory",
+}
+
+
 def _posting_mode(settings: Dict[str, Any]) -> str:
     return str(settings.get("posting_mode") or "Accounting Voucher").strip().lower()
+
+
+def _is_item_invoice_mode(settings: Dict[str, Any]) -> bool:
+    return _posting_mode(settings) in ITEM_INVOICE_ALIASES
+
+
+def _is_voucher_with_inventory_mode(settings: Dict[str, Any]) -> bool:
+    return _posting_mode(settings) in VOUCHER_WITH_INVENTORY_ALIASES
+
+
+def _uses_stock_items(settings: Dict[str, Any]) -> bool:
+    """Both inventory-backed modes need stock item, UOM, and quantity data."""
+
+    return _is_item_invoice_mode(settings) or _is_voucher_with_inventory_mode(settings)
 
 
 def _line_stock_item(row: Dict[str, Any], settings: Dict[str, Any]) -> str:
@@ -489,6 +519,133 @@ def _build_inventory_entries(
     return "".join(entries)
 
 
+def _build_voucher_inventory_entries(
+    payload: Dict[str, Any],
+    settings: Dict[str, Any],
+    classifier=None,
+) -> str:
+    """Build voucher-mode purchase entries with nested inventory allocations.
+
+    This is how many TallyPrime users actually enter purchases: the voucher
+    looks like a plain Dr/Cr accounting voucher (ISINVOICE=No, Accounting
+    Voucher View), but each purchase ledger debit carries an
+    INVENTORYALLOCATIONS.LIST so stock still updates. Lines are grouped by
+    their resolved purchase ledger, so a client using one purchase ledger gets
+    a single debit block and a client splitting across ledgers gets one block
+    per ledger.
+    """
+
+    parts = _invoice_parts(payload)
+    rows = parts["rows"]
+    default_ledger = settings.get("purchase_ledger") or "Purchase Accounts"
+    godown_name = str(settings.get("godown_name") or "").strip()
+    if classifier:
+        try:
+            rows = classifier.classify_invoice_rows(rows)
+        except Exception:
+            pass
+
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(_line_ledger(row, default_ledger), []).append(row)
+
+    entries: List[str] = []
+
+    tax_total = _tax_total(parts, rows)
+    net_total = round(sum(_line_net_amount(row) for row in rows), 2)
+    tcs_total = _summary_amount(parts, ["TCS", "TCS AMOUNT", "TOTAL TCS"])
+    current_total = round(net_total + tax_total + tcs_total, 2)
+    party_total = parts["total"] or current_total
+    invoice_no = str(parts["header"].get("INVOICE NO.", "") or "SiftEntry")
+
+    entries.append(
+        _ledger_entry(
+            parts["vendor"],
+            party_total,
+            "No",
+            is_party=True,
+            bill_name=invoice_no,
+        )
+    )
+
+    for ledger, ledger_rows in grouped.items():
+        allocations: List[str] = []
+        ledger_total = 0.0
+        for row in ledger_rows:
+            stock_item = _line_stock_item(row, settings)
+            quantity = _amount(row.get("QUANTITY") or row.get("QTY") or 1) or 1.0
+            uom = _line_tally_uom(row, settings)
+            unit_price = _amount(row.get("UNIT PRICE") or row.get("RATE"))
+            net_amount = _line_net_amount(row)
+            if not net_amount and unit_price:
+                net_amount = round(quantity * unit_price, 2)
+            if not unit_price and quantity:
+                unit_price = round(net_amount / quantity, 6)
+            ledger_total += net_amount
+
+            qty_text = f"{_fmt_qty(quantity)} {uom}"
+            rate_xml = (
+                f"<RATE>{_fmt_amount(unit_price)}/{_xml(uom)}</RATE>"
+                if unit_price
+                else ""
+            )
+            godown_xml = ""
+            if godown_name:
+                godown_xml = f"""
+          <BATCHALLOCATIONS.LIST>
+            <GODOWNNAME>{_xml(godown_name)}</GODOWNNAME>
+            <BATCHNAME>Primary Batch</BATCHNAME>
+            <AMOUNT>-{_fmt_amount(net_amount)}</AMOUNT>
+            <ACTUALQTY>{_xml(qty_text)}</ACTUALQTY>
+            <BILLEDQTY>{_xml(qty_text)}</BILLEDQTY>
+          </BATCHALLOCATIONS.LIST>"""
+
+            allocations.append(
+                f"""
+        <INVENTORYALLOCATIONS.LIST>
+          <STOCKITEMNAME>{_xml(stock_item)}</STOCKITEMNAME>
+          <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+          {rate_xml}
+          <AMOUNT>-{_fmt_amount(net_amount)}</AMOUNT>
+          <ACTUALQTY>{_xml(qty_text)}</ACTUALQTY>
+          <BILLEDQTY>{_xml(qty_text)}</BILLEDQTY>{godown_xml}
+        </INVENTORYALLOCATIONS.LIST>"""
+            )
+
+        entries.append(
+            f"""
+      <ALLLEDGERENTRIES.LIST>
+        <LEDGERNAME>{_xml(ledger)}</LEDGERNAME>
+        <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+        <ISPARTYLEDGER>No</ISPARTYLEDGER>
+        <AMOUNT>-{_fmt_amount(round(ledger_total, 2))}</AMOUNT>{"".join(allocations)}
+      </ALLLEDGERENTRIES.LIST>"""
+        )
+
+    for component in _tax_ledger_components(parts, rows, settings):
+        tax_ledger = component.get("ledger") or default_ledger
+        entries.append(_ledger_entry(tax_ledger, -component.get("amount", 0), "Yes"))
+
+    if tcs_total:
+        tcs_ledger = settings.get("tcs_ledger") or default_ledger
+        entries.append(_ledger_entry(tcs_ledger, -tcs_total, "Yes"))
+
+    round_delta = round(party_total - current_total, 2)
+    explicit_round = _summary_amount(
+        parts,
+        ["ROUND OFF", "ROUNDOFF", "ROUNDING", "ROUNDING OFF"],
+    )
+    if explicit_round:
+        round_delta = explicit_round
+    if abs(round_delta) >= 0.01:
+        round_ledger = settings.get("round_off_ledger") or default_ledger
+        entries.append(
+            _ledger_entry(round_ledger, -round_delta, "Yes" if round_delta > 0 else "No")
+        )
+
+    return "".join(entries)
+
+
 def _build_item_invoice_adjustment_entries(
     parts: Dict[str, Any],
     rows: List[Dict[str, Any]],
@@ -597,7 +754,7 @@ def build_tally_xml(payload: Dict[str, Any], settings: Optional[Dict[str, Any]] 
     if po_no and po_no != "N/A":
         narration += " | PO: " + str(po_no)
 
-    if _posting_mode(settings) in {"item invoice", "item_invoice", "inventory", "inventory invoice"} and parts["rows"]:
+    if _is_item_invoice_mode(settings) and parts["rows"]:
         inventory_entries = _build_inventory_entries(parts["rows"], settings, classifier=classifier)
         adjustment_entries = _build_item_invoice_adjustment_entries(parts, parts["rows"], settings)
         computed_total = round(sum(_line_net_amount(row) for row in parts["rows"]) + _tax_total(parts, parts["rows"]), 2)
@@ -630,6 +787,45 @@ def build_tally_xml(payload: Dict[str, Any], settings: Optional[Dict[str, Any]] 
           <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
           <ISINVOICE>Yes</ISINVOICE>
           <NARRATION>{_xml(narration)}</NARRATION>{party_entry}{inventory_entries}{adjustment_entries}
+        </VOUCHER>
+      </TALLYMESSAGE>
+    </DATA>
+  </BODY>
+</ENVELOPE>"""
+
+    if _is_voucher_with_inventory_mode(settings) and parts["rows"]:
+        voucher_entries = _build_voucher_inventory_entries(
+            payload,
+            settings,
+            classifier=classifier,
+        )
+        return f"""<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Import</TALLYREQUEST>
+    <TYPE>Data</TYPE>
+    <ID>Vouchers</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        {static_company}
+      </STATICVARIABLES>
+    </DESC>
+    <DATA>
+      <TALLYMESSAGE xmlns:UDF="TallyUDF">
+        <VOUCHER VCHTYPE="{_xml(voucher_type)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
+          <DATE>{invoice_date}</DATE>
+          <EFFECTIVEDATE>{invoice_date}</EFFECTIVEDATE>
+          <VOUCHERTYPENAME>{_xml(voucher_type)}</VOUCHERTYPENAME>
+          <VOUCHERNUMBER>{_xml(invoice_no)}</VOUCHERNUMBER>
+          <REFERENCE>{_xml(invoice_no)}</REFERENCE>
+          <REFERENCEDATE>{invoice_date}</REFERENCEDATE>
+          <PARTYLEDGERNAME>{_xml(parts["vendor"])}</PARTYLEDGERNAME>
+          <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
+          <VCHENTRYMODE>Voucher</VCHENTRYMODE>
+          <ISINVOICE>No</ISINVOICE>
+          <NARRATION>{_xml(narration)}</NARRATION>{voucher_entries}
         </VOUCHER>
       </TALLYMESSAGE>
     </DATA>
@@ -827,12 +1023,7 @@ def _tally_preflight_issues(
     parts = _invoice_parts(payload)
     rows = parts["rows"]
     posting_mode = _posting_mode(settings)
-    is_item_invoice = posting_mode in {
-        "item invoice",
-        "item_invoice",
-        "inventory",
-        "inventory invoice",
-    }
+    is_item_invoice = posting_mode in ITEM_INVOICE_ALIASES or posting_mode in VOUCHER_WITH_INVENTORY_ALIASES
     issues: List[Dict[str, Any]] = []
 
     if not str(settings.get("company") or "").strip():

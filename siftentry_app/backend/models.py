@@ -47,6 +47,7 @@ class AccountingSystem(str, Enum):
 class ProfilePostingMode(str, Enum):
     ACCOUNTING_VOUCHER = "accounting_voucher"
     ITEM_INVOICE = "item_invoice"
+    VOUCHER_WITH_INVENTORY = "voucher_with_inventory"
     SUPPLIER_BILL = "supplier_bill"
     EXPORT_PACKAGE = "export_package"
     CUSTOM = "custom"

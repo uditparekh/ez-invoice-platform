@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { BuildRefresh } from "@/components/build-refresh";
+
 import "./globals.css";
 
 export const viewport = {
@@ -47,7 +49,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <BuildRefresh />
+        {children}
+      </body>
     </html>
   );
 }
