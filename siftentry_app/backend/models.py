@@ -313,6 +313,10 @@ class OrganizationMember(BaseModel):
     last_login_at: Optional[datetime] = None
 
 
+class MemberRoleUpdate(BaseModel):
+    role: OrganizationRole
+
+
 class Membership(BaseModel):
     organization_id: str
     organization_name: str

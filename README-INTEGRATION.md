@@ -1,115 +1,110 @@
-# pkg32 — Voucher with stock allocation, connector guard, PWA build refresh
+# pkg33 — Consolidation & trust
 
-Built against: main @ e76a514 ("Docs: fix stale api.siftentry.com hostname
-references"). Verify your local main is at this commit before applying. If it
-is not: STOP and tell me the current commit.
+Built against: main @ 4c6bd2d (pkg32 commit). Verify your local main is at
+this commit before applying. If it is not: STOP and tell me the current
+commit.
 
-## Files in this zip: 15 total (12 changed, 3 new)
+## Files in this zip: 12 total (9 changed, 1 new, 1 deleted, 1 this README)
 
-Apply by copying each file to the same path in the repo. No apply-order
-dependency — all files are independent copies. Overwrite when prompted.
+Apply by copying each file to the same path in the repo. Overwrite when
+prompted. ONE FILE MUST BE DELETED BY HAND — see step 0.
 
-Backend (4 changed):
+0.  DELETE apps/web/src/app/(product)/app/gl-mapping/page.tsx
+    (and the now-empty gl-mapping folder). This orphaned demo page is not
+    in the zip; removing it is part of the package.
+
+Backend (2 changed):
 1.  siftentry_app/backend/models.py
-2.  siftentry_app/tally_integration.py
-3.  siftentry_app/backend/adapters.py
-4.  siftentry_app/backend/main.py
+2.  siftentry_app/backend/main.py
 
-Tests (2 changed):
-5.  tests/test_tally_integration.py
-6.  tests/test_api.py
+Tests (1 changed):
+3.  tests/test_api.py
 
-Web (4 changed, 2 new):
-7.  apps/web/src/lib/types.ts
-8.  apps/web/src/components/client-profiles/profile-wizard.tsx
-9.  apps/web/src/components/client-profiles-panel.tsx
-10. apps/web/src/app/layout.tsx
-11. apps/web/src/app/api/system/build/route.ts          (NEW — create folder)
-12. apps/web/src/components/build-refresh.tsx           (NEW)
+Web (4 changed, 1 new):
+4.  apps/web/src/components/client-profiles-panel.tsx
+5.  apps/web/src/components/client-profiles/profile-wizard.tsx
+6.  apps/web/src/components/settings/team-management-panel.tsx
+7.  apps/web/src/app/layout.tsx
+8.  apps/web/src/app/api/organizations/[organizationId]/members/[userId]/route.ts
+    (NEW — create the [userId] folder inside the existing members folder)
 
-Docs (2 changed, 1 new):
-13. CHANGELOG.md
-14. README-INTEGRATION.md (this file)
-15. SIFTENTRY_CHANGELOG.md                              (NEW)
+Docs (3 changed):
+9.  CHANGELOG.md
+10. SIFTENTRY_CHANGELOG.md
+11. README-INTEGRATION.md (this file)
 
 ## What this package delivers
 
-1. Tally "Voucher with stock allocation" posting mode — the third posting
-   shape, for your pilot client: looks like a Dr/Cr accounting voucher in
-   Tally (ISINVOICE=No) but stock still updates through
-   INVENTORYALLOCATIONS.LIST nested inside each purchase ledger debit.
-   Lines are grouped by purchase ledger, so it is correct whether the
-   client uses one purchase ledger or several. Selectable in the wizard
-   (now three cards) and the profile editor dropdown. Stock item / UOM /
-   godown preflight applies to it exactly like Item Invoice.
-2. Golden XML tests for all three posting modes — build_tally_xml had zero
-   test coverage before this package. Each test also asserts the OTHER
-   modes' markers are absent, so a mode emitting the wrong shape fails.
-3. Connector double-posting guard — a second connector-enabled Tally
-   profile per organization is rejected with 409 naming the conflicting
-   profile (on create and on update). The error message surfaces as-is in
-   the existing profile save notice; no frontend change was needed for it.
-4. PWA build refresh — GET /api/system/build returns the deployed build id
-   with no-store headers; a BuildRefresh component in the root layout polls
-   it every 60s (and on tab focus) and reloads once when a new deployment
-   lands. Installed PWAs pick up fixes without a manual hard refresh.
-   There is deliberately no service worker.
+1. Profile library collapses to a slim rail. Starts collapsed with one
+   profile (the editor gets the width), expanded with several. Your
+   toggle is remembered. You can still switch profiles from the rail.
+2. "Ledgers and stock items" rebuilt: three concept groups (where
+   purchases post / default stock item / item mapping rules), helper
+   text under every field, optional fields marked, stock fields hidden
+   for ledger-only modes. Mapping row replaced by count + link to
+   Rules & mapping, which is now the one place mappings are edited.
+3. AI readiness as a sentence. No more 43%. The status names what is
+   missing or what would improve accuracy. Guidance, validation rules,
+   and posting expectations are now labelled recommended (they were
+   marked required by a panel that disagreed with the real activation
+   gate). Readiness card lives inside the training panel; each
+   instruction box shows its own inline status.
+4. Role changes without re-inviting: a role dropdown on each Team
+   access row (not your own). Backend guards: only owners can promote
+   to owner or change an owner; the last owner cannot be demoted.
+5. Wizard "Posting expectations" now saves to the right field.
+6. Viewport fix: installed PWA gets safe-area handling on notched phones.
+7. Orphaned /app/gl-mapping demo route removed.
+
+Deliberately NOT in this package: the ledger fields stay plain text
+inputs. They become verified dropdowns fed by Tally in pkg34 (master
+sync) — building dropdowns twice would be wasted work.
 
 ## Diff expectations in GitHub Desktop
 
-- models.py: one green line inside ProfilePostingMode.
-- tally_integration.py: green blocks around _posting_mode (alias sets +
-  helpers), a large green block adding _build_voucher_inventory_entries,
-  a green envelope branch inside build_tally_xml, and two SMALL red blocks:
-  the item-invoice branch condition (inline set → helper call) and the
-  preflight is_item_invoice set (inline set → shared constants). If you see
-  red inside the existing Item Invoice or Accounting Voucher envelope
-  strings: STOP.
-- adapters.py: small red block replacing the posting_mode ternary with a
-  label-map lookup, plus a green map above the function.
-- main.py: green import line, green constants block, green guard function,
-  green inserts in create/update profile endpoints, and a small red block
-  in the profile preflight (item_invoice check → INVENTORY_POSTING_MODES,
-  plus one message wording line). If you see red anywhere else in main.py:
-  STOP.
-- test_tally_integration.py: one green import line + green tests appended.
+- models.py: one small green class (MemberRoleUpdate).
+- main.py: one green import line and one green endpoint block before
+  list_organization_invitations. No red. If you see red: STOP.
 - test_api.py: green-only appended tests.
-- types.ts: one green line in the ProfilePostingMode union.
-- profile-wizard.tsx: green import line, small red block widening the
-  voucherMode type + green label map, a red/green block replacing the
-  two-card grid with three cards, one red/green line in the review step.
-- client-profiles-panel.tsx: one green dropdown line, one small red/green
-  block widening isItemInvoice.
-- layout.tsx: green import + small red/green block in the body.
-- build/route.ts and build-refresh.tsx: entirely new files (all green).
+- client-profiles-panel.tsx: the large one. Expect: green imports
+  (ArrowRight, ChevronUp, PanelLeftClose, PanelLeftOpen, Link); a green
+  constants/helper block near postingModes; a red/green block replacing
+  the <aside>; a red block removing updatePrimaryMapping and the
+  `mapping` const; a large red/green block replacing the "Ledgers,
+  items, and mapping" SettingsPanel; a red block removing the "AI/OCR
+  readiness" SettingsPanel and a green block inside the training panel;
+  red/green inside getAiReadiness (three required: true → false, score
+  block → headline); red/green in TextField/TextAreaField signatures
+  and a new FieldGroup component. If you see red inside the connector,
+  activation, or Tally sections: STOP.
+- profile-wizard.tsx: one red/green line (extraction_instructions →
+  posting_expectations).
+- team-management-panel.tsx: one changed import line, a green handler
+  block, a red/green block in the member row.
+- layout.tsx: red/green on the viewport object and the import line.
+- members/[userId]/route.ts: entirely new.
 - CHANGELOG.md / SIFTENTRY_CHANGELOG.md: green only.
 
 ## Commit message
 
-Tally voucher-with-stock-allocation mode, connector double-posting guard, PWA build refresh
+Profile editor consolidation, AI readiness as plain language, member role changes
 
 ## Verify steps
 
-1. Backend: `python3 -m pytest -q` → 86 passed (was 75).
+1. Backend: `python3 -m pytest -q` → 89 passed (was 86).
 2. Web, from apps/web: `pnpm typecheck && pnpm lint && pnpm build` → all
-   clean; the build route list includes /api/system/build (43 routes
-   total, was 42).
-3. Push via GitHub Desktop, confirm the latest commit message at
-   github.com/uditparekh/ez-invoice-platform, let Railway + Vercel deploy.
-4. Open app.siftentry.com → Client profiles → New client profile wizard →
-   step 3 shows THREE posting-mode cards including "Voucher with stock
-   allocation".
-5. Guard check: on an org that already has a connector-enabled Tally
-   profile, try creating a second Tally profile with the connector toggle
-   on → the save is rejected and the notice names the existing profile.
-6. Build refresh check (after the NEXT deploy following this one): leave
-   the installed PWA open through a deploy; within ~60s of the new
-   deployment going live it reloads itself once.
-
-## For the pilot client's profile
-
-Set posting mode to "Voucher with stock allocation". Before the first live
-post, still confirm with the client: (a) one purchase ledger or several
-(the XML handles both; this is verification), and (b) whether Tally prompts
-for a godown/batch during their allocation entry — if yes, put the exact
-godown name in the profile; if no, leave godown blank.
+   clean; 41 static pages (was 42).
+3. Push, confirm the commit on GitHub, let Railway + Vercel deploy.
+4. Client profiles: with one profile the library shows as a narrow rail
+   on the left and the editor is wide. Click the rail toggle → it
+   expands smoothly; reload → it stays expanded (remembered).
+5. Ledgers and stock items: three grouped boxes with helper text; on a
+   ledger-only profile the stock box is replaced by a one-line note.
+6. AI extraction and parser training: a sentence like "AI extraction is
+   ready for testing. 3 optional items would improve accuracy: ..." —
+   no percentage. Type into Extraction instructions → its pill flips to
+   "Sent with every extraction".
+7. Settings → Team access: the Udit Viewer row has a role dropdown.
+   Change it to Accountant → row updates, message confirms. Your own
+   Owner row has no dropdown.
+8. /app/gl-mapping returns 404.

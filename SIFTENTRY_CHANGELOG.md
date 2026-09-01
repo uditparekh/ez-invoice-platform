@@ -4,6 +4,41 @@ Tracks every file changed per delivered package, against the repo state each
 package was built on. Started at pkg32; earlier packages are recorded in
 CHANGELOG.md and their README-INTEGRATION files.
 
+## pkg33 — built against main @ 4c6bd2d
+
+Consolidation & trust: collapsible profile library, ledger section rebuilt
+into concept groups, AI readiness as a sentence with aligned required flags,
+mappings canonical in Rules & mapping, member role changes, wizard field
+wiring fix, viewport fix, orphan route removed.
+
+Backend (2 changed):
+- siftentry_app/backend/models.py — MemberRoleUpdate
+- siftentry_app/backend/main.py — PATCH members/{user_id} endpoint with
+  owner-promotion and last-owner guards
+
+Tests (1 changed):
+- tests/test_api.py — 3 role-change tests
+
+Web (5 changed, 1 new, 1 deleted):
+- apps/web/src/components/client-profiles-panel.tsx — library rail,
+  FieldGroup + hint/optional on TextField, ledger section rebuilt, mapping
+  row → count + link, readiness merged into training panel, sentence status,
+  inline status on instruction textareas, dead mapping helpers removed
+- apps/web/src/components/client-profiles/profile-wizard.tsx — expectations
+  field writes posting_expectations
+- apps/web/src/components/settings/team-management-panel.tsx — role select
+  on member rows
+- apps/web/src/app/layout.tsx — viewport object corrected, Viewport type
+- apps/web/src/app/api/organizations/[organizationId]/members/[userId]/route.ts
+  — NEW, PATCH proxy
+- apps/web/src/app/(product)/app/gl-mapping/page.tsx — DELETED (orphan demo)
+
+Docs (3 changed):
+- CHANGELOG.md, README-INTEGRATION.md, SIFTENTRY_CHANGELOG.md
+
+Backend tests: 86 → 89. Web: typecheck/lint/build clean, 41 static pages
+(was 42 — the orphan route).
+
 ## pkg32 — built against main @ e76a514
 
 Voucher-with-stock-allocation posting mode, connector double-posting guard,

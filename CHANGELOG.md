@@ -6,6 +6,19 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Member role changes (pkg33): PATCH
+  /api/v1/organizations/{id}/members/{user_id} changes an existing
+  member's role in place — previously the only path was re-inviting the
+  member. Owner promotion stays owner-only, and the last owner cannot be
+  demoted. Team access rows in Settings now carry a role dropdown (your
+  own row stays read-only) (3 new tests)
+- Collapsible profile library (pkg33): the client-profiles library
+  collapses to a slim rail so the editor takes the width. Starts
+  collapsed when there is one profile or none, expanded when there are
+  several; a manual toggle wins and is remembered per browser. Profiles
+  can still be switched from the rail. Below the desktop breakpoint the
+  same toggle collapses the list vertically
+
 - Tally "Voucher with stock allocation" posting mode (pkg32): a third
   posting mode for clients who enter purchases in Tally's voucher mode
   (Dr/Cr accounting voucher screen) but allocate stock items through
@@ -44,6 +57,35 @@ All notable platform changes will be recorded here.
   construction since nothing can be uploaded or modified (1 new test)
 
 ### Changed
+
+- Profile editor "Ledgers and stock items" (pkg33): the flat 14-field
+  grid is now three concept groups — where purchases post, default stock
+  item, item mapping rules — each with one plain sentence of why. Every
+  field carries helper text under it instead of example-style
+  placeholders that read as filled values; optional fields are labelled
+  optional. Stock item settings are hidden for ledger-only posting
+  modes. The embedded mapping row is replaced by a rule count and a
+  link to Rules & mapping, which is now the single place mappings are
+  edited
+- AI readiness (pkg33): the percentage score and progress bar are
+  replaced by a plain-language status sentence naming what is missing
+  or what would improve accuracy. Extraction guidance, validation rules,
+  and posting expectations are now correctly labelled recommended, not
+  required — the activation gate never required them, and the two
+  panels disagreed. The readiness card now sits inside the training
+  panel, and each instruction textarea shows its own inline status
+  ("Sent with every extraction" / "Optional · improves accuracy")
+- Wizard (pkg33): the "Posting expectations" field now saves to
+  posting_expectations; it was writing to extraction_instructions
+
+### Fixed
+
+- Root layout viewport (pkg33): viewportFit: "cover" was nested inside
+  the light-mode themeColor entry instead of on the viewport object, so
+  installed PWAs got no safe-area handling on notched phones
+- Removed the orphaned /app/gl-mapping route (pkg33): a demo page with
+  hardcoded categories that touched no real profile data and was not
+  linked from navigation
 
 - Mobile tab bar (pkg30): the Menu tab moved from the right end to the
   left end of the bottom navigation bar

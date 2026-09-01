@@ -1895,3 +1895,91 @@ def test_updating_the_only_connector_profile_still_succeeds(tmp_path: Path):
         assert updated.status_code == 200
         assert updated.json()["settings"]["purchase_ledger"] == "RAW MATERIAL A/C"
         assert updated.json()["settings"]["posting_mode"] == "voucher_with_inventory"
+
+
+def _invite_and_accept(client, org_id: str, headers: dict, email: str, role: str) -> str:
+    invitation = client.post(
+        f"/api/v1/organizations/{org_id}/invitations",
+        json={"email": email, "role": role},
+        headers=headers,
+    )
+    assert invitation.status_code == 201
+    accepted = client.post(
+        "/api/v1/auth/invitations/accept",
+        json={
+            "token": invitation.json()["invitation_token"],
+            "password": "member-password-is-long",
+            "full_name": email.split("@")[0],
+        },
+    )
+    assert accepted.status_code == 200
+    members = client.get(f"/api/v1/organizations/{org_id}/members", headers=headers).json()
+    return next(member["user_id"] for member in members if member["email"] == email)
+
+
+def test_owner_can_change_member_role_in_place(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+        viewer_id = _invite_and_accept(client, org_id, headers, "viewer@example.com", "viewer")
+
+        changed = client.patch(
+            f"/api/v1/organizations/{org_id}/members/{viewer_id}",
+            json={"role": "accountant"},
+            headers=headers,
+        )
+        assert changed.status_code == 200
+        assert changed.json()["role"] == "accountant"
+
+        members = client.get(f"/api/v1/organizations/{org_id}/members", headers=headers).json()
+        # No duplicate membership row was created by the role change.
+        assert [m["email"] for m in members].count("viewer@example.com") == 1
+
+
+def test_last_owner_cannot_be_demoted(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+        members = client.get(f"/api/v1/organizations/{org_id}/members", headers=headers).json()
+        owner_id = next(m["user_id"] for m in members if m["role"] == "owner")
+
+        demote = client.patch(
+            f"/api/v1/organizations/{org_id}/members/{owner_id}",
+            json={"role": "admin"},
+            headers=headers,
+        )
+        assert demote.status_code == 409
+
+
+def test_admin_cannot_promote_to_owner(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        headers = authorization(tokens)
+        admin_id = _invite_and_accept(client, org_id, headers, "admin@example.com", "admin")
+        viewer_id = _invite_and_accept(client, org_id, headers, "viewer@example.com", "viewer")
+
+        admin_login = client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@example.com", "password": "member-password-is-long"},
+        )
+        assert admin_login.status_code == 200
+        admin_headers = authorization(admin_login.json())
+
+        promote = client.patch(
+            f"/api/v1/organizations/{org_id}/members/{viewer_id}",
+            json={"role": "owner"},
+            headers=admin_headers,
+        )
+        assert promote.status_code == 403
+
+        # Admins can still make ordinary role changes.
+        assert admin_id
+        ordinary = client.patch(
+            f"/api/v1/organizations/{org_id}/members/{viewer_id}",
+            json={"role": "approver"},
+            headers=admin_headers,
+        )
+        assert ordinary.status_code == 200

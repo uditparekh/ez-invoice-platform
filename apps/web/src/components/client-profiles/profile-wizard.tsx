@@ -172,7 +172,7 @@ export function ProfileWizard({
           : payload.settings.posting_mode,
         training_profile: {
           ...payload.settings.training_profile,
-          extraction_instructions: draft.expectations.trim(),
+          posting_expectations: draft.expectations.trim(),
           onboarding_status: "ready_for_admin_review",
         },
       };

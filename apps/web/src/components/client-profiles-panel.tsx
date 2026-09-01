@@ -2,9 +2,11 @@
 
 import {
   AlertTriangle,
+  ArrowRight,
   BadgeCheck,
   BrainCircuit,
   ChevronDown,
+  ChevronUp,
   CheckCircle2,
   CircleDashed,
   CopyPlus,
@@ -14,6 +16,8 @@ import {
   Landmark,
   Layers3,
   LoaderCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Save,
   Search,
@@ -23,6 +27,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import Link from "next/link";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { ContentCard } from "@/components/dashboard/content-card";
@@ -50,6 +55,25 @@ const accountingSystems: { label: string; value: AccountingSystem }[] = [
   { label: "Excel", value: "excel" },
   { label: "Custom", value: "custom" },
 ];
+
+const LIBRARY_COLLAPSE_KEY = "siftentry.profile-library.collapsed";
+
+function readStoredLibraryPreference(): boolean | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(LIBRARY_COLLAPSE_KEY);
+    if (stored === "1") return true;
+    if (stored === "0") return false;
+  } catch {
+    // Storage unavailable (private mode, etc.): fall back to the smart default.
+  }
+  return null;
+}
+
+/** Posting modes that move stock and therefore need stock item settings. */
+function isInventoryPostingMode(mode: ProfilePostingMode | string | undefined) {
+  return mode === "item_invoice" || mode === "voucher_with_inventory";
+}
 
 const postingModes: { label: string; value: ProfilePostingMode }[] = [
   { label: "Accounting voucher", value: "accounting_voucher" },
@@ -469,6 +493,23 @@ export function ClientProfilesPanel({
   );
   const [notice, setNotice] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
+  // Library collapse: starts collapsed when there is one profile or none (the
+  // overwhelming case — the editor gets the space), expanded when there are
+  // several. A manual toggle wins and is remembered for this browser.
+  const [libraryPreference, setLibraryPreference] = useState<boolean | null>(
+    readStoredLibraryPreference,
+  );
+  const libraryCollapsed =
+    libraryPreference !== null ? libraryPreference : profiles.length <= 1;
+  function toggleLibrary() {
+    const next = !libraryCollapsed;
+    setLibraryPreference(next);
+    try {
+      window.localStorage.setItem(LIBRARY_COLLAPSE_KEY, next ? "1" : "0");
+    } catch {
+      // Best effort only.
+    }
+  }
   const [trainingSampleFile, setTrainingSampleFile] = useState<File | null>(
     null,
   );
@@ -617,22 +658,6 @@ export function ClientProfilesPanel({
       fieldSet.add(field);
     }
     updateTrainingProfile({ expected_fields: Array.from(fieldSet) });
-  }
-
-  function updatePrimaryMapping<Key extends keyof ClientProfileItemMapping>(
-    key: Key,
-    value: ClientProfileItemMapping[Key],
-  ) {
-    setDraft((current) => {
-      const [first = emptyMapping, ...rest] = current.settings.item_mappings;
-      return {
-        ...current,
-        settings: {
-          ...current.settings,
-          item_mappings: [{ ...first, [key]: value }, ...rest],
-        },
-      };
-    });
   }
 
   function applyCountryProfile(countryCode: string) {
@@ -844,7 +869,6 @@ export function ClientProfilesPanel({
     }
   }
 
-  const mapping = draft.settings.item_mappings[0] ?? emptyMapping;
   const countryOptions = optionsWithCurrent(
     countryProfiles.map(({ label, value }) => ({ label, value })),
     draft.settings.country_code,
@@ -902,95 +926,169 @@ export function ClientProfilesPanel({
         onChange={(event) => void importProfile(event)}
       />
       <div className="space-y-5">
-        <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="rounded-2xl border border-line bg-canvas p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-                  Profile library
-                </p>
-                <h3 className="mt-1 text-base font-black text-ink">
-                  Workspace setups
-                </h3>
+        <div
+          className={cn(
+            "grid gap-5 transition-[grid-template-columns] duration-300 ease-in-out",
+            libraryCollapsed
+              ? "xl:grid-cols-[64px_minmax(0,1fr)]"
+              : "xl:grid-cols-[320px_minmax(0,1fr)]",
+          )}
+        >
+          <aside
+            className={cn(
+              "overflow-hidden rounded-2xl border border-line bg-canvas transition-[padding] duration-300",
+              libraryCollapsed ? "p-2 xl:px-2 xl:py-3" : "p-4",
+            )}
+            aria-label="Profile library"
+          >
+            {/* Header row: always visible. On desktop it holds the collapse toggle;
+                below xl the same toggle collapses the list vertically. */}
+            <div
+              className={cn(
+                "flex items-start gap-3",
+                libraryCollapsed ? "justify-between xl:flex-col xl:items-center" : "justify-between",
+              )}
+            >
+              {!libraryCollapsed && (
+                <div className="min-w-0">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                    Profile library
+                  </p>
+                  <h3 className="mt-1 text-base font-black text-ink">
+                    Workspace setups
+                  </h3>
+                </div>
+              )}
+              <div
+                className={cn(
+                  "flex items-center gap-2",
+                  libraryCollapsed && "xl:flex-col",
+                )}
+              >
+                <span
+                  className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-black text-ink-secondary"
+                  title={`${filteredProfiles.length} profile${filteredProfiles.length === 1 ? "" : "s"}`}
+                >
+                  {filteredProfiles.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleLibrary()}
+                  aria-expanded={!libraryCollapsed}
+                  aria-controls="profile-library-list"
+                  title={libraryCollapsed ? "Expand profile library" : "Collapse profile library"}
+                  className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-surface text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+                >
+                  <span className="hidden xl:block">
+                    {libraryCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                  </span>
+                  <span className="xl:hidden">
+                    {libraryCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                  </span>
+                </button>
               </div>
-              <span className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-black text-ink-secondary">
-                {filteredProfiles.length}
-              </span>
             </div>
 
-            <label className="mt-4 flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink-secondary">
-              <Search size={16} className="shrink-0 text-ink-muted" />
-              <input
-                value={profileSearch}
-                onChange={(event) => setProfileSearch(event.target.value)}
-                placeholder="Search profiles"
-                className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-muted"
-              />
-            </label>
-
-            <div className="mt-4 space-y-3">
-              {loading ? (
-                <div className="rounded-2xl border border-line bg-surface px-4 py-6 text-sm font-bold text-ink-secondary">
-                  <LoaderCircle
-                    className="mr-2 inline animate-spin"
-                    size={16}
-                  />
-                  Loading profiles
-                </div>
-              ) : filteredProfiles.length ? (
-                filteredProfiles.map((profile) => (
+            {libraryCollapsed ? (
+              /* Rail: switch profiles without expanding. Hidden below xl, where
+                 collapsed simply means "list hidden". */
+              <div className="mt-3 hidden flex-col items-center gap-2 xl:flex">
+                {filteredProfiles.map((profile) => (
                   <button
                     key={profile.id}
                     type="button"
                     onClick={() => selectProfile(profile)}
+                    title={`${profile.name} · ${systemLabel(profile.accounting_system)}`}
+                    aria-label={`Open profile ${profile.name}`}
+                    aria-current={selectedId === profile.id ? "true" : undefined}
                     className={cn(
-                      "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                      "grid size-10 place-items-center rounded-xl border text-xs font-black uppercase transition-colors",
                       selectedId === profile.id
-                        ? "border-accent bg-accent-soft"
-                        : "border-line bg-surface hover:border-accent hover:bg-surface-subtle",
+                        ? "border-accent bg-accent-soft text-accent-ink"
+                        : "border-line bg-surface text-ink-secondary hover:border-accent hover:text-accent",
                     )}
                   >
-                    <div className="flex items-start gap-3">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-xs font-black uppercase text-accent-ink">
-                        {profile.accounting_system.slice(0, 2)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-black text-ink">
-                          {profile.name}
-                        </span>
-                        <span className="mt-1 block truncate text-xs font-bold text-ink-muted">
-                          {systemLabel(profile.accounting_system)} /{" "}
-                          {profile.settings.company_name || "Company not set"}
-                        </span>
-                        <span className="mt-2 flex flex-wrap gap-1.5">
-                          <MiniChip>
-                            {profile.settings.default_currency || "USD"}
-                          </MiniChip>
-                          <MiniChip>
-                            {postingModeLabel(profile.settings.posting_mode)}
-                          </MiniChip>
-                          {profile.is_default && (
-                            <MiniChip tone="accent">Default</MiniChip>
-                          )}
-                        </span>
-                      </span>
-                      {profile.is_default && (
-                        <Star
-                          size={16}
-                          className="shrink-0 fill-accent text-accent"
-                        />
-                      )}
-                    </div>
+                    {profile.accounting_system.slice(0, 2)}
                   </button>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-line-strong bg-surface px-4 py-6 text-sm font-semibold leading-6 text-ink-secondary">
-                  {profileSearch
-                    ? "No profiles match that search."
-                    : "No profiles saved yet. Use the India GST template or start with a blank profile."}
+                ))}
+              </div>
+            ) : (
+              <div id="profile-library-list">
+                <label className="mt-4 flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink-secondary">
+                  <Search size={16} className="shrink-0 text-ink-muted" />
+                  <input
+                    value={profileSearch}
+                    onChange={(event) => setProfileSearch(event.target.value)}
+                    placeholder="Search profiles"
+                    className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-muted"
+                  />
+                </label>
+
+                <div className="mt-4 space-y-3">
+                  {loading ? (
+                    <div className="rounded-2xl border border-line bg-surface px-4 py-6 text-sm font-bold text-ink-secondary">
+                      <LoaderCircle
+                        className="mr-2 inline animate-spin"
+                        size={16}
+                      />
+                      Loading profiles
+                    </div>
+                  ) : filteredProfiles.length ? (
+                    filteredProfiles.map((profile) => (
+                      <button
+                        key={profile.id}
+                        type="button"
+                        onClick={() => selectProfile(profile)}
+                        className={cn(
+                          "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                          selectedId === profile.id
+                            ? "border-accent bg-accent-soft"
+                            : "border-line bg-surface hover:border-accent hover:bg-surface-subtle",
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-xs font-black uppercase text-accent-ink">
+                            {profile.accounting_system.slice(0, 2)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-black text-ink">
+                              {profile.name}
+                            </span>
+                            <span className="mt-1 block truncate text-xs font-bold text-ink-muted">
+                              {systemLabel(profile.accounting_system)} /{" "}
+                              {profile.settings.company_name || "Company not set"}
+                            </span>
+                            <span className="mt-2 flex flex-wrap gap-1.5">
+                              <MiniChip>
+                                {profile.settings.default_currency || "USD"}
+                              </MiniChip>
+                              <MiniChip>
+                                {postingModeLabel(profile.settings.posting_mode)}
+                              </MiniChip>
+                              {profile.is_default && (
+                                <MiniChip tone="accent">Default</MiniChip>
+                              )}
+                            </span>
+                          </span>
+                          {profile.is_default && (
+                            <Star
+                              size={16}
+                              className="shrink-0 fill-accent text-accent"
+                            />
+                          )}
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-line-strong bg-surface px-4 py-6 text-sm font-semibold leading-6 text-ink-secondary">
+                      {profileSearch
+                        ? "No profiles match that search."
+                        : "No profiles saved yet. Use the India GST template or start with a blank profile."}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </aside>
 
           <section className="overflow-hidden rounded-2xl border border-line bg-canvas">
@@ -1232,133 +1330,137 @@ export function ClientProfilesPanel({
             </SettingsPanel>
 
             <SettingsPanel
-              title="Ledgers, items, and mapping"
-              detail="Exact accounting names used for posting and retry diagnostics."
+              title="Ledgers and stock items"
+              detail="The exact names from this client's books. Postings fail if a name here differs from the accounting system by even one character — copy names, don't type them."
             >
-              <FormGrid>
-                <TextField
-                  label="Purchase ledger"
-                  value={draft.settings.purchase_ledger}
-                  onChange={(value) => updateSettings("purchase_ledger", value)}
-                  placeholder="Exact purchase ledger"
-                />
-                <TextField
-                  label="Tax ledger"
-                  value={draft.settings.tax_ledger}
-                  onChange={(value) => updateSettings("tax_ledger", value)}
-                  placeholder="Generic or IGST ledger"
-                />
-                <TextField
-                  label="Input IGST ledger"
-                  value={String(draft.settings.tax_settings.igst_ledger ?? "")}
-                  onChange={(value) => updateTaxSetting("igst_ledger", value)}
-                  placeholder="IGST A/C"
-                />
-                <TextField
-                  label="Input CGST ledger"
-                  value={String(draft.settings.tax_settings.cgst_ledger ?? "")}
-                  onChange={(value) => updateTaxSetting("cgst_ledger", value)}
-                  placeholder="CGST A/C"
-                />
-                <TextField
-                  label="Input SGST ledger"
-                  value={String(draft.settings.tax_settings.sgst_ledger ?? "")}
-                  onChange={(value) => updateTaxSetting("sgst_ledger", value)}
-                  placeholder="SGST A/C"
-                />
-                <TextField
-                  label="TCS ledger"
-                  value={draft.settings.tcs_ledger}
-                  onChange={(value) => updateSettings("tcs_ledger", value)}
-                  placeholder="Optional exact ledger"
-                />
-                <TextField
-                  label="Round-off ledger"
-                  value={draft.settings.round_off_ledger}
-                  onChange={(value) =>
-                    updateSettings("round_off_ledger", value)
-                  }
-                  placeholder="Optional exact ledger"
-                />
-                <TextField
-                  label="Stock item"
-                  value={draft.settings.stock_item_name}
-                  onChange={(value) => updateSettings("stock_item_name", value)}
-                  placeholder="Exact stock item"
-                />
-                <TextField
-                  label="HSN/SAC"
-                  value={draft.settings.stock_item_hsn}
-                  onChange={(value) => updateSettings("stock_item_hsn", value)}
-                  placeholder="HSN/SAC code"
-                />
-                <TextField
-                  label="UOM"
-                  value={draft.settings.stock_item_uom}
-                  onChange={(value) => updateSettings("stock_item_uom", value)}
-                  placeholder="Exact unit"
-                />
-                <TextField
-                  label="Godown/location"
-                  value={draft.settings.godown_name}
-                  onChange={(value) => updateSettings("godown_name", value)}
-                  placeholder="Optional"
-                />
-                <TextField
-                  label="Description contains"
-                  value={mapping.source_description_contains}
-                  onChange={(value) =>
-                    updatePrimaryMapping("source_description_contains", value)
-                  }
-                  placeholder="Keyword from invoice line"
-                />
-                <TextField
-                  label="Source HSN/SAC"
-                  value={mapping.source_hsn_sac}
-                  onChange={(value) =>
-                    updatePrimaryMapping("source_hsn_sac", value)
-                  }
-                  placeholder="HSN/SAC code"
-                />
-                <TextField
-                  label="Target item"
-                  value={mapping.target_item_name}
-                  onChange={(value) =>
-                    updatePrimaryMapping("target_item_name", value)
-                  }
-                  placeholder="Exact stock item"
-                />
-                <TextField
-                  label="Target UOM"
-                  value={mapping.target_uom}
-                  onChange={(value) =>
-                    updatePrimaryMapping("target_uom", value)
-                  }
-                  placeholder="Exact unit"
-                />
-                <TextField
-                  label="Mapping purchase ledger"
-                  value={mapping.purchase_ledger}
-                  onChange={(value) =>
-                    updatePrimaryMapping("purchase_ledger", value)
-                  }
-                  placeholder="Exact purchase ledger"
-                />
-                <TextField
-                  label="Mapping tax ledger"
-                  value={mapping.tax_ledger}
-                  onChange={(value) =>
-                    updatePrimaryMapping("tax_ledger", value)
-                  }
-                  placeholder="Exact tax ledger"
-                />
-              </FormGrid>
+              <div className="space-y-4">
+                <FieldGroup
+                  title="Where purchases post"
+                  detail="Every invoice debits the purchase ledger and credits the supplier. Tax is split out to its own ledgers."
+                >
+                  <TextField
+                    label="Purchase ledger"
+                    value={draft.settings.purchase_ledger}
+                    onChange={(value) => updateSettings("purchase_ledger", value)}
+                    hint="Copy the exact ledger name from the accounting system."
+                  />
+                  <TextField
+                    label="Tax ledger"
+                    value={draft.settings.tax_ledger}
+                    onChange={(value) => updateSettings("tax_ledger", value)}
+                    hint="Used when tax is posted as one line, or as the IGST fallback."
+                  />
+                  <TextField
+                    label="Input IGST ledger"
+                    value={String(draft.settings.tax_settings.igst_ledger ?? "")}
+                    onChange={(value) => updateTaxSetting("igst_ledger", value)}
+                    hint="Interstate GST. Leave blank to use the tax ledger."
+                  />
+                  <TextField
+                    label="Input CGST ledger"
+                    value={String(draft.settings.tax_settings.cgst_ledger ?? "")}
+                    onChange={(value) => updateTaxSetting("cgst_ledger", value)}
+                    hint="Central half of intrastate GST."
+                  />
+                  <TextField
+                    label="Input SGST ledger"
+                    value={String(draft.settings.tax_settings.sgst_ledger ?? "")}
+                    onChange={(value) => updateTaxSetting("sgst_ledger", value)}
+                    hint="State half of intrastate GST."
+                  />
+                  <TextField
+                    label="TCS ledger"
+                    optional
+                    value={draft.settings.tcs_ledger}
+                    onChange={(value) => updateSettings("tcs_ledger", value)}
+                    hint="Only if suppliers charge TCS on invoices."
+                  />
+                  <TextField
+                    label="Round-off ledger"
+                    optional
+                    value={draft.settings.round_off_ledger}
+                    onChange={(value) =>
+                      updateSettings("round_off_ledger", value)
+                    }
+                    hint="Absorbs paise differences between line totals and the invoice total."
+                  />
+                </FieldGroup>
+
+                {isInventoryPostingMode(draft.settings.posting_mode) ? (
+                  <FieldGroup
+                    title="Default stock item"
+                    detail="Used for any invoice line that no item mapping matches. Stock moves in the accounting system under this item."
+                  >
+                    <TextField
+                      label="Stock item"
+                      value={draft.settings.stock_item_name}
+                      onChange={(value) => updateSettings("stock_item_name", value)}
+                      hint="Exact stock item name as it appears in the accounting system."
+                    />
+                    <TextField
+                      label="Unit (UOM)"
+                      value={draft.settings.stock_item_uom}
+                      onChange={(value) => updateSettings("stock_item_uom", value)}
+                      hint="The unit symbol that stock item uses — for example Nos or KGS."
+                    />
+                    <TextField
+                      label="HSN/SAC"
+                      optional
+                      value={draft.settings.stock_item_hsn}
+                      onChange={(value) => updateSettings("stock_item_hsn", value)}
+                      hint="Recommended for GST validation on India profiles."
+                    />
+                    <TextField
+                      label="Godown / location"
+                      optional
+                      value={draft.settings.godown_name}
+                      onChange={(value) => updateSettings("godown_name", value)}
+                      hint="Only if the accounting system prompts for a godown during entry."
+                    />
+                  </FieldGroup>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-3 text-xs font-semibold leading-5 text-ink-secondary">
+                    Stock item settings are hidden because this profile posts
+                    ledger-only accounting vouchers. Switch the posting mode to
+                    an inventory-backed mode to configure stock items.
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-ink">Item mapping rules</p>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
+                      {draft.settings.item_mappings.length
+                        ? `${draft.settings.item_mappings.length} rule${draft.settings.item_mappings.length === 1 ? "" : "s"} override the default stock item for matching invoice lines.`
+                        : "No rules yet. Rules override the default stock item for specific invoice lines and are built from real invoice data."}
+                    </p>
+                  </div>
+                  <Link
+                    href="/app/rules"
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-black text-accent transition-colors hover:border-accent"
+                  >
+                    Manage in Rules &amp; mapping
+                    <ArrowRight size={14} />
+                  </Link>
+                </div>
+              </div>
             </SettingsPanel>
 
             <SettingsPanel
-              title="Sample invoices and parser training"
-              detail="Upload examples and capture the rules used by AI/OCR and deterministic parsers."
+              title="AI extraction and parser training"
+              detail="Upload real invoices and describe how they are laid out. Everything here is sent to the AI with every extraction for this client."
             >
+              <div className="mb-5">
+                <AiReadinessPanel
+                  aiStatus={aiStatus}
+                  aiStatusError={aiStatusError}
+                  profileName={draft.name || "Untitled client setup"}
+                  accountingSystem={draftSystem}
+                  countryCode={draft.settings.country_code}
+                  currency={draft.settings.default_currency || "USD"}
+                  trainingProfile={trainingProfile}
+                />
+              </div>
               <TrainingProfileSection
                 selectedProfile={selectedProfile}
                 trainingProfile={trainingProfile}
@@ -1382,21 +1484,6 @@ export function ClientProfilesPanel({
               onSubmitReview={() => void submitForReview()}
               onActivate={() => void approveAndActivate()}
             />
-
-            <SettingsPanel
-              title="AI/OCR readiness"
-              detail="Provider status and client-specific training checks."
-            >
-              <AiReadinessPanel
-                aiStatus={aiStatus}
-                aiStatusError={aiStatusError}
-                profileName={draft.name || "Untitled client setup"}
-                accountingSystem={draftSystem}
-                countryCode={draft.settings.country_code}
-                currency={draft.settings.default_currency || "USD"}
-                trainingProfile={trainingProfile}
-              />
-            </SettingsPanel>
 
             {draft.is_default && (
               <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-bold text-success">
@@ -1450,9 +1537,7 @@ function getOnboardingChecklist(
   const taxSettings = settings.tax_settings ?? {};
   const taxMode = (settings.tax_mode || "").toLowerCase();
   const isTally = system === "tally";
-  const isItemInvoice =
-    settings.posting_mode === "item_invoice" ||
-    settings.posting_mode === "voucher_with_inventory";
+  const isItemInvoice = isInventoryPostingMode(settings.posting_mode);
   const expectedText = [
     trainingProfile.extraction_instructions,
     trainingProfile.posting_expectations,
@@ -1779,29 +1864,15 @@ function AiReadinessPanel({
 
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_310px]">
         <div className="rounded-2xl border border-line bg-canvas p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-                Live extraction score
-              </p>
-              <p className="mt-1 text-3xl font-black text-ink">
-                {readiness.score}%
-              </p>
-            </div>
-            <p className="max-w-md text-sm font-semibold leading-6 text-ink-secondary">
-              {readiness.summary}
-            </p>
-          </div>
-
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface-subtle">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all",
-                readiness.blockers.length ? "bg-gold" : "bg-success",
-              )}
-              style={{ width: `${readiness.score}%` }}
-            />
-          </div>
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+            Where this profile stands
+          </p>
+          <p className="mt-2 text-base font-black leading-7 text-ink">
+            {readiness.headline}
+          </p>
+          <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-ink-secondary">
+            {readiness.summary}
+          </p>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {readiness.items.map((item) => (
@@ -1957,7 +2028,7 @@ function getAiReadiness(
         ? "Client-specific parsing notes saved"
         : "Add where fields appear on this client's invoices",
       ready: hasInstructions,
-      required: true,
+      required: false,
     },
     {
       label: "Validation rules",
@@ -1965,7 +2036,7 @@ function getAiReadiness(
         ? `${trainingProfile.validation_rules.length} rules saved`
         : "Add total, tax, item, or vendor checks",
       ready: hasValidationRules,
-      required: true,
+      required: false,
     },
     {
       label: "Posting expectations",
@@ -1973,7 +2044,7 @@ function getAiReadiness(
         ? "ERP behavior is documented"
         : `Define ${systemLabel(accountingSystem)} posting expectations`,
       ready: hasPostingExpectations,
-      required: true,
+      required: false,
     },
     {
       label: "Policy approval",
@@ -1990,6 +2061,11 @@ function getAiReadiness(
   const blockers = items
     .filter((item) => item.required && !item.ready)
     .map((item) => item.label.toLowerCase());
+  // Recommended items improve accuracy but never block AI use. They are
+  // surfaced as plain suggestions rather than folded into a percentage.
+  const recommendations = items
+    .filter((item) => !item.required && !item.ready && item.label !== "Policy approval")
+    .map((item) => item.label.toLowerCase());
 
   const providerLabel = aiStatus
     ? formatProvider(aiStatus.provider)
@@ -2000,17 +2076,36 @@ function getAiReadiness(
       : `${humanizeToken(aiStatus.mode)} mode`
     : "Waiting for backend";
 
+  const headline = blockers.length
+    ? `AI extraction is not ready yet — ${joinNaturally(blockers)} ${blockers.length === 1 ? "is" : "are"} still missing.`
+    : recommendations.length
+      ? `AI extraction is ready for testing. ${recommendations.length} optional item${recommendations.length === 1 ? "" : "s"} would improve accuracy: ${joinNaturally(recommendations)}.`
+      : trainingProfile.llm_ready
+        ? "AI extraction is fully set up and approved for live use."
+        : "AI extraction is fully set up. Keep it in review until you have approved a few extractions, then switch the policy to live.";
+
   return {
     items,
     score,
     blockers,
+    recommendations,
     providerLabel,
     providerDetail,
-    statusLabel: blockers.length ? "Needs setup" : "Ready for live AI",
+    statusLabel: blockers.length
+      ? "Needs setup"
+      : recommendations.length
+        ? "Ready for testing"
+        : "Ready for live AI",
+    headline,
     summary: blockers.length
-      ? "This profile can still run deterministic parsing, but live AI extraction should stay in review until the missing setup is complete."
-      : "This profile has the provider, examples, rules, and posting context needed for live AI-assisted extraction.",
+      ? "Deterministic parsing still works. Live AI extraction stays in review until the missing setup is complete."
+      : "Every extraction for this client is sent with these instructions and samples as context.",
   };
+}
+
+function joinNaturally(parts: string[]) {
+  if (parts.length <= 1) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
 function formatProvider(provider?: string) {
@@ -2527,7 +2622,12 @@ function TrainingProfileSection({
             onChange={(value) =>
               onUpdate({ extraction_instructions: value })
             }
-            placeholder="Example: Supplier legal name appears under Bill From. Use grand total after IGST/TCS/round-off."
+            hint="Describe where things sit on this client's invoices — e.g. which block holds the supplier name, and which total to use. Two or three sentences is plenty."
+            status={{
+              ready: trainingProfile.extraction_instructions.trim().length > 0,
+              readyText: "Sent with every extraction",
+              emptyText: "Optional · improves accuracy",
+            }}
             wide
           />
           <TextAreaField
@@ -2541,19 +2641,34 @@ function TrainingProfileSection({
                   .filter(Boolean),
               })
             }
-            placeholder="One rule per line"
+            hint="One check per line, in plain words — e.g. line totals must add up to the subtotal."
+            status={{
+              ready: trainingProfile.validation_rules.length > 0,
+              readyText: `${trainingProfile.validation_rules.length} rule${trainingProfile.validation_rules.length === 1 ? "" : "s"} active`,
+              emptyText: "Optional · improves accuracy",
+            }}
           />
           <TextAreaField
             label="Posting expectations"
             value={trainingProfile.posting_expectations}
             onChange={(value) => onUpdate({ posting_expectations: value })}
-            placeholder="Example: Tally Item Invoice, stock item PTA SWEEP, IGST separate, round-off ledger ROUND OFF."
+            hint="How entries should land in the accounting system — anything the ledger fields above don't already capture."
+            status={{
+              ready: trainingProfile.posting_expectations.trim().length > 0,
+              readyText: "Sent with every extraction",
+              emptyText: "Optional · improves accuracy",
+            }}
           />
           <TextAreaField
             label="Exception examples"
             value={trainingProfile.exception_examples}
             onChange={(value) => onUpdate({ exception_examples: value })}
-            placeholder="Known invoice issues, vendor variations, or fields that usually need review."
+            hint="Known quirks: a supplier whose invoices arrive in a different layout, fields that usually need a manual check."
+            status={{
+              ready: trainingProfile.exception_examples.trim().length > 0,
+              readyText: "Saved",
+              emptyText: "Optional",
+            }}
             wide
           />
         </div>
@@ -2671,18 +2786,29 @@ function TextField({
   value,
   onChange,
   placeholder,
+  hint,
+  optional = false,
   wide = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Plain-language guidance shown under the input. Prefer this over
+   *  example-style placeholders, which read as already-filled values. */
+  hint?: string;
+  optional?: boolean;
   wide?: boolean;
 }) {
   return (
     <label className={cn("block", wide && "md:col-span-2 xl:col-span-full")}>
       <span className="text-[11px] font-extrabold uppercase text-ink-muted">
         {label}
+        {optional && (
+          <span className="ml-1.5 font-bold normal-case tracking-normal text-ink-muted/70">
+            · optional
+          </span>
+        )}
       </span>
       <input
         value={value}
@@ -2690,7 +2816,32 @@ function TextField({
         placeholder={placeholder}
         className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
       />
+      {hint && (
+        <span className="mt-1.5 block text-xs font-semibold leading-5 text-ink-muted">
+          {hint}
+        </span>
+      )}
     </label>
+  );
+}
+
+function FieldGroup({
+  title,
+  detail,
+  children,
+}: {
+  title: string;
+  detail: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-canvas p-4">
+      <p className="text-sm font-black text-ink">{title}</p>
+      <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
+        {detail}
+      </p>
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+    </div>
   );
 }
 
@@ -2699,19 +2850,45 @@ function TextAreaField({
   value,
   onChange,
   placeholder,
+  hint,
+  status,
   wide = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** What this field does for the user, in plain language. */
+  hint?: string;
+  /** Inline status: what the AI does with this field right now. */
+  status?: { ready: boolean; readyText: string; emptyText: string };
   wide?: boolean;
 }) {
   return (
     <label className={cn("block", wide && "md:col-span-2 xl:col-span-full")}>
-      <span className="text-[11px] font-extrabold uppercase text-ink-muted">
-        {label}
+      <span className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+          {label}
+        </span>
+        {status && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black",
+              status.ready
+                ? "bg-success-soft text-success"
+                : "bg-surface-subtle text-ink-muted",
+            )}
+          >
+            {status.ready ? <CheckCircle2 size={12} /> : <CircleDashed size={12} />}
+            {status.ready ? status.readyText : status.emptyText}
+          </span>
+        )}
       </span>
+      {hint && (
+        <span className="mt-1 block text-xs font-semibold leading-5 text-ink-muted">
+          {hint}
+        </span>
+      )}
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}

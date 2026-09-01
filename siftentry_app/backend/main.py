@@ -65,6 +65,7 @@ from .models import (
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     PasswordResetResponse,
+    MemberRoleUpdate,
     PdfRetentionPolicy,
     ProfilePostingMode,
     BatchPostRequest,
@@ -507,6 +508,48 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> List[OrganizationMember]:
         _require_membership(request, current_user, organization_id, MANAGE_ROLES)
         return _repo(request).list_organization_members(organization_id)
+
+    @app.patch(
+        "/api/v1/organizations/{organization_id}/members/{user_id}",
+        response_model=OrganizationMember,
+        tags=["authentication"],
+    )
+    def update_organization_member_role(
+        request: Request,
+        organization_id: str,
+        user_id: str,
+        body: MemberRoleUpdate,
+        current_user: CurrentUser,
+    ) -> OrganizationMember:
+        """Change an existing member's role in place.
+
+        Previously the only way to change a role was to re-invite the member
+        and have them accept again. Owner promotion stays owner-only, and an
+        organization can never be left without an owner.
+        """
+        actor = _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        members = _repo(request).list_organization_members(organization_id)
+        target = next((member for member in members if member.user_id == user_id), None)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Member not found in this organization.")
+        if body.role == OrganizationRole.OWNER and actor.role != OrganizationRole.OWNER:
+            raise HTTPException(status_code=403, detail="Only an owner can promote a member to owner.")
+        if target.role == OrganizationRole.OWNER and actor.role != OrganizationRole.OWNER:
+            raise HTTPException(status_code=403, detail="Only an owner can change another owner's role.")
+        if target.role == OrganizationRole.OWNER and body.role != OrganizationRole.OWNER:
+            owners = [member for member in members if member.role == OrganizationRole.OWNER]
+            if len(owners) <= 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This organization needs at least one owner. Promote someone else first.",
+                )
+        _repo(request).create_membership(user_id, organization_id, body.role)
+        updated = next(
+            member
+            for member in _repo(request).list_organization_members(organization_id)
+            if member.user_id == user_id
+        )
+        return updated
 
     @app.get(
         "/api/v1/organizations/{organization_id}/invitations",

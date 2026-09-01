@@ -1,6 +1,6 @@
 "use client";
 
-import { MailPlus, RefreshCw, ShieldCheck, UserRoundCheck } from "lucide-react";
+import { ChevronDown, MailPlus, RefreshCw, ShieldCheck, UserRoundCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -42,6 +42,40 @@ export function TeamManagementPanel() {
   const [error, setError] = useState("");
   const [lastInviteToken, setLastInviteToken] = useState("");
   const [lastInviteUrl, setLastInviteUrl] = useState("");
+  const [changingRoleFor, setChangingRoleFor] = useState<string>("");
+
+  async function changeMemberRole(member: OrganizationMember, nextRole: OrganizationRole) {
+    if (!activeOrganizationId || nextRole === member.role) return;
+    setChangingRoleFor(member.user_id);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(
+        `/api/organizations/${activeOrganizationId}/members/${member.user_id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: nextRole }),
+        },
+      );
+      const payload = (await response.json().catch(() => ({}))) as
+        | OrganizationMember
+        | ApiErrorPayload;
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(payload, "Role could not be changed."));
+      }
+      setMembers((current) =>
+        current.map((entry) =>
+          entry.user_id === member.user_id ? { ...entry, role: nextRole } : entry,
+        ),
+      );
+      setMessage(`${member.full_name || member.email} is now ${nextRole}.`);
+    } catch (changeError) {
+      setError((changeError as Error).message);
+    } finally {
+      setChangingRoleFor("");
+    }
+  }
 
   const currentRole = useMemo(
     () =>
@@ -249,7 +283,38 @@ export function TeamManagementPanel() {
                       </p>
                     </div>
                     <div className="flex items-center justify-between gap-3 sm:contents">
-                      <RolePill role={member.role} />
+                      {member.user_id === user?.id ? (
+                        <RolePill role={member.role} />
+                      ) : (
+                        <label className="relative block">
+                          <span className="sr-only">Role for {member.email}</span>
+                          <select
+                            value={member.role}
+                            disabled={changingRoleFor === member.user_id}
+                            onChange={(event) =>
+                              void changeMemberRole(
+                                member,
+                                event.target.value as OrganizationRole,
+                              )
+                            }
+                            title="Change role"
+                            className={cn(
+                              "h-9 w-full cursor-pointer appearance-none rounded-full border px-3 pr-8 text-xs font-black outline-none transition-colors focus:border-accent disabled:cursor-wait disabled:opacity-60",
+                              roleTone[member.role],
+                            )}
+                          >
+                            {inviteRoles.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown
+                            size={14}
+                            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-current"
+                          />
+                        </label>
+                      )}
                       <p className="text-xs font-semibold text-ink-secondary">
                         <span className="sm:hidden">Last login: </span>
                         {member.last_login_at
