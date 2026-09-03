@@ -1,110 +1,69 @@
-# pkg33 — Consolidation & trust
+# pkg33-b — Create workspace
 
-Built against: main @ 4c6bd2d (pkg32 commit). Verify your local main is at
+Built against: main @ 3517528 (pkg33 commit). Verify your local main is at
 this commit before applying. If it is not: STOP and tell me the current
 commit.
 
-## Files in this zip: 12 total (9 changed, 1 new, 1 deleted, 1 this README)
+## Files in this zip: 8 total (5 changed, 3 new)
 
-Apply by copying each file to the same path in the repo. Overwrite when
-prompted. ONE FILE MUST BE DELETED BY HAND — see step 0.
-
-0.  DELETE apps/web/src/app/(product)/app/gl-mapping/page.tsx
-    (and the now-empty gl-mapping folder). This orphaned demo page is not
-    in the zip; removing it is part of the package.
-
-Backend (2 changed):
-1.  siftentry_app/backend/models.py
-2.  siftentry_app/backend/main.py
-
-Tests (1 changed):
-3.  tests/test_api.py
-
-Web (4 changed, 1 new):
-4.  apps/web/src/components/client-profiles-panel.tsx
-5.  apps/web/src/components/client-profiles/profile-wizard.tsx
-6.  apps/web/src/components/settings/team-management-panel.tsx
-7.  apps/web/src/app/layout.tsx
-8.  apps/web/src/app/api/organizations/[organizationId]/members/[userId]/route.ts
-    (NEW — create the [userId] folder inside the existing members folder)
+Web (3 changed, 2 new):
+1. apps/web/src/app/api/organizations/route.ts
+2. apps/web/src/components/create-workspace-dialog.tsx            (NEW)
+3. apps/web/src/components/app-shell.tsx
+4. apps/web/src/app/(product)/app/settings/page.tsx
+5. apps/web/src/app/api/organizations/[organizationId]/members/[userId]/route.ts
+   (NEW — this is the pkg33 file that did not make it into your push.
+   Create the [userId] folder inside the existing members folder.
+   Without it the Team access role dropdown fails with a 404.)
 
 Docs (3 changed):
-9.  CHANGELOG.md
-10. SIFTENTRY_CHANGELOG.md
-11. README-INTEGRATION.md (this file)
+6. CHANGELOG.md
+7. SIFTENTRY_CHANGELOG.md
+8. README-INTEGRATION.md (this file)
 
 ## What this package delivers
 
-1. Profile library collapses to a slim rail. Starts collapsed with one
-   profile (the editor gets the width), expanded with several. Your
-   toggle is remembered. You can still switch profiles from the rail.
-2. "Ledgers and stock items" rebuilt: three concept groups (where
-   purchases post / default stock item / item mapping rules), helper
-   text under every field, optional fields marked, stock fields hidden
-   for ledger-only modes. Mapping row replaced by count + link to
-   Rules & mapping, which is now the one place mappings are edited.
-3. AI readiness as a sentence. No more 43%. The status names what is
-   missing or what would improve accuracy. Guidance, validation rules,
-   and posting expectations are now labelled recommended (they were
-   marked required by a panel that disagreed with the real activation
-   gate). Readiness card lives inside the training panel; each
-   instruction box shows its own inline status.
-4. Role changes without re-inviting: a role dropdown on each Team
-   access row (not your own). Backend guards: only owners can promote
-   to owner or change an owner; the last owner cannot be demoted.
-5. Wizard "Posting expectations" now saves to the right field.
-6. Viewport fix: installed PWA gets safe-area handling on notched phones.
-7. Orphaned /app/gl-mapping demo route removed.
+1. A "+" button beside the workspace name in the header, and a "New
+   workspace" card under Settings → Organization. Both open a dialog:
+   workspace name + default currency. Creating it makes you its owner
+   and switches you into it immediately, so the next click can be the
+   client profile wizard in the right place.
+2. The header now behaves as a workspace switcher once you have more
+   than one workspace (it already did — you just never had two).
+3. The missing pkg33 PATCH proxy route, so role changes in Team access
+   actually work.
 
-Deliberately NOT in this package: the ledger fields stay plain text
-inputs. They become verified dropdowns fed by Tally in pkg34 (master
-sync) — building dropdowns twice would be wasted work.
+No backend changes: POST /api/v1/organizations already existed and is
+covered by tests. The web app simply never called it.
 
 ## Diff expectations in GitHub Desktop
 
-- models.py: one small green class (MemberRoleUpdate).
-- main.py: one green import line and one green endpoint block before
-  list_organization_invitations. No red. If you see red: STOP.
-- test_api.py: green-only appended tests.
-- client-profiles-panel.tsx: the large one. Expect: green imports
-  (ArrowRight, ChevronUp, PanelLeftClose, PanelLeftOpen, Link); a green
-  constants/helper block near postingModes; a red/green block replacing
-  the <aside>; a red block removing updatePrimaryMapping and the
-  `mapping` const; a large red/green block replacing the "Ledgers,
-  items, and mapping" SettingsPanel; a red block removing the "AI/OCR
-  readiness" SettingsPanel and a green block inside the training panel;
-  red/green inside getAiReadiness (three required: true → false, score
-  block → headline); red/green in TextField/TextAreaField signatures
-  and a new FieldGroup component. If you see red inside the connector,
-  activation, or Tally sections: STOP.
-- profile-wizard.tsx: one red/green line (extraction_instructions →
-  posting_expectations).
-- team-management-panel.tsx: one changed import line, a green handler
-  block, a red/green block in the member row.
-- layout.tsx: red/green on the viewport object and the import line.
+- organizations/route.ts: green POST function appended.
+- create-workspace-dialog.tsx: entirely new.
+- app-shell.tsx: one green import line (Plus), one green import
+  (CreateWorkspaceDialog), one green useState line, a green button block
+  after the role label in the header, and a green dialog mount before
+  the main content div. No red. If you see red: STOP.
+- settings/page.tsx: green imports (Plus, CreateWorkspaceDialog, Button),
+  one green useState line at the top of OrganizationPane, and a green
+  card + dialog block after the "Managed by the workspace owner" hint.
+  No red.
 - members/[userId]/route.ts: entirely new.
 - CHANGELOG.md / SIFTENTRY_CHANGELOG.md: green only.
 
 ## Commit message
 
-Profile editor consolidation, AI readiness as plain language, member role changes
+Create workspace from the app; add missing members role PATCH proxy route
 
 ## Verify steps
 
-1. Backend: `python3 -m pytest -q` → 89 passed (was 86).
-2. Web, from apps/web: `pnpm typecheck && pnpm lint && pnpm build` → all
-   clean; 41 static pages (was 42).
-3. Push, confirm the commit on GitHub, let Railway + Vercel deploy.
-4. Client profiles: with one profile the library shows as a narrow rail
-   on the left and the editor is wide. Click the rail toggle → it
-   expands smoothly; reload → it stays expanded (remembered).
-5. Ledgers and stock items: three grouped boxes with helper text; on a
-   ledger-only profile the stock box is replaced by a one-line note.
-6. AI extraction and parser training: a sentence like "AI extraction is
-   ready for testing. 3 optional items would improve accuracy: ..." —
-   no percentage. Type into Extraction instructions → its pill flips to
-   "Sent with every extraction".
-7. Settings → Team access: the Udit Viewer row has a role dropdown.
-   Change it to Accountant → row updates, message confirms. Your own
-   Owner row has no dropdown.
-8. /app/gl-mapping returns 404.
+1. Web, from apps/web: `pnpm typecheck && pnpm lint && pnpm build` → clean.
+2. Backend: `python3 -m pytest -q` → 89 passed (unchanged).
+3. Push, confirm the commit on GitHub, let Vercel deploy.
+4. Header: a small "+" appears right after "Owner". Click it → dialog.
+5. Create a workspace named after client one. The header switches to it
+   and now shows a dropdown listing Pilot Workspace and the new one.
+6. Settings → Team access → change Udit Viewer's role → it saves (this
+   confirms the re-shipped route).
+7. Client profiles in the new workspace is empty — correct. Run the
+   wizard (or Import JSON) there.

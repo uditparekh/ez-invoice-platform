@@ -4,6 +4,25 @@ Tracks every file changed per delivered package, against the repo state each
 package was built on. Started at pkg32; earlier packages are recorded in
 CHANGELOG.md and their README-INTEGRATION files.
 
+## pkg33-b — built against main @ 3517528
+
+Create-workspace button and dialog; the missing pkg33 PATCH proxy route is
+re-included because it was absent from the pkg33 push.
+
+Web (3 changed, 2 new):
+- apps/web/src/app/api/organizations/route.ts — POST proxy added
+- apps/web/src/components/create-workspace-dialog.tsx — NEW
+- apps/web/src/components/app-shell.tsx — header "+" button, dialog mounted
+- apps/web/src/app/(product)/app/settings/page.tsx — New workspace card
+  under Organization
+- apps/web/src/app/api/organizations/[organizationId]/members/[userId]/route.ts
+  — from pkg33; re-shipped (missing upstream)
+
+Docs (3 changed):
+- CHANGELOG.md, README-INTEGRATION.md, SIFTENTRY_CHANGELOG.md
+
+Backend: unchanged (89 tests). Web: typecheck/lint/build clean, 41 pages.
+
 ## pkg33 — built against main @ 4c6bd2d
 
 Consolidation & trust: collapsible profile library, ledger section rebuilt

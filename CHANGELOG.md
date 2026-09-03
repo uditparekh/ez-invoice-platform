@@ -6,6 +6,14 @@ All notable platform changes will be recorded here.
 
 ### Added
 
+- Create workspace from the app (pkg33-b): a "+" button beside the
+  workspace name in the header and a "New workspace" card under
+  Settings → Organization open a dialog (name + default currency) that
+  creates the organization and switches into it. The backend endpoint
+  already existed; the web app never exposed it, so a second client
+  workspace could not be created from the product. The header switcher
+  now shows the new workspace immediately
+
 - Member role changes (pkg33): PATCH
   /api/v1/organizations/{id}/members/{user_id} changes an existing
   member's role in place — previously the only path was re-inviting the

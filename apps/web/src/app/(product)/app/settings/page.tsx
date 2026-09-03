@@ -7,6 +7,7 @@ import {
   KeyRound,
   Moon,
   Palette,
+  Plus,
   Sun,
   UserRound,
   UsersRound,
@@ -15,9 +16,11 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { CreateWorkspaceDialog } from "@/components/create-workspace-dialog";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PasswordChangeCard } from "@/components/settings/password-change-card";
 import { TeamManagementPanel } from "@/components/settings/team-management-panel";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /** Settings — UI Spec §14. Linear-style two-group rail:
@@ -216,6 +219,7 @@ function SyncState({ org }: { org: OrgSettingsState }) {
 /* ================= workspace panes ================= */
 
 function OrganizationPane({ org }: { org: OrgSettingsState }) {
+  const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
   const { user, activeOrganizationId } = useAuth();
   const membership =
     user?.memberships.find(
@@ -235,6 +239,23 @@ function OrganizationPane({ org }: { org: OrgSettingsState }) {
         </p>
         <Hint>Managed by the workspace owner.</Hint>
       </Field>
+      <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-black text-ink">Onboarding another client?</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
+            Each client gets its own workspace so invoices, profiles, team, and
+            the Tally connection never mix.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={() => setWorkspaceDialogOpen(true)}>
+          <Plus size={14} />
+          New workspace
+        </Button>
+      </div>
+      <CreateWorkspaceDialog
+        open={workspaceDialogOpen}
+        onClose={() => setWorkspaceDialogOpen(false)}
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Default currency">
           <Select

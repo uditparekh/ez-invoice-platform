@@ -8,6 +8,7 @@ import {
   FileText,
   LogOut,
   Menu,
+  Plus,
   PlugZap,
   Search,
   SlidersHorizontal,
@@ -26,6 +27,7 @@ import {
   openCommandPalette,
 } from "@/components/command-center";
 import { BrandMark } from "@/components/brand-mark";
+import { CreateWorkspaceDialog } from "@/components/create-workspace-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -60,6 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     selectOrganization,
     logout,
   } = useAuth();
+  const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -192,6 +195,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      <CreateWorkspaceDialog
+        open={workspaceDialogOpen}
+        onClose={() => setWorkspaceDialogOpen(false)}
+      />
+
       <div className="min-w-0 lg:pl-[260px]">
         <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-shell/95 px-4 backdrop-blur sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink-secondary">
@@ -221,6 +229,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="hidden capitalize text-ink-muted sm:inline">
               {membership?.role ?? "member"}
             </span>
+            {user && (
+              <button
+                type="button"
+                onClick={() => setWorkspaceDialogOpen(true)}
+                title="New workspace"
+                aria-label="Create a new workspace"
+                className="ml-1 grid size-7 shrink-0 place-items-center rounded-lg border border-line text-ink-muted transition-colors hover:border-accent hover:text-accent"
+              >
+                <Plus size={14} />
+              </button>
+            )}
           </div>
           <button
             type="button"
