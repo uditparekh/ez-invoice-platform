@@ -1,69 +1,44 @@
-# pkg33-b — Create workspace
+# pkg33-c — Hotfix: creating a workspace logged you out
 
-Built against: main @ 3517528 (pkg33 commit). Verify your local main is at
-this commit before applying. If it is not: STOP and tell me the current
-commit.
+Built on top of pkg33-b. Apply after pkg33-b is pushed.
 
-## Files in this zip: 8 total (5 changed, 3 new)
+## Files in this zip: 5 total (2 code, 3 docs)
 
-Web (3 changed, 2 new):
-1. apps/web/src/app/api/organizations/route.ts
-2. apps/web/src/components/create-workspace-dialog.tsx            (NEW)
-3. apps/web/src/components/app-shell.tsx
-4. apps/web/src/app/(product)/app/settings/page.tsx
-5. apps/web/src/app/api/organizations/[organizationId]/members/[userId]/route.ts
-   (NEW — this is the pkg33 file that did not make it into your push.
-   Create the [userId] folder inside the existing members folder.
-   Without it the Team access role dropdown fails with a 404.)
+1. apps/web/src/components/create-workspace-dialog.tsx
+2. apps/web/src/components/auth-provider.tsx
+3. CHANGELOG.md
+4. SIFTENTRY_CHANGELOG.md
+5. README-INTEGRATION.md (this file)
 
-Docs (3 changed):
-6. CHANGELOG.md
-7. SIFTENTRY_CHANGELOG.md
-8. README-INTEGRATION.md (this file)
+## What changed
 
-## What this package delivers
+- create-workspace-dialog.tsx: after creating the workspace, reload the
+  session FIRST, then switch to the new workspace. (It was the other way
+  round, which briefly pointed the app at a workspace it did not know.)
+- auth-provider.tsx: refresh() no longer logs you out on a transient
+  failure. Only a definitive 401/403 from /api/auth/me clears the session;
+  a 5xx or a network blip keeps you signed in and retries on the next
+  navigation. This was a pre-existing fragility that the dialog exposed.
 
-1. A "+" button beside the workspace name in the header, and a "New
-   workspace" card under Settings → Organization. Both open a dialog:
-   workspace name + default currency. Creating it makes you its owner
-   and switches you into it immediately, so the next click can be the
-   client profile wizard in the right place.
-2. The header now behaves as a workspace switcher once you have more
-   than one workspace (it already did — you just never had two).
-3. The missing pkg33 PATCH proxy route, so role changes in Team access
-   actually work.
+## Diff expectations
 
-No backend changes: POST /api/v1/organizations already existed and is
-covered by tests. The web app simply never called it.
-
-## Diff expectations in GitHub Desktop
-
-- organizations/route.ts: green POST function appended.
-- create-workspace-dialog.tsx: entirely new.
-- app-shell.tsx: one green import line (Plus), one green import
-  (CreateWorkspaceDialog), one green useState line, a green button block
-  after the role label in the header, and a green dialog mount before
-  the main content div. No red. If you see red: STOP.
-- settings/page.tsx: green imports (Plus, CreateWorkspaceDialog, Button),
-  one green useState line at the top of OrganizationPane, and a green
-  card + dialog block after the "Managed by the workspace owner" hint.
-  No red.
-- members/[userId]/route.ts: entirely new.
-- CHANGELOG.md / SIFTENTRY_CHANGELOG.md: green only.
+- create-workspace-dialog.tsx: two lines swap order inside submit(),
+  comment updated. Nothing else.
+- auth-provider.tsx: fetchAuthenticatedUser gains a status check and a
+  small SessionRefreshError class above it; refresh()'s catch block no
+  longer calls clearUser. Nothing else. If you see red elsewhere: STOP.
 
 ## Commit message
 
-Create workspace from the app; add missing members role PATCH proxy route
+Fix logout after creating a workspace; keep session on transient refresh failures
 
-## Verify steps
+## Verify
 
-1. Web, from apps/web: `pnpm typecheck && pnpm lint && pnpm build` → clean.
-2. Backend: `python3 -m pytest -q` → 89 passed (unchanged).
-3. Push, confirm the commit on GitHub, let Vercel deploy.
-4. Header: a small "+" appears right after "Owner". Click it → dialog.
-5. Create a workspace named after client one. The header switches to it
-   and now shows a dropdown listing Pilot Workspace and the new one.
-6. Settings → Team access → change Udit Viewer's role → it saves (this
-   confirms the re-shipped route).
-7. Client profiles in the new workspace is empty — correct. Run the
-   wizard (or Import JSON) there.
+1. From apps/web: pnpm typecheck && pnpm lint && pnpm build → clean.
+2. Push, let Vercel deploy.
+3. Click "+" in the header, create a throwaway workspace ("Test 2").
+   You stay signed in and the header switches to it.
+4. Switch back to the Pilot workspace via the header dropdown.
+   (There is no delete-workspace in the UI; "Test 2" will simply sit in
+   the dropdown. Harmless — or skip step 3 and just watch the real
+   client-two creation.)

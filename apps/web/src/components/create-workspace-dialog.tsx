@@ -87,9 +87,11 @@ export function CreateWorkspaceDialog({
       if (!response.ok || !("id" in payload)) {
         throw new Error(apiErrorMessage(payload, "Workspace could not be created."));
       }
-      // Select first so the refreshed session lands in the new workspace.
-      selectOrganization(payload.id);
+      // Refresh first so the new workspace is in the memberships list, then
+      // switch to it. Switching before the refresh briefly points the app at
+      // a workspace it does not know about yet.
       await refresh();
+      selectOrganization(payload.id);
       setName("");
       setError("");
       onClose();

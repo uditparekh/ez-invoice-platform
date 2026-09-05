@@ -88,6 +88,13 @@ All notable platform changes will be recorded here.
 
 ### Fixed
 
+- Creating a workspace no longer logs you out (pkg33-c). The dialog
+  switched to the new workspace before the session had reloaded, and
+  refresh() treated any non-OK /api/auth/me response as a lost session.
+  The dialog now reloads the session first, then switches; refresh()
+  only clears the session on a definitive 401/403 and keeps it on
+  transient failures
+
 - Root layout viewport (pkg33): viewportFit: "cover" was nested inside
   the light-mode themeColor entry instead of on the viewport object, so
   installed PWAs got no safe-area handling on notched phones

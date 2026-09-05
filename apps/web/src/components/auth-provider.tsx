@@ -64,9 +64,20 @@ function writeLastActivityAt(value = Date.now()) {
   }
 }
 
+class SessionRefreshError extends Error {}
+
+/**
+ * Returns the user, or null only when the server definitively says the
+ * session is gone (401/403). Any other failure — a 5xx, a network blip, a
+ * token mid-rotation — throws, so callers can keep the current session
+ * instead of logging the person out over a transient error.
+ */
 async function fetchAuthenticatedUser() {
   const response = await fetch("/api/auth/me", { cache: "no-store" });
-  if (!response.ok) return null;
+  if (response.status === 401 || response.status === 403) return null;
+  if (!response.ok) {
+    throw new SessionRefreshError(`Session refresh failed (${response.status})`);
+  }
   return (await response.json()) as AuthenticatedUser;
 }
 
@@ -110,7 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (nextUser) applyUser(nextUser);
       else clearUser();
     } catch {
-      clearUser();
+      // Transient failure: keep the session we already have. The next
+      // navigation or refresh will try again.
     } finally {
       setLoading(false);
     }

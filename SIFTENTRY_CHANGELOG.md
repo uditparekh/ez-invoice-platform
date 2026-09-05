@@ -4,6 +4,18 @@ Tracks every file changed per delivered package, against the repo state each
 package was built on. Started at pkg32; earlier packages are recorded in
 CHANGELOG.md and their README-INTEGRATION files.
 
+## pkg33-c — hotfix, built on pkg33-b
+
+Creating a workspace logged the user out.
+
+Web (2 changed):
+- apps/web/src/components/create-workspace-dialog.tsx — refresh session
+  before switching workspace
+- apps/web/src/components/auth-provider.tsx — refresh() keeps the session
+  on transient failures; only 401/403 clears it
+
+Docs (3 changed): CHANGELOG.md, README-INTEGRATION.md, SIFTENTRY_CHANGELOG.md
+
 ## pkg33-b — built against main @ 3517528
 
 Create-workspace button and dialog; the missing pkg33 PATCH proxy route is
