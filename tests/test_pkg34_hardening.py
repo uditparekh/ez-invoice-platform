@@ -132,3 +132,12 @@ def test_overlapping_runtime_poll_is_blocked(tmp_path, monkeypatch):
 
 def test_named_configs_have_separate_outboxes(tmp_path):
     assert rt.default_outbox_path(str(tmp_path / "one.json")) != rt.default_outbox_path(str(tmp_path / "two.json"))
+
+
+def test_postgres_test_database_url_keeps_credentials(tmp_path, monkeypatch):
+    from urllib.parse import urlparse
+    from tests.test_api import _database_url_for
+    monkeypatch.setenv("SIFTENTRY_TEST_DATABASE_URL", "postgresql://postgres:test-only@localhost:5432/postgres")
+    parsed = urlparse(_database_url_for(tmp_path))
+    assert parsed.username == "postgres" and parsed.password == "test-only"
+    assert parsed.hostname == "localhost" and parsed.path.startswith("/siftentry_test_")

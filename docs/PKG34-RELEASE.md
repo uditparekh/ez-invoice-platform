@@ -38,4 +38,4 @@ The unique active-posting index is installed after legacy column migration. If a
 
 Analytics, event-backed History, invoice variance and broader design work from the QA report remain separate work. The History claim is corrected here, not its underlying event model.
 
-References used for transaction/release design: [PostgreSQL row locking](https://www.postgresql.org/docs/17/explicit-locking.html), [GitHub branch-specific workflow runs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-running-a-workflow).
+References used for transaction/release design: [PostgreSQL row locking](https://www.postgresql.org/docs/17/explicit-locking.html), [GitHub branch-specific workflow runs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).

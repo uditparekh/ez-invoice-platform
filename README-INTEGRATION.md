@@ -5,7 +5,7 @@
 The integrated release includes additional hardening and regression tests beyond
 the original 17-file archive. See [the release/runbook](docs/PKG34-RELEASE.md)
 for the authoritative implementation, safe branch-first installer publication,
-and remaining real-Windows/Tally checks. Local backend verification: 112 tests.
+and remaining real-Windows/Tally checks. Local backend verification: 113 tests.
 The original archive notes below are retained for traceability; their two-push
 main procedure is superseded by the release-branch process (no download outage).
 

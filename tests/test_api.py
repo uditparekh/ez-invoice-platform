@@ -39,7 +39,7 @@ def _database_url_for(tmp_path: Path) -> str:
     from urllib.parse import urlparse
 
     parsed = urlparse(base)
-    return base.replace(parsed.path or "/postgres", f"/{dbname}", 1)
+    return parsed._replace(path=f"/{dbname}").geturl()
 
 
 def make_client(tmp_path: Path, **overrides) -> TestClient:
