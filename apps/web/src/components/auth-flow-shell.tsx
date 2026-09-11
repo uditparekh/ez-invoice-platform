@@ -28,10 +28,10 @@ export function AuthFlowShell({
         </header>
         <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,500px)] lg:py-16">
           <div className="max-w-xl">
-            <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-accent dark:text-cyan">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-ink dark:text-cyan-ink">
               {eyebrow}
             </p>
-            <h1 className="mt-4 text-4xl font-black leading-tight text-ink sm:text-5xl">
+            <h1 className="mt-4 text-4xl font-semibold leading-tight text-ink sm:text-5xl">
               {title}
             </h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-ink-secondary sm:text-lg">
@@ -39,7 +39,7 @@ export function AuthFlowShell({
             </p>
             <Link
               href={backHref}
-              className="mt-8 inline-flex text-sm font-extrabold text-accent transition hover:text-cyan"
+              className="mt-8 inline-flex text-sm font-semibold text-accent-ink transition hover:text-cyan-ink"
             >
               {backLabel}
             </Link>

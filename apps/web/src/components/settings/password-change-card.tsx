@@ -40,15 +40,21 @@ export function PasswordChangeCard() {
         }),
       });
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as ApiErrorPayload;
-        throw new Error(apiErrorMessage(payload, "Password could not be updated."));
+        const payload = (await response
+          .json()
+          .catch(() => ({}))) as ApiErrorPayload;
+        throw new Error(
+          apiErrorMessage(payload, "Password could not be updated."),
+        );
       }
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setMessage("Password updated.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Password could not be updated.");
+      setError(
+        err instanceof Error ? err.message : "Password could not be updated.",
+      );
     } finally {
       setSaving(false);
     }
@@ -59,7 +65,7 @@ export function PasswordChangeCard() {
       title="Password"
       subtitle="Update the password used for this SiftEntry workspace login."
       action={
-        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-success/25 bg-success/10 px-3 text-xs font-extrabold text-success">
+        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-success/25 bg-success/10 px-3 text-xs font-semibold text-success">
           <ShieldCheck size={14} />
           Protected
         </span>
@@ -90,7 +96,9 @@ export function PasswordChangeCard() {
           {message && (
             <p className="text-sm font-semibold text-success">{message}</p>
           )}
-          {error && <p className="text-sm font-semibold text-danger">{error}</p>}
+          {error && (
+            <p className="text-sm font-semibold text-danger">{error}</p>
+          )}
         </div>
         <Button
           variant="primary"
@@ -122,7 +130,7 @@ function PasswordField({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+      <span className="text-xs font-semibold uppercase text-ink-muted">
         {label}
       </span>
       <input

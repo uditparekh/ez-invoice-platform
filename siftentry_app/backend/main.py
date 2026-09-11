@@ -12,7 +12,7 @@ import sqlite3
 import uuid
 import hmac
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional
 from urllib.parse import quote
@@ -95,6 +95,7 @@ from .models import (
 from .parser_service import parse_pdf_invoice
 from .profile_recommendation import recommend_client_profiles
 from .repository import InvoiceRepository
+from .reporting import report_period, safe_csv
 from .review_service import build_invoice_review
 from .security import (
     AuthenticationError,
@@ -1306,6 +1307,59 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             errors=errors,
         )
 
+    @app.get("/api/v1/organizations/{organization_id}/analytics", tags=["reporting"])
+    def workspace_analytics(request: Request, current_user: CurrentUser, organization_id: str,
+                            start: Optional[date] = None, end: Optional[date] = None):
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        try:
+            lower, upper = report_period(start, end)
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+        return _repo(request).workspace_analytics(organization_id, lower, upper)
+
+    @app.get("/api/v1/organizations/{organization_id}/events", tags=["reporting"])
+    def workspace_events(request: Request, current_user: CurrentUser, organization_id: str,
+                         start: Optional[date] = None, end: Optional[date] = None,
+                         category: str = Query(default="all", pattern="^(all|invoice|posting|client_profile|organization|job|demo|digest)$"),
+                         search: str = Query(default="", max_length=120),
+                         limit: int = Query(default=50, ge=1, le=200),
+                         cursor: Optional[str] = Query(default=None, max_length=512),
+                         snapshot: Optional[str] = None):
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        try:
+            lower, upper = report_period(start, end)
+            return _repo(request).workspace_events(organization_id, lower, upper, category=category,
+                search=search, limit=limit, cursor=cursor, snapshot=snapshot)
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+
+    @app.get("/api/v1/organizations/{organization_id}/events/export", tags=["reporting"])
+    def export_workspace_events(request: Request, current_user: CurrentUser, organization_id: str,
+                                start: Optional[date] = None, end: Optional[date] = None,
+                                category: str = Query(default="all", pattern="^(all|invoice|posting|client_profile|organization|job|demo|digest)$"),
+                                search: str = Query(default="", max_length=120), snapshot: Optional[str] = None):
+        _require_membership(request, current_user, organization_id, READ_ROLES)
+        try:
+            lower, upper = report_period(start, end)
+            rows = [["event_id", "timestamp_utc", "event_type", "invoice_id", "invoice_number", "actor", "details"]]
+            cursor = None
+            while True:
+                page = _repo(request).workspace_events(organization_id, lower, upper,
+                    category=category, search=search, limit=200, cursor=cursor, snapshot=snapshot)
+                snapshot = page['snapshot']
+                for event in page['items']:
+                    rows.append([event['id'], event['created_at'], event['event_type'], event['invoice_id'],
+                                 event['invoice_number'], event['actor'] or 'Actor not recorded', str(event['details'])])
+                cursor = page['next_cursor']
+                if not cursor:
+                    break
+                if len(rows) > 100000:
+                    raise HTTPException(422, "Export exceeds 100,000 events. Choose a smaller date range.")
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+        return Response(safe_csv(rows), media_type="text/csv", headers={
+            "Content-Disposition": 'attachment; filename="siftentry-history.csv"', "Cache-Control": "no-store"})
+
     @app.get("/api/v1/invoices", response_model=List[Invoice], tags=["invoices"])
     def list_invoices(
         request: Request,
@@ -1556,7 +1610,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 status_code=409,
                 detail="Only a validated invoice can be approved.",
             )
-        approved = _repo(request).set_status(invoice_id, InvoiceStatus.APPROVED) or invoice
+        approved = _repo(request).set_status(invoice_id, InvoiceStatus.APPROVED, actor_id=current_user.id) or invoice
         # Training-mode signal: a clean approval (zero corrections) extends
         # this supplier format's trusted streak; corrections reset it.
         try:

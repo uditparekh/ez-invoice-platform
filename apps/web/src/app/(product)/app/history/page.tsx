@@ -1,605 +1,402 @@
 "use client";
 
-import {
-  ArrowUpRight,
-  CheckCircle2,
-  FileClock,
-  FileDown,
-  LoaderCircle,
-  RotateCcw,
-  ShieldCheck,
-  UploadCloud,
-  XCircle,
-} from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-
-import { useAuth } from "@/components/auth-provider";
-import type { ReactNode } from "react";
-
-import { EmptyState } from "@/components/dashboard/empty-state";
-import { LoadingState } from "@/components/dashboard/loading-state";
+import { ArrowUpRight, FileClock, FileDown } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { StatusBadge } from "@/components/status-badge";
-import { useWorkspaceInvoices } from "@/hooks/use-workspace-invoices";
-import type { Invoice, PostingResult } from "@/lib/types";
-import { cn, formatCurrency } from "@/lib/utils";
-
-/** History — UI Spec §10. Append-only audit surface:
- *  Activity (event feed from live invoices) · Posting log & retry (real posting
- *  attempts with raw responses, ↻ Retry via /api/postings/{id}/retry). */
-
-type HistoryTab = "activity" | "postings";
-type ActivityFilter = "all" | "postings" | "approvals" | "flags";
+import { LoadingState } from "@/components/dashboard/loading-state";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import {
+  ReportControls,
+  ReportError,
+} from "@/components/dashboard/report-controls";
+import { Button } from "@/components/ui/button";
+import { useWorkspaceReport } from "@/hooks/use-workspace-report";
+import { useAuth } from "@/components/auth-provider";
+import {
+  currentMonth,
+  eventTitle,
+  type EventPage,
+  type WorkspaceEvent,
+} from "@/lib/reporting";
+import type { PostingResult } from "@/lib/types";
 
 export default function HistoryPage() {
-  const { invoices, loading, error } = useWorkspaceInvoices();
-  const [tab, setTab] = useState<HistoryTab>("activity");
-  const [filter, setFilter] = useState<ActivityFilter>("all");
+  const { activeOrganizationId } = useAuth();
+  // Remount query state on workspace changes, so cursor/snapshot never cross tenants.
+  return <HistoryWorkspace key={activeOrganizationId ?? "none"} />;
+}
 
-  const events = useMemo(() => buildEvents(invoices), [invoices]);
-  const filtered = events.filter((event) =>
-    filter === "all" ? true : event.kind === filter,
-  );
-  const failedCount = invoices.filter(
-    (invoice) => invoice.status === "failed",
-  ).length;
-
-  function exportAudit() {
-    const header = "timestamp,invoice,supplier,event,detail,amount,currency";
-    const rows = events.map((event) =>
-      [
-        event.at,
-        event.invoiceNumber,
-        event.supplier.replaceAll(",", " "),
-        event.kind,
-        event.title.replaceAll(",", " "),
-        event.amount,
-        event.currency,
-      ].join(","),
-    );
-    const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "siftentry_audit_log.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+function HistoryWorkspace() {
+  const [range, setRange] = useState(currentMonth);
+  const [category, setCategory] = useState("all");
+  const [search, setSearch] = useState("");
+  const [draftSearch, setDraftSearch] = useState("");
+  const [pages, setPages] = useState<string[]>([]);
+  const [snapshot, setSnapshot] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const query = new URLSearchParams({
+    ...range,
+    category,
+    search,
+    limit: "30",
+  });
+  if (pages.length) query.set("cursor", pages[pages.length - 1]);
+  if (snapshot) query.set("snapshot", snapshot);
+  const report = useWorkspaceReport<EventPage>("events", query.toString());
+  const data = report.data;
+  function reset() {
+    setPages([]);
+    setSnapshot("");
+    setExportError("");
   }
-
+  function refresh() {
+    reset();
+    report.reload();
+  }
+  async function exportHistory() {
+    if (!data || !report.organizationId) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      const params = new URLSearchParams({
+        ...range,
+        category,
+        search,
+        snapshot: data.snapshot,
+      });
+      const response = await fetch(
+        `/api/organizations/${report.organizationId}/events/export?${params}`,
+      );
+      if (!response.ok)
+        throw new Error(
+          "Export could not be completed. Try again or choose a smaller date range.",
+        );
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `siftentry-history-${range.start}-${range.end}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError((error as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-canvas">
+    <div className="bg-canvas">
       <PageHeader
         title="History"
-        section="Audit trail"
-        description="Current status of every invoice, with export. A full event-by-event trail is coming."
+        description="Recorded workspace events, from receipt to posting."
         action={
-          <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
-            <button
-              type="button"
-              onClick={exportAudit}
-              className="inline-flex h-11 items-center gap-2 self-start rounded-xl bg-accent px-4 text-sm font-black text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover"
-            >
-              <FileDown size={16} />
-              Export audit log
-            </button>
-          </div>
+          <Button
+            onClick={() => void exportHistory()}
+            disabled={!data || exporting}
+          >
+            <FileDown size={16} />
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
         }
       />
-
-      <div className="border-b border-line bg-shell/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1440px] gap-1 px-4 sm:px-6 lg:px-8">
-          <TabButton active={tab === "activity"} onClick={() => setTab("activity")}>
-            Activity
-          </TabButton>
-          <TabButton active={tab === "postings"} onClick={() => setTab("postings")}>
-            Posting log &amp; retry
-            {failedCount > 0 && (
-              <span className="ml-1.5 rounded-full bg-danger-soft px-2 py-0.5 font-mono text-[11px] font-black text-danger">
-                {failedCount}
-              </span>
-            )}
-          </TabButton>
+      <main className="report-main">
+        <ReportControls
+          range={range}
+          onChange={(value) => {
+            setRange(value);
+            reset();
+          }}
+          onRefresh={refresh}
+          loading={report.loading}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-sm text-ink-secondary">
+            Events
+            <select
+              aria-label="Event category"
+              className="h-11 rounded-lg border border-line-strong bg-surface px-3 text-ink"
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                reset();
+              }}
+            >
+              <option value="all">All events</option>
+              <option value="invoice">Invoices</option>
+              <option value="posting">Posting attempts</option>
+              <option value="client_profile">Client profiles</option>
+              <option value="organization">Workspace</option>
+              <option value="job">Background jobs</option>
+              <option value="digest">Email digests</option>
+            </select>
+          </label>
+          <form
+            className="flex min-w-0 flex-1 gap-2 sm:max-w-sm"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearch(draftSearch.trim());
+              reset();
+            }}
+          >
+            <input
+              aria-label="Search history"
+              placeholder="Invoice number or event type"
+              value={draftSearch}
+              onChange={(e) => setDraftSearch(e.target.value)}
+              className="h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 text-sm"
+              maxLength={120}
+            />
+            <Button type="submit">Search</Button>
+          </form>
         </div>
-      </div>
-
-      <main className="mx-auto max-w-[1440px] space-y-4 px-4 py-6 sm:px-6 lg:px-8">
-        {loading ? (
-          <LoadingState label="Loading audit trail" />
-        ) : error ? (
-          <div className="rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">
-            {error}
-          </div>
-        ) : !invoices.length ? (
-          <EmptyState
-            icon={FileClock}
-            title="Every action will be recorded here"
-            description="Uploads, extractions, corrections, approvals, and posting attempts will be listed here."
+        {exportError && (
+          <ReportError
+            message={exportError}
+            retry={() => void exportHistory()}
           />
-        ) : tab === "activity" ? (
+        )}
+        {report.loading && <LoadingState label="Loading recorded events" />}
+        {report.error && (
+          <ReportError message={report.error} retry={report.reload} />
+        )}
+        {data && (
           <>
-            <div className="flex flex-wrap items-center gap-2">
-              {(
-                [
-                  ["all", "All"],
-                  ["postings", "Postings"],
-                  ["approvals", "Approvals"],
-                  ["flags", "Flags"],
-                ] as [ActivityFilter, string][]
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setFilter(value)}
-                  className={cn(
-                    "inline-flex h-9 items-center rounded-full border px-3.5 text-xs font-black transition-colors",
-                    filter === value
-                      ? "border-accent bg-accent-soft text-accent-ink"
-                      : "border-line bg-surface text-ink-secondary hover:border-accent hover:text-accent",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-              <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-black text-success">
-                <span className="size-2 animate-pulse rounded-full bg-success" />
-                LIVE
+            <div
+              className="flex flex-wrap justify-between gap-2 text-xs text-ink-secondary"
+              aria-live="polite"
+            >
+              <span>
+                {data.total.toLocaleString()} recorded events
+                {search ? ` matching “${search}”` : ""}
+              </span>
+              <span>
+                As of {new Date(data.snapshot).toLocaleString()} · refresh for
+                newer events
               </span>
             </div>
-            <section className="rounded-2xl border border-line bg-surface shadow-card">
-              {filtered.length ? (
-                <div className="divide-y divide-line">
-                  {filtered.slice(0, 30).map((event) => (
-                    <div
+            {!data.items.length ? (
+              <EmptyState
+                icon={FileClock}
+                title="No recorded events in this view"
+                description="Try a wider date range or different filter. History only shows saved events; it does not reconstruct missing activity from invoice status."
+              />
+            ) : (
+              <section
+                className="overflow-hidden rounded-xl border border-line bg-surface"
+                aria-label="Recorded history"
+              >
+                <ol className="divide-y divide-line">
+                  {data.items.map((event) => (
+                    <EventRow
                       key={event.id}
-                      className="flex items-start gap-3 px-4 py-4 sm:gap-4 sm:px-5"
-                    >
-                      <span
-                        className={cn(
-                          "grid size-9 shrink-0 place-items-center rounded-xl",
-                          event.kind === "postings"
-                            ? "bg-cyan-soft text-cyan-ink"
-                            : event.kind === "approvals"
-                              ? "bg-success-soft text-success"
-                              : event.kind === "flags"
-                                ? "bg-gold-soft text-gold-ink"
-                                : "bg-surface-strong text-ink-secondary",
-                        )}
-                      >
-                        {event.icon}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-black text-ink">
-                          <span>{event.title}</span>
-                          <StatusBadge status={event.status} />
-                        </div>
-                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-ink-secondary">
-                          <span className="min-w-0 break-words">
-                            {event.supplier}
-                          </span>
-                          <span aria-hidden="true" className="text-ink-muted">
-                            ·
-                          </span>
-                          <span className="break-all font-mono">
-                            {event.invoiceNumber}
-                          </span>
-                          <span aria-hidden="true" className="text-ink-muted">
-                            ·
-                          </span>
-                          <span className="whitespace-nowrap font-mono">
-                            {formatCurrency(event.amount, event.currency)}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs font-bold text-ink-muted">
-                        {timeAgo(event.at)}
-                      </span>
-                    </div>
+                      event={event}
+                      onRefresh={refresh}
+                    />
                   ))}
-                </div>
-              ) : (
-                <p className="px-5 py-10 text-center text-sm font-semibold text-ink-muted">
-                  No {filter} events yet.
-                </p>
-              )}
-            </section>
+                </ol>
+              </section>
+            )}
+            {(pages.length > 0 || data.next_cursor) && (
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <Button
+                  disabled={!pages.length}
+                  onClick={() => setPages((items) => items.slice(0, -1))}
+                >
+                  Previous
+                </Button>
+                <span>Page {pages.length + 1}</span>
+                <Button
+                  disabled={!data.next_cursor}
+                  onClick={() => {
+                    setSnapshot(data.snapshot);
+                    setPages((items) => [...items, data.next_cursor!]);
+                  }}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+            <p className="text-xs leading-5 text-ink-secondary">
+              Times are shown in your local timezone; date filters use UTC.
+              Export includes every matching recorded event, not just this page.
+              Older events may have no recorded actor. This operational history
+              is not a tamper-proof compliance archive; invoice deletion can
+              remove associated records.
+            </p>
           </>
-        ) : (
-          <PostingLog invoices={invoices} />
         )}
       </main>
     </div>
   );
 }
 
-/* ================= posting log & retry ================= */
+function EventRow({
+  event,
+  onRefresh,
+}: {
+  event: WorkspaceEvent;
+  onRefresh: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const failed =
+    event.event_type === "posting.failed" ||
+    event.event_type === "invoice.failed";
+  return (
+    <li className="px-4 py-5 sm:px-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p
+            className={`text-sm font-semibold ${failed ? "text-danger" : "text-ink"}`}
+          >
+            {eventTitle(event)}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-secondary">
+            {event.invoice_id && (
+              <Link
+                className="inline-flex items-center gap-1 break-all text-accent-ink hover:underline"
+                href={`/app/invoices/${event.invoice_id}`}
+              >
+                {event.invoice_number || event.invoice_id.slice(0, 8)}
+                <ArrowUpRight size={13} />
+              </Link>
+            )}
+            <span>{event.actor || "Actor not recorded"}</span>
+            {event.details.target && (
+              <span>{event.details.target.replace("PostingTarget.", "")}</span>
+            )}
+          </div>
+          {event.details.fields?.length ? (
+            <p className="mt-2 break-words text-xs text-ink-secondary">
+              Changed fields: {event.details.fields.join(", ")}
+            </p>
+          ) : null}
+        </div>
+        <time
+          className="shrink-0 text-xs text-ink-secondary"
+          dateTime={event.created_at}
+        >
+          {new Date(event.created_at).toLocaleString()}
+        </time>
+      </div>
+      <details className="mt-3 text-xs text-ink-secondary">
+        <summary className="cursor-pointer">Event details</summary>
+        <dl className="mt-2 space-y-1 break-all">
+          <div>Type: {event.event_type}</div>
+          <div>Event ID: {event.id}</div>
+          <div>UTC: {event.created_at}</div>
+          {event.details.status && (
+            <div>Recorded status: {event.details.status}</div>
+          )}
+        </dl>
+      </details>
+      {event.details.posting_id && (
+        <div className="mt-3">
+          <Button
+            size="sm"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+          >
+            {expanded ? "Hide posting result" : "View posting result"}
+          </Button>
+          {expanded && (
+            <PostingDetail
+              id={event.details.posting_id}
+              onRefresh={onRefresh}
+            />
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
 
-function PostingLog({ invoices }: { invoices: Invoice[] }) {
-  const { activeOrganizationId: organizationId } = useAuth();
-  const [postings, setPostings] = useState<PostingResult[] | null>(null);
-  const [retrying, setRetrying] = useState<string>("");
-  const [notice, setNotice] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!organizationId) return;
-      try {
-        const response = await fetch(
-          `/api/organizations/${organizationId}/postings?limit=300`,
-        );
-        const payload = response.ok ? ((await response.json()) as unknown) : [];
-        const results = (
-          Array.isArray(payload) ? payload : []
-        ) as PostingResult[];
-        if (!cancelled)
-          setPostings(
-            results.sort(
-              (a, b) =>
-                new Date(b.created_at).getTime() -
-                new Date(a.created_at).getTime(),
-            ),
-          );
-      } catch {
-        if (!cancelled) setPostings([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [organizationId]);
-
-  async function retry(posting: PostingResult) {
-    setRetrying(posting.id);
-    setNotice("");
+function PostingDetail({
+  id,
+  onRefresh,
+}: {
+  id: string;
+  onRefresh: () => void;
+}) {
+  const { user, activeOrganizationId } = useAuth();
+  const role = user?.memberships.find(
+    (item) => item.organization_id === activeOrganizationId,
+  )?.role;
+  const [result, setResult] = useState<PostingResult | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function load(retry = false) {
+    setBusy(true);
+    setError("");
     try {
-      const response = await fetch(`/api/postings/${posting.id}/retry`, {
-        method: "POST",
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | PostingResult
-        | { detail?: string }
-        | null;
+      const response = await fetch(
+        `/api/postings/${id}${retry ? "/retry" : ""}`,
+        retry ? { method: "POST" } : { cache: "no-store" },
+      );
+      const payload = await response.json();
       if (!response.ok)
         throw new Error(
-          (payload as { detail?: string })?.detail ?? "Retry failed.",
+          typeof payload.detail === "string"
+            ? payload.detail
+            : "Posting result is unavailable.",
         );
-      setNotice(
-        `Retry submitted for ${posting.invoice_id.slice(0, 8)} — result recorded below.`,
-      );
-      if (payload && "id" in (payload as PostingResult))
-        setPostings((current) => [payload as PostingResult, ...(current ?? [])]);
+      setResult(payload as PostingResult);
+      if (retry) onRefresh();
     } catch (error) {
-      setNotice((error as Error).message);
+      setError((error as Error).message);
     } finally {
-      setRetrying("");
+      setBusy(false);
     }
   }
-
-  if (postings === null) return <LoadingState label="Loading posting attempts" />;
-  if (!postings.length)
-    return (
-      <EmptyState
-        icon={UploadCloud}
-        title="No posting attempts yet"
-        description="Every attempt lands here with the raw system response — successes and failures alike, nothing overwritten."
-      />
-    );
-
-  const invoiceById = new Map(invoices.map((invoice) => [invoice.id, invoice]));
-
   return (
-    <section className="rounded-2xl border border-line bg-surface shadow-card">
-      {notice && (
-        <p className="border-b border-line bg-accent-soft px-5 py-3 text-sm font-bold text-accent-ink">
-          {notice}
+    <div className="mt-3 rounded-lg border border-line bg-surface-subtle p-4 text-sm">
+      {!result && (
+        <Button onClick={() => void load()} disabled={busy}>
+          {busy ? "Loading…" : "Load recorded response"}
+        </Button>
+      )}
+      {error && (
+        <p role="alert" className="mt-2 text-danger">
+          {error}
         </p>
       )}
-      {/* Mobile: posting cards */}
-      <div className="md:hidden">
-        {postings.slice(0, 25).map((posting) => {
-          const invoice = invoiceById.get(posting.invoice_id);
-          const failed = !posting.success;
-          const mappingIssue = /ledger|account|not found|map/i.test(
-            posting.message || "",
-          );
-          return (
-            <article
-              key={posting.id}
-              className={cn(
-                "border-b border-line px-4 py-4",
-                failed && "bg-danger-soft/30",
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-sm font-black text-ink">
-                    {invoice?.invoice_number || posting.invoice_id.slice(0, 8)}
-                  </p>
-                  <p className="truncate text-xs font-bold text-ink-secondary">
-                    {invoice?.supplier.name || ""}
-                  </p>
-                </div>
-                <span
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-black",
-                    failed
-                      ? "bg-danger-soft text-danger"
-                      : "bg-success-soft text-success",
-                  )}
-                >
-                  {failed ? <XCircle size={11} /> : <CheckCircle2 size={11} />}
-                  {failed ? "FAILED" : "SUCCESS"}
-                </span>
-              </div>
-              <p className="mt-2 text-xs font-bold capitalize text-ink-secondary">
-                {posting.target}
-                {posting.dry_run ? " · dry run" : ""}
-                <span className="text-ink-muted">
-                  {" · "}
-                  {new Date(posting.created_at).toLocaleString()}
-                </span>
-              </p>
-              <p className="mt-1.5 break-words font-mono text-xs font-semibold text-ink-secondary">
-                {posting.message ||
-                  (posting.external_id
-                    ? `Accepted · ${posting.external_id}`
-                    : "Recorded")}
-              </p>
-              {failed && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={retrying === posting.id}
-                    onClick={() => void retry(posting)}
-                    className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-black text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
-                  >
-                    {retrying === posting.id ? (
-                      <LoaderCircle size={13} className="animate-spin" />
-                    ) : (
-                      <RotateCcw size={13} />
-                    )}
-                    Retry
-                  </button>
-                  {mappingIssue && (
-                    <Link
-                      href="/app/rules"
-                      className="inline-flex h-11 flex-1 items-center justify-center gap-1 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-accent transition-colors hover:border-accent hover:bg-accent-soft"
-                    >
-                      Fix mapping
-                      <ArrowUpRight size={12} />
-                    </Link>
-                  )}
-                </div>
-              )}
-            </article>
-          );
-        })}
-        {!postings.length && (
-          <p className="px-4 py-10 text-center text-sm font-semibold text-ink-muted">
-            No posting attempts yet.
+      {result && (
+        <>
+          <p className="font-medium capitalize">
+            {result.status} · {result.target}
+            {result.dry_run ? " · dry run" : ""}
           </p>
-        )}
-      </div>
-
-      {/* Desktop: full table */}
-      <div className="hidden overflow-x-auto md:block" data-scroll-region="true">
-        <table className="w-full min-w-[820px] border-collapse text-left text-sm">
-          <thead className="bg-surface-subtle">
-            <tr className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
-              <th className="px-4 py-3">Time</th>
-              <th className="px-4 py-3">Invoice</th>
-              <th className="px-4 py-3">Target</th>
-              <th className="px-4 py-3">Result · system response</th>
-              <th className="px-4 py-3 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {postings.slice(0, 25).map((posting) => {
-              const invoice = invoiceById.get(posting.invoice_id);
-              const failed = !posting.success;
-              const mappingIssue = /ledger|account|not found|map/i.test(
-                posting.message || "",
-              );
-              return (
-                <tr
-                  key={posting.id}
-                  className={cn(
-                    "border-t border-line align-top",
-                    failed && "bg-danger-soft/30",
-                  )}
-                >
-                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs font-bold text-ink-muted">
-                    {new Date(posting.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <p className="font-mono text-sm font-black text-ink">
-                      {invoice?.invoice_number || posting.invoice_id.slice(0, 8)}
-                    </p>
-                    <p className="truncate text-xs font-bold text-ink-secondary">
-                      {invoice?.supplier.name || ""}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3.5 text-sm font-bold capitalize text-ink-secondary">
-                    {posting.target}
-                    {posting.dry_run ? " · dry run" : ""}
-                  </td>
-                  <td className="max-w-[340px] px-4 py-3.5">
-                    <span
-                      className={cn(
-                        "mr-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-black",
-                        failed
-                          ? "bg-danger-soft text-danger"
-                          : "bg-success-soft text-success",
-                      )}
-                    >
-                      {failed ? <XCircle size={11} /> : <CheckCircle2 size={11} />}
-                      {failed ? "FAILED" : "SUCCESS"}
-                    </span>
-                    <span className="break-words font-mono text-xs font-semibold text-ink-secondary">
-                      {posting.message ||
-                        (posting.external_id
-                          ? `Accepted · ${posting.external_id}`
-                          : "Recorded")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    {failed && (
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          disabled={retrying === posting.id}
-                          onClick={() => void retry(posting)}
-                          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-black text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
-                        >
-                          {retrying === posting.id ? (
-                            <LoaderCircle size={13} className="animate-spin" />
-                          ) : (
-                            <RotateCcw size={13} />
-                          )}
-                          Retry
-                        </button>
-                        {mappingIssue && (
-                          <Link
-                            href="/app/rules"
-                            className="inline-flex h-9 items-center gap-1 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-accent transition-colors hover:border-accent hover:bg-accent-soft"
-                          >
-                            Fix mapping
-                            <ArrowUpRight size={12} />
-                          </Link>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="border-t border-line bg-surface-subtle px-5 py-3 text-xs font-semibold text-ink-muted">
-        Every attempt is recorded with the raw system response — nothing is
-        overwritten. Failed postings can be retried manually anytime.
-      </p>
-    </section>
-  );
-}
-
-/* ================= helpers ================= */
-
-type AuditEvent = {
-  id: string;
-  kind: ActivityFilter;
-  icon: ReactNode;
-  title: string;
-  status: Invoice["status"];
-  supplier: string;
-  invoiceNumber: string;
-  amount: number;
-  currency: string;
-  at: string;
-};
-
-function buildEvents(invoices: Invoice[]): AuditEvent[] {
-  const events: AuditEvent[] = [];
-  for (const invoice of invoices) {
-    const base = {
-      supplier: invoice.supplier.name || "Supplier pending",
-      invoiceNumber: invoice.invoice_number || invoice.id.slice(0, 8),
-      amount: invoice.total || 0,
-      currency: invoice.currency || "USD",
-    };
-    if (invoice.status === "posted")
-      events.push({
-        id: `${invoice.id}-posted`,
-        kind: "postings",
-        icon: <UploadCloud size={16} />,
-        title: "Posted to accounting system",
-        status: invoice.status,
-        at: invoice.updated_at,
-        ...base,
-      });
-    else if (invoice.status === "failed")
-      events.push({
-        id: `${invoice.id}-failed`,
-        kind: "postings",
-        icon: <XCircle size={16} />,
-        title: "Posting failed — retry available",
-        status: invoice.status,
-        at: invoice.updated_at,
-        ...base,
-      });
-    else if (invoice.status === "approved")
-      events.push({
-        id: `${invoice.id}-approved`,
-        kind: "approvals",
-        icon: <ShieldCheck size={16} />,
-        title: "Approved for posting",
-        status: invoice.status,
-        at: invoice.updated_at,
-        ...base,
-      });
-    else if (
-      invoice.status === "needs_review" ||
-      invoice.validation_issues.length
-    )
-      events.push({
-        id: `${invoice.id}-flag`,
-        kind: "flags",
-        icon: <FileClock size={16} />,
-        title: invoice.validation_issues[0] || "Flagged for review",
-        status: invoice.status,
-        at: invoice.updated_at,
-        ...base,
-      });
-    else
-      events.push({
-        id: `${invoice.id}-recorded`,
-        kind: "all",
-        icon: <FileClock size={16} />,
-        title: "Invoice recorded",
-        status: invoice.status,
-        at: invoice.created_at,
-        ...base,
-      });
-  }
-  return events.sort(
-    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
-  );
-}
-
-function timeAgo(value: string) {
-  const delta = Date.now() - new Date(value).getTime();
-  if (!Number.isFinite(delta) || delta < 0) return "";
-  const minutes = Math.floor(delta / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-12 shrink-0 items-center border-b-2 px-4 text-sm font-black transition-colors",
-        active
-          ? "border-accent text-accent"
-          : "border-transparent text-ink-secondary hover:text-ink",
+          <p className="mt-2 break-words text-ink-secondary">
+            {result.message}
+          </p>
+          {result.external_id && (
+            <p className="mt-1 break-all text-ink-secondary">
+              External reference: {result.external_id}
+            </p>
+          )}
+          <details className="mt-3">
+            <summary className="cursor-pointer">
+              Recorded system response
+            </summary>
+            <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">
+              {JSON.stringify(result.response_payload, null, 2)}
+            </pre>
+          </details>
+          {result.status === "failed" &&
+            role &&
+            ["owner", "admin", "accountant"].includes(role) && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs text-ink-secondary">
+                  Confirm the invoice is approved and reconcile uncertain
+                  results in the accounting system before retrying.
+                </p>
+                <Button disabled={busy} onClick={() => void load(true)}>
+                  {busy ? "Submitting…" : "Retry posting"}
+                </Button>
+              </div>
+            )}
+        </>
       )}
-    >
-      {children}
-    </button>
+    </div>
   );
 }

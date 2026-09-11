@@ -15,7 +15,11 @@ export function QueueMetrics({ counts }: { counts: QueueCounts }) {
       <QueueMetric label="Auto-extracted" value={counts.extracted} active />
       <QueueMetric label="Validated" value={counts.validated} />
       <QueueMetric label="Posted" value={counts.sent} tone="posted" />
-      <QueueMetric label="Exceptions" value={counts.exceptions} tone="warning" />
+      <QueueMetric
+        label="Exceptions"
+        value={counts.exceptions}
+        tone="warning"
+      />
     </section>
   );
 }
@@ -34,24 +38,22 @@ function QueueMetric({
   return (
     <div
       className={cn(
-        "relative flex min-h-[92px] items-center gap-3 border-b border-line px-5 py-4 last:col-span-2 sm:border-r lg:last:col-span-1 lg:border-b-0",
-        active && "bg-accent-soft/70 dark:bg-accent-soft",
+        "relative flex min-h-[72px] items-center gap-3 border-b border-line px-4 py-3 last:col-span-2 sm:border-r lg:last:col-span-1 lg:border-b-0",
       )}
     >
       <strong
         className={cn(
-          "font-mono text-[32px] font-black leading-none text-accent",
+          "text-2xl font-semibold leading-none text-ink tabular-nums",
           tone === "warning" && "text-gold",
-          tone === "posted" && "text-cyan",
-          active && "text-accent",
+          tone === "posted" && "text-success",
+          active && "text-accent-ink",
         )}
       >
         {value}
       </strong>
-      <span className="min-w-0 text-sm font-black leading-5 text-ink-secondary">
+      <span className="min-w-0 text-sm font-semibold leading-5 text-ink-secondary">
         {label}
       </span>
-      {active && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-accent" />}
     </div>
   );
 }

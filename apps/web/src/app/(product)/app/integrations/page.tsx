@@ -35,7 +35,8 @@ const systems = [
     connection: "OAuth API",
     object: "Supplier Bill",
     masterData: "Vendors + taxes",
-    detail: "Post approved bills through the QuickBooks sandbox or connected client company.",
+    detail:
+      "Post approved bills through the QuickBooks sandbox or connected client company.",
   },
   {
     name: "Tally",
@@ -47,7 +48,8 @@ const systems = [
     connection: "Local XML bridge",
     object: "Item Invoice / Voucher",
     masterData: "Ledgers + stock items",
-    detail: "Use the Windows connector beside TallyPrime for profile-owned posting.",
+    detail:
+      "Use the Windows connector beside TallyPrime for profile-owned posting.",
   },
   {
     name: "Zoho Books",
@@ -59,7 +61,8 @@ const systems = [
     connection: "OAuth API",
     object: "Bill",
     masterData: "Contacts + taxes",
-    detail: "Cloud bill posting path ready for sandbox validation and pilot rollout.",
+    detail:
+      "Cloud bill posting path ready for sandbox validation and pilot rollout.",
   },
   {
     name: "Coupa",
@@ -71,7 +74,8 @@ const systems = [
     connection: "Package export",
     object: "Invoice payload",
     masterData: "Suppliers + account codes",
-    detail: "Download a clean AP import package while direct API setup is planned.",
+    detail:
+      "Download a clean AP import package while direct API setup is planned.",
   },
   {
     name: "NetSuite",
@@ -83,7 +87,8 @@ const systems = [
     connection: "Package export",
     object: "Vendor bill",
     masterData: "Subsidiaries + dimensions",
-    detail: "Prepare vendor bill files with client-specific mappings and dimensions.",
+    detail:
+      "Prepare vendor bill files with client-specific mappings and dimensions.",
   },
   {
     name: "SAP",
@@ -127,7 +132,7 @@ export default function IntegrationsPage() {
         action={
           <Link
             href="/app/client-profiles"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-black text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-semibold text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover"
           >
             Manage profiles
             <ArrowRight size={16} />
@@ -169,17 +174,19 @@ export default function IntegrationsPage() {
               className="group flex min-h-[286px] flex-col rounded-[28px] border border-line bg-surface p-5 shadow-card transition-colors hover:border-accent hover:bg-accent-soft dark:hover:bg-surface-strong"
             >
               <div className="flex items-start justify-between gap-4">
-                <span className="grid size-[52px] place-items-center rounded-2xl bg-gradient-to-br from-accent to-cyan text-white shadow-glow">
+                <span className="grid size-[52px] place-items-center rounded-2xl bg-accent text-white shadow-card">
                   <system.icon size={22} />
                 </span>
-                <StatusPill tone={system.statusTone}>{system.status}</StatusPill>
+                <StatusPill tone={system.statusTone}>
+                  {system.status}
+                </StatusPill>
               </div>
 
               <div className="mt-5 min-w-0">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-ink-muted">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
                   Accounting system
                 </p>
-                <h2 className="mt-1 text-2xl font-black tracking-tight text-ink">
+                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-ink">
                   {system.name}
                 </h2>
                 <p className="mt-3 min-h-12 text-sm font-semibold leading-6 text-ink-secondary">
@@ -193,7 +200,7 @@ export default function IntegrationsPage() {
                 <SystemFact label="Master data" value={system.masterData} />
               </div>
 
-              <span className="mt-auto inline-flex items-center gap-2 pt-5 text-sm font-black text-accent dark:text-cyan">
+              <span className="mt-auto inline-flex items-center gap-2 pt-5 text-sm font-semibold text-accent-ink dark:text-cyan-ink">
                 Open setup
                 <ArrowRight
                   size={15}
@@ -204,43 +211,57 @@ export default function IntegrationsPage() {
           ))}
         </section>
 
-        {!isOwner && activeSystems.size > 0 && visibleSystems.length < systems.length && (
-          <p className="rounded-2xl border border-line bg-surface-subtle px-4 py-3 text-sm font-semibold text-ink-secondary">
-            Showing the accounting system configured for this workspace. Need a
-            different system? Contact your SiftEntry administrator.
-          </p>
-        )}
+        {!isOwner &&
+          activeSystems.size > 0 &&
+          visibleSystems.length < systems.length && (
+            <p className="rounded-2xl border border-line bg-surface-subtle px-4 py-3 text-sm font-semibold text-ink-secondary">
+              Showing the accounting system configured for this workspace. Need
+              a different system? Contact your SiftEntry administrator.
+            </p>
+          )}
 
         <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="rounded-[28px] border border-line bg-surface p-5 shadow-card">
             <div className="flex items-start gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink dark:text-cyan">
+              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink dark:text-cyan-ink">
                 <Workflow size={19} />
               </span>
               <div className="min-w-0">
-                <h2 className="text-lg font-black text-ink">
-                  Posting flow
-                </h2>
+                <h2 className="text-lg font-semibold text-ink">Posting flow</h2>
                 <p className="mt-1 text-sm leading-6 text-ink-secondary">
-                  Every accounting action starts from the selected client profile, then writes a posting log with the exact system response.
+                  Every accounting action starts from the selected client
+                  profile, then writes a posting log with the exact system
+                  response.
                 </p>
               </div>
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-4">
               {[
-                ["1", "Client profile", "Country, tax mode, ledgers, connector."],
+                [
+                  "1",
+                  "Client profile",
+                  "Country, tax mode, ledgers, connector.",
+                ],
                 ["2", "Approved invoice", "Validated fields and line items."],
-                ["3", "Target payload", "Bill, voucher, XML, or export package."],
-                ["4", "Posting log", "Success, failure, retry, and audit trail."],
+                [
+                  "3",
+                  "Target payload",
+                  "Bill, voucher, XML, or export package.",
+                ],
+                [
+                  "4",
+                  "Posting log",
+                  "Success, failure, retry, and audit trail.",
+                ],
               ].map(([step, title, detail]) => (
                 <div
                   key={step}
                   className="rounded-2xl border border-line bg-canvas p-4"
                 >
-                  <span className="grid size-8 place-items-center rounded-full bg-accent text-sm font-black text-white">
+                  <span className="grid size-8 place-items-center rounded-full bg-accent text-sm font-semibold text-white">
                     {step}
                   </span>
-                  <p className="mt-3 text-sm font-black text-ink">{title}</p>
+                  <p className="mt-3 text-sm font-semibold text-ink">{title}</p>
                   <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
                     {detail}
                   </p>
@@ -250,10 +271,10 @@ export default function IntegrationsPage() {
           </div>
 
           <div className="rounded-[28px] border border-line bg-surface p-5 shadow-card">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-ink-muted">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
               Connector experience
             </p>
-            <h2 className="mt-2 text-lg font-black text-ink">
+            <h2 className="mt-2 text-lg font-semibold text-ink">
               Tally runs locally. SiftEntry stays in the cloud.
             </h2>
             <div className="mt-5 space-y-3">
@@ -266,7 +287,10 @@ export default function IntegrationsPage() {
                   key={item}
                   className="flex gap-3 rounded-2xl border border-line bg-canvas p-3"
                 >
-                  <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-success" />
+                  <CheckCircle2
+                    size={18}
+                    className="mt-0.5 shrink-0 text-success"
+                  />
                   <p className="text-sm font-semibold leading-6 text-ink-secondary">
                     {item}
                   </p>
@@ -316,14 +340,16 @@ function IntegrationFact({
 }) {
   return (
     <div className="flex min-h-28 items-center gap-3 px-5 py-4">
-      <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink dark:text-cyan">
+      <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink dark:text-cyan-ink">
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-ink-muted">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
           {label}
         </p>
-        <p className="mt-1 truncate text-base font-black text-ink">{value}</p>
+        <p className="mt-1 truncate text-base font-semibold text-ink">
+          {value}
+        </p>
       </div>
     </div>
   );
@@ -332,10 +358,10 @@ function IntegrationFact({
 function SystemFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-line bg-canvas px-3 py-2.5">
-      <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.14em] text-ink-muted">
+      <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
         {label}
       </span>
-      <span className="truncate text-right text-xs font-black text-ink">
+      <span className="truncate text-right text-xs font-semibold text-ink">
         {value}
       </span>
     </div>
@@ -353,12 +379,12 @@ function StatusPill({
     tone === "success"
       ? "border-success/25 bg-success-soft text-success"
       : tone === "neutral"
-        ? "border-cyan/25 bg-cyan-soft text-cyan"
+        ? "border-cyan/25 bg-cyan-soft text-cyan-ink"
         : "border-line bg-surface-subtle text-ink-muted";
 
   return (
     <span
-      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-black ${styles}`}
+      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold ${styles}`}
     >
       {tone === "success" && <CheckCircle2 size={13} />}
       {children}
@@ -385,11 +411,11 @@ function ChannelCard({
     <div className="rounded-[28px] border border-line bg-surface p-5 shadow-card">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink dark:text-cyan">
+          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink dark:text-cyan-ink">
             {icon}
           </span>
           <div className="min-w-0">
-            <h2 className="text-lg font-black text-ink">{title}</h2>
+            <h2 className="text-lg font-semibold text-ink">{title}</h2>
             <p className="mt-1 text-sm font-semibold leading-6 text-ink-secondary">
               {subtitle}
             </p>
@@ -398,7 +424,7 @@ function ChannelCard({
         {href && actionLabel ? (
           <Link
             href={href}
-            className="hidden h-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface px-3 text-xs font-black text-ink transition-colors hover:border-accent hover:text-accent sm:inline-flex"
+            className="hidden h-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent-ink sm:inline-flex"
           >
             {actionLabel}
           </Link>
@@ -410,17 +436,19 @@ function ChannelCard({
             key={label}
             className="min-w-0 rounded-2xl border border-line bg-canvas px-3 py-3"
           >
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-ink-muted">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
               {label}
             </p>
-            <p className="mt-1 truncate text-sm font-black text-ink">{value}</p>
+            <p className="mt-1 truncate text-sm font-semibold text-ink">
+              {value}
+            </p>
           </div>
         ))}
       </div>
       {href && actionLabel ? (
         <Link
           href={href}
-          className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-xl bg-accent text-sm font-black text-white sm:hidden"
+          className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-white sm:hidden"
         >
           {actionLabel}
         </Link>

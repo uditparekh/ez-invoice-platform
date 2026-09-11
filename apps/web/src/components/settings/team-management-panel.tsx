@@ -1,6 +1,12 @@
 "use client";
 
-import { ChevronDown, MailPlus, RefreshCw, ShieldCheck, UserRoundCheck } from "lucide-react";
+import {
+  ChevronDown,
+  MailPlus,
+  RefreshCw,
+  ShieldCheck,
+  UserRoundCheck,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -23,8 +29,8 @@ const inviteRoles: { label: string; value: OrganizationRole }[] = [
 ];
 
 const roleTone: Record<OrganizationRole, string> = {
-  owner: "border-accent/30 bg-accent-soft text-accent",
-  admin: "border-cyan/30 bg-cyan/10 text-cyan",
+  owner: "border-accent/30 bg-accent-soft text-accent-ink",
+  admin: "border-cyan/30 bg-cyan/10 text-cyan-ink",
   accountant: "border-success/30 bg-success/10 text-success",
   approver: "border-gold/30 bg-gold/10 text-gold",
   viewer: "border-line bg-surface-subtle text-ink-secondary",
@@ -44,7 +50,10 @@ export function TeamManagementPanel() {
   const [lastInviteUrl, setLastInviteUrl] = useState("");
   const [changingRoleFor, setChangingRoleFor] = useState<string>("");
 
-  async function changeMemberRole(member: OrganizationMember, nextRole: OrganizationRole) {
+  async function changeMemberRole(
+    member: OrganizationMember,
+    nextRole: OrganizationRole,
+  ) {
     if (!activeOrganizationId || nextRole === member.role) return;
     setChangingRoleFor(member.user_id);
     setError("");
@@ -66,7 +75,9 @@ export function TeamManagementPanel() {
       }
       setMembers((current) =>
         current.map((entry) =>
-          entry.user_id === member.user_id ? { ...entry, role: nextRole } : entry,
+          entry.user_id === member.user_id
+            ? { ...entry, role: nextRole }
+            : entry,
         ),
       );
       setMessage(`${member.full_name || member.email} is now ${nextRole}.`);
@@ -101,7 +112,11 @@ export function TeamManagementPanel() {
       setMembers((await membersResponse.json()) as OrganizationMember[]);
       setInvitations((await invitationsResponse.json()) as Invitation[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Team details could not be loaded.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Team details could not be loaded.",
+      );
     } finally {
       setLoading(false);
     }
@@ -136,7 +151,8 @@ export function TeamManagementPanel() {
       if (!response.ok) {
         throw new Error(apiErrorMessage(payload, "Invite could not be sent."));
       }
-      const token = "invitation_token" in payload ? payload.invitation_token ?? "" : "";
+      const token =
+        "invitation_token" in payload ? (payload.invitation_token ?? "") : "";
       setMessage(
         token
           ? `Invitation prepared for ${email.trim()}.`
@@ -144,13 +160,17 @@ export function TeamManagementPanel() {
       );
       setLastInviteToken(token);
       setLastInviteUrl(
-        token ? `${window.location.origin}/invite?token=${encodeURIComponent(token)}` : "",
+        token
+          ? `${window.location.origin}/invite?token=${encodeURIComponent(token)}`
+          : "",
       );
       setEmail("");
       setRole("accountant");
       await refreshTeam();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invite could not be sent.");
+      setError(
+        err instanceof Error ? err.message : "Invite could not be sent.",
+      );
     } finally {
       setSending(false);
     }
@@ -184,11 +204,11 @@ export function TeamManagementPanel() {
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
         <div className="min-w-0 rounded-2xl border border-line bg-canvas p-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent-ink">
               <MailPlus size={18} />
             </span>
             <div>
-              <p className="text-sm font-black text-ink">Invite teammate</p>
+              <p className="text-sm font-semibold text-ink">Invite teammate</p>
               <p className="text-xs font-semibold text-ink-secondary">
                 Role controls what they can view, approve, and post.
               </p>
@@ -196,7 +216,7 @@ export function TeamManagementPanel() {
           </div>
           <div className="mt-5 space-y-3">
             <label className="block">
-              <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+              <span className="text-xs font-semibold uppercase text-ink-muted">
                 Work email
               </span>
               <input
@@ -208,13 +228,15 @@ export function TeamManagementPanel() {
               />
             </label>
             <label className="block">
-              <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+              <span className="text-xs font-semibold uppercase text-ink-muted">
                 Role
               </span>
               <select
                 className="mt-2 h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm font-semibold text-ink outline-none transition focus:border-accent"
                 value={role}
-                onChange={(event) => setRole(event.target.value as OrganizationRole)}
+                onChange={(event) =>
+                  setRole(event.target.value as OrganizationRole)
+                }
               >
                 {inviteRoles.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -238,13 +260,13 @@ export function TeamManagementPanel() {
             )}
             {lastInviteToken && (
               <div className="rounded-xl border border-line bg-surface-subtle p-3">
-                <p className="text-[11px] font-extrabold uppercase text-ink-muted">
+                <p className="text-xs font-semibold uppercase text-ink-muted">
                   Invite link
                 </p>
                 <p className="mt-2 break-all font-mono text-xs text-ink">
                   {lastInviteUrl}
                 </p>
-                <p className="mt-3 text-[11px] font-extrabold uppercase text-ink-muted">
+                <p className="mt-3 text-xs font-semibold uppercase text-ink-muted">
                   Dev token
                 </p>
                 <p className="mt-2 break-all font-mono text-xs text-ink">
@@ -263,7 +285,7 @@ export function TeamManagementPanel() {
         <div className="min-w-0 space-y-4">
           <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-line">
             <div className="sm:min-w-[540px]">
-              <div className="hidden grid-cols-[minmax(0,1fr)_120px_128px] gap-3 border-b border-line bg-surface-subtle px-4 py-3 text-[11px] font-extrabold uppercase text-ink-muted sm:grid">
+              <div className="hidden grid-cols-[minmax(0,1fr)_120px_128px] gap-3 border-b border-line bg-surface-subtle px-4 py-3 text-xs font-semibold uppercase text-ink-muted sm:grid">
                 <span>Member</span>
                 <span>Role</span>
                 <span>Last login</span>
@@ -275,7 +297,7 @@ export function TeamManagementPanel() {
                     className="grid grid-cols-1 gap-2 border-b border-line px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_120px_128px] sm:items-center sm:gap-3"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-ink">
+                      <p className="truncate text-sm font-semibold text-ink">
                         {member.full_name || member.email}
                       </p>
                       <p className="truncate text-xs font-semibold text-ink-secondary">
@@ -287,7 +309,9 @@ export function TeamManagementPanel() {
                         <RolePill role={member.role} />
                       ) : (
                         <label className="relative block">
-                          <span className="sr-only">Role for {member.email}</span>
+                          <span className="sr-only">
+                            Role for {member.email}
+                          </span>
                           <select
                             value={member.role}
                             disabled={changingRoleFor === member.user_id}
@@ -299,7 +323,7 @@ export function TeamManagementPanel() {
                             }
                             title="Change role"
                             className={cn(
-                              "h-9 w-full cursor-pointer appearance-none rounded-full border px-3 pr-8 text-xs font-black outline-none transition-colors focus:border-accent disabled:cursor-wait disabled:opacity-60",
+                              "h-9 w-full cursor-pointer appearance-none rounded-full border px-3 pr-8 text-xs font-semibold outline-none transition-colors focus:border-accent disabled:cursor-wait disabled:opacity-60",
                               roleTone[member.role],
                             )}
                           >
@@ -333,8 +357,8 @@ export function TeamManagementPanel() {
           </div>
 
           <div className="rounded-2xl border border-line bg-canvas p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-black text-ink">
-              <ShieldCheck size={16} className="text-accent" />
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
+              <ShieldCheck size={16} className="text-accent-ink" />
               Pending invitations
             </div>
             {invitations.length ? (
@@ -345,7 +369,9 @@ export function TeamManagementPanel() {
                     className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
-                      <p className="text-sm font-black text-ink">{invitation.email}</p>
+                      <p className="text-sm font-semibold text-ink">
+                        {invitation.email}
+                      </p>
                       <p className="text-xs font-semibold text-ink-secondary">
                         Expires {formatDate(invitation.expires_at)}
                       </p>
@@ -370,7 +396,7 @@ function RolePill({ role }: { role: OrganizationRole }) {
   return (
     <span
       className={cn(
-        "inline-flex h-8 w-fit items-center gap-2 rounded-full border px-3 text-xs font-extrabold capitalize",
+        "inline-flex h-8 w-fit items-center gap-2 rounded-full border px-3 text-xs font-semibold capitalize",
         roleTone[role],
       )}
     >

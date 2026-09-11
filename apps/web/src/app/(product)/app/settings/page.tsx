@@ -43,13 +43,48 @@ const sections: {
   label: string;
   icon: ReactNode;
 }[] = [
-  { group: "WORKSPACE", id: "organization", label: "Organization", icon: <Building2 size={15} /> },
-  { group: "WORKSPACE", id: "team", label: "Team access", icon: <UsersRound size={15} /> },
-  { group: "WORKSPACE", id: "retention", label: "Data retention", icon: <Database size={15} /> },
-  { group: "MY ACCOUNT", id: "profile", label: "Profile", icon: <UserRound size={15} /> },
-  { group: "MY ACCOUNT", id: "security", label: "Security", icon: <KeyRound size={15} /> },
-  { group: "MY ACCOUNT", id: "notifications", label: "Notifications", icon: <Bell size={15} /> },
-  { group: "MY ACCOUNT", id: "appearance", label: "Appearance", icon: <Palette size={15} /> },
+  {
+    group: "WORKSPACE",
+    id: "organization",
+    label: "Organization",
+    icon: <Building2 size={15} />,
+  },
+  {
+    group: "WORKSPACE",
+    id: "team",
+    label: "Team access",
+    icon: <UsersRound size={15} />,
+  },
+  {
+    group: "WORKSPACE",
+    id: "retention",
+    label: "Data retention",
+    icon: <Database size={15} />,
+  },
+  {
+    group: "MY ACCOUNT",
+    id: "profile",
+    label: "Profile",
+    icon: <UserRound size={15} />,
+  },
+  {
+    group: "MY ACCOUNT",
+    id: "security",
+    label: "Security",
+    icon: <KeyRound size={15} />,
+  },
+  {
+    group: "MY ACCOUNT",
+    id: "notifications",
+    label: "Notifications",
+    icon: <Bell size={15} />,
+  },
+  {
+    group: "MY ACCOUNT",
+    id: "appearance",
+    label: "Appearance",
+    icon: <Palette size={15} />,
+  },
 ];
 
 export default function SettingsPage() {
@@ -70,7 +105,7 @@ export default function SettingsPage() {
             <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:flex-col lg:gap-0">
               {(["WORKSPACE", "MY ACCOUNT"] as const).map((group) => (
                 <div key={group} className="contents lg:block">
-                  <p className="hidden px-3 pb-2 pt-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted first:pt-0 lg:block">
+                  <p className="hidden px-3 pb-2 pt-4 text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted first:pt-0 lg:block">
                     {group}
                   </p>
                   {sections
@@ -81,7 +116,7 @@ export default function SettingsPage() {
                         type="button"
                         onClick={() => setSection(item.id)}
                         className={cn(
-                          "flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-bold leading-4 transition-colors sm:text-sm lg:min-h-0 lg:whitespace-nowrap",
+                          "flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-medium leading-4 transition-colors sm:text-sm lg:min-h-0 lg:whitespace-nowrap",
                           section === item.id
                             ? "bg-accent-soft text-accent-ink"
                             : "text-ink-secondary hover:bg-surface-strong hover:text-ink",
@@ -132,8 +167,7 @@ type OrgSettingsState = {
 function useOrgSettings(): OrgSettingsState {
   const { activeOrganizationId } = useAuth();
   const [settings, setSettings] = useState<OrgSettings | null>(null);
-  const [status, setStatus] =
-    useState<OrgSettingsState["status"]>("loading");
+  const [status, setStatus] = useState<OrgSettingsState["status"]>("loading");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -202,9 +236,7 @@ function useOrgSettings(): OrgSettingsState {
 
 function SyncState({ org }: { org: OrgSettingsState }) {
   if (org.status === "error")
-    return (
-      <p className="text-xs font-bold text-danger">{org.error}</p>
-    );
+    return <p className="text-xs font-medium text-danger">{org.error}</p>;
   return (
     <p className="text-xs font-semibold text-ink-muted">
       {org.status === "saving"
@@ -234,20 +266,25 @@ function OrganizationPane({ org }: { org: OrgSettingsState }) {
       detail="Defaults that frame every invoice, connector, and mapping."
     >
       <Field label="Organization name">
-        <p className="flex h-12 items-center rounded-xl border border-line bg-surface-subtle px-4 text-sm font-black text-ink">
+        <p className="flex h-12 items-center rounded-xl border border-line bg-surface-subtle px-4 text-sm font-semibold text-ink">
           {orgName}
         </p>
         <Hint>Managed by the workspace owner.</Hint>
       </Field>
       <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-black text-ink">Onboarding another client?</p>
+          <p className="text-sm font-semibold text-ink">
+            Onboarding another client?
+          </p>
           <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
             Each client gets its own workspace so invoices, profiles, team, and
             the Tally connection never mix.
           </p>
         </div>
-        <Button variant="secondary" onClick={() => setWorkspaceDialogOpen(true)}>
+        <Button
+          variant="secondary"
+          onClick={() => setWorkspaceDialogOpen(true)}
+        >
           <Plus size={14} />
           New workspace
         </Button>
@@ -350,7 +387,7 @@ function RetentionPane({ org }: { org: OrgSettingsState }) {
                 : "border-line hover:border-line-strong",
             )}
           >
-            <p className="text-sm font-black text-ink">{label}</p>
+            <p className="text-sm font-semibold text-ink">{label}</p>
             <p className="mt-1 text-sm font-semibold leading-5 text-ink-secondary">
               {detail}
             </p>
@@ -374,9 +411,12 @@ function ProfilePane() {
   const name = user?.full_name || user?.email || "Your name";
   const email = user?.email || "";
   return (
-    <Pane title="Profile" detail="How you appear in approvals and the audit trail.">
+    <Pane
+      title="Profile"
+      detail="How you appear in approvals and the audit trail."
+    >
       <div className="flex items-center gap-4">
-        <span className="grid size-14 place-items-center rounded-2xl bg-accent-soft font-display text-lg font-black text-accent-ink">
+        <span className="grid size-14 place-items-center rounded-2xl bg-accent-soft font-display text-lg font-semibold text-accent-ink">
           {name
             .split(/\s+/)
             .slice(0, 2)
@@ -385,7 +425,7 @@ function ProfilePane() {
             .toUpperCase()}
         </span>
         <div>
-          <p className="text-base font-black text-ink">{name}</p>
+          <p className="text-base font-semibold text-ink">{name}</p>
           <p className="text-sm font-semibold text-ink-secondary">{email}</p>
         </div>
       </div>
@@ -405,9 +445,21 @@ function NotificationsPane({ org }: { org: OrgSettingsState }) {
     digest: false,
   };
   const rows: [string, string, string][] = [
-    ["approvals", "Approval requests", "When an invoice is routed to you by an approval rule."],
-    ["failures", "Posting failures", "When a posting attempt fails and needs a retry or mapping fix."],
-    ["digest", "Weekly digest", "Your week: posted count, value processed, what needs you Monday."],
+    [
+      "approvals",
+      "Approval requests",
+      "When an invoice is routed to you by an approval rule.",
+    ],
+    [
+      "failures",
+      "Posting failures",
+      "When a posting attempt fails and needs a retry or mapping fix.",
+    ],
+    [
+      "digest",
+      "Weekly digest",
+      "Your week: posted count, value processed, what needs you Monday.",
+    ],
   ];
   return (
     <Pane title="Notifications" detail="What SiftEntry emails you about.">
@@ -418,7 +470,9 @@ function NotificationsPane({ org }: { org: OrgSettingsState }) {
             className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-line bg-surface p-4"
           >
             <span>
-              <span className="block text-sm font-black text-ink">{label}</span>
+              <span className="block text-sm font-semibold text-ink">
+                {label}
+              </span>
               <span className="mt-0.5 block text-sm font-semibold text-ink-secondary">
                 {detail}
               </span>
@@ -482,8 +536,8 @@ function AppearancePane() {
                 : "border-line hover:border-line-strong",
             )}
           >
-            <span className="text-accent">{icon}</span>
-            <span className="text-sm font-black text-ink">{label}</span>
+            <span className="text-accent-ink">{icon}</span>
+            <span className="text-sm font-semibold text-ink">{label}</span>
           </button>
         ))}
       </div>
@@ -497,7 +551,6 @@ function AppearancePane() {
 
 /* ================= shared ================= */
 
-
 function Pane({
   title,
   detail,
@@ -509,7 +562,7 @@ function Pane({
 }) {
   return (
     <section className="rounded-2xl border border-line bg-surface p-6 shadow-card">
-      <h2 className="text-lg font-black text-ink">{title}</h2>
+      <h2 className="text-lg font-semibold text-ink">{title}</h2>
       <p className="mt-1 text-sm font-semibold text-ink-secondary">{detail}</p>
       <div className="mt-5 space-y-4">{children}</div>
     </section>
@@ -519,7 +572,7 @@ function Pane({
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
         {label}
       </p>
       {children}
@@ -540,7 +593,7 @@ function Select({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="h-12 w-full rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-bold text-ink outline-none transition-colors focus:border-accent"
+      className="h-12 w-full rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink outline-none transition-colors focus:border-accent"
     >
       {options.map(([optionValue, label]) => (
         <option key={optionValue} value={optionValue}>

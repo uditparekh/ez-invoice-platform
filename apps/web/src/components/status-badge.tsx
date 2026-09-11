@@ -20,13 +20,13 @@ export function StatusBadge({ status }: { status: InvoiceStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-extrabold",
+        "inline-flex min-h-7 shrink-0 items-center whitespace-nowrap rounded-md px-2.5 text-xs font-medium",
         danger
           ? "bg-danger-soft text-danger"
           : warning
             ? "bg-gold-soft text-gold"
             : posted
-              ? "bg-cyan-soft text-cyan"
+              ? "bg-success-soft text-success"
               : ready
                 ? "bg-success-soft text-success"
                 : "bg-accent-soft text-accent-ink",

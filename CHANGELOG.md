@@ -4,6 +4,20 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Calm Finance redesign and reporting
+
+- Rebuild Home and Insights with date-scoped, server-backed reporting, separate
+  currencies, explicit posting/queue definitions, and no invented ROI or tax-credit claims.
+- Replace synthesized History with persisted workspace events, cursor pagination,
+  filter-matched CSV export, recorded actors, and posting-result inspection/retry.
+- Apply the approved restrained indigo direction across the product in light and
+  dark mode: shared spacing, legible secondary text, lighter typography, simpler
+  controls, and less duplicated queue chrome.
+- Reconcile net line values against subtotal rather than gross invoice value;
+  add direct invoice links and native-dialog keyboard focus containment.
+- Add reporting regressions and a light/dark desktop/mobile browser matrix to CI.
+- See docs/CALM-FINANCE-RELEASE.md for metric definitions and remaining limitations.
+
 ### pkg34 shipping hardening
 
 - Commit claim/attempt creation and terminal posting/invoice/audit transitions

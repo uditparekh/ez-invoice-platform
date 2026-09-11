@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ArrowRight,
-  Eye,
-  LoaderCircle,
-  LockKeyhole,
-  Mail,
-} from "lucide-react";
+import { ArrowRight, Eye, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -82,7 +76,9 @@ export function LoginForm() {
       // user staring at an idle form while the app loads — the exact "laggy"
       // feeling this state exists to prevent.
     } catch {
-      setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
+      setError(
+        "The SiftEntry API is unavailable. Start FastAPI and try again.",
+      );
       releaseRequest();
       setSubmitting(false);
     }
@@ -99,7 +95,9 @@ export function LoginForm() {
       const response = await fetch("/api/auth/demo", { method: "POST" });
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
-        setError(apiErrorMessage(payload, "Unable to open the demo workspace."));
+        setError(
+          apiErrorMessage(payload, "Unable to open the demo workspace."),
+        );
         releaseRequest();
         setOpeningDemo(false);
         return;
@@ -120,7 +118,7 @@ export function LoginForm() {
       className="mt-8 space-y-5"
     >
       <label className="block">
-        <span className="mb-2 block text-xs font-bold text-ink-secondary">
+        <span className="mb-2 block text-xs font-medium text-ink-secondary">
           Work email
         </span>
         <span className="flex h-12 items-center gap-3 rounded-xl border border-line-strong bg-surface px-3.5 focus-within:border-accent">
@@ -136,11 +134,11 @@ export function LoginForm() {
         </span>
       </label>
       <label className="block">
-        <span className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-ink-secondary">
+        <span className="mb-2 flex items-center justify-between gap-3 text-xs font-medium text-ink-secondary">
           <span>Password</span>
           <Link
             href="/forgot-password"
-            className="text-accent transition hover:text-cyan"
+            className="text-accent-ink transition hover:text-cyan-ink"
           >
             Forgot password?
           </Link>
@@ -159,7 +157,7 @@ export function LoginForm() {
       {notice && (
         <p
           role="status"
-          className="rounded-xl border border-accent/20 bg-accent-soft px-3.5 py-3 text-sm font-semibold text-accent"
+          className="rounded-xl border border-accent/20 bg-accent-soft px-3.5 py-3 text-sm font-semibold text-accent-ink"
         >
           {notice}
         </p>
@@ -181,11 +179,7 @@ export function LoginForm() {
         aria-disabled={submitting || openingDemo}
       >
         {submitting ? (
-          <LoaderCircle
-            size={17}
-            className="animate-spin"
-            aria-hidden="true"
-          />
+          <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
         ) : (
           <ArrowRight size={17} aria-hidden="true" />
         )}
@@ -194,7 +188,7 @@ export function LoginForm() {
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {submitting ? "Signing in and opening your workspace." : ""}
       </span>
-      <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+      <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
         <span className="h-px flex-1 bg-line" />
         Or
         <span className="h-px flex-1 bg-line" />

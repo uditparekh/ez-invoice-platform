@@ -75,8 +75,11 @@ export function PdfEvidenceViewer({
           import.meta.url,
         ).toString();
         const doc = await pdfjs.getDocument({ url }).promise;
-        const rendered: { pageNumber: number; dataUrl: string; aspect: number }[] =
-          [];
+        const rendered: {
+          pageNumber: number;
+          dataUrl: string;
+          aspect: number;
+        }[] = [];
         const pageCount = Math.min(doc.numPages, 12); // guardrail for huge docs
         for (let n = 1; n <= pageCount; n += 1) {
           const page = await doc.getPage(n);
@@ -86,7 +89,8 @@ export function PdfEvidenceViewer({
           canvas.height = viewport.height;
           const context = canvas.getContext("2d");
           if (!context) throw new Error("canvas 2d unavailable");
-          await page.render({ canvasContext: context, viewport, canvas }).promise;
+          await page.render({ canvasContext: context, viewport, canvas })
+            .promise;
           rendered.push({
             pageNumber: n,
             dataUrl: canvas.toDataURL("image/png"),
@@ -120,7 +124,9 @@ export function PdfEvidenceViewer({
   if (!pages.length)
     return (
       <div className="grid h-[620px] place-items-center rounded-xl border border-line bg-surface">
-        <p className="text-sm font-bold text-ink-muted">Rendering document…</p>
+        <p className="text-sm font-medium text-ink-muted">
+          Rendering document…
+        </p>
       </div>
     );
 
@@ -144,29 +150,31 @@ export function PdfEvidenceViewer({
             alt={`Invoice page ${pageNumber}`}
             className="absolute inset-0 h-full w-full"
           />
-          {(boxesByPage.get(pageNumber) ?? []).map(({ fieldPath, evidence }) => {
-            const active = fieldPath === activeFieldPath;
-            return (
-              <span
-                key={`${fieldPath}-${evidence.field}`}
-                aria-hidden
-                className={cn(
-                  "absolute rounded-[3px] transition-all duration-300",
-                  active
-                    ? "z-10 animate-pulse border-2 border-cyan bg-cyan/25 shadow-[0_0_0_4px_rgba(34,211,238,0.25)]"
-                    : "border border-accent/50 bg-accent/10",
-                )}
-                style={{
-                  left: `${(evidence.x0 ?? 0) * 100}%`,
-                  top: `${(evidence.y0 ?? 0) * 100}%`,
-                  width: `${((evidence.x1 ?? 0) - (evidence.x0 ?? 0)) * 100}%`,
-                  height: `${((evidence.y1 ?? 0) - (evidence.y0 ?? 0)) * 100}%`,
-                  padding: "3px",
-                }}
-              />
-            );
-          })}
-          <span className="absolute bottom-2 right-2 rounded-md bg-ink/70 px-2 py-0.5 text-[10px] font-black text-white">
+          {(boxesByPage.get(pageNumber) ?? []).map(
+            ({ fieldPath, evidence }) => {
+              const active = fieldPath === activeFieldPath;
+              return (
+                <span
+                  key={`${fieldPath}-${evidence.field}`}
+                  aria-hidden
+                  className={cn(
+                    "absolute rounded-[3px] transition-all duration-300",
+                    active
+                      ? "z-10 animate-pulse border-2 border-cyan bg-cyan/25 shadow-[0_0_0_4px_rgba(34,211,238,0.25)]"
+                      : "border border-accent/50 bg-accent/10",
+                  )}
+                  style={{
+                    left: `${(evidence.x0 ?? 0) * 100}%`,
+                    top: `${(evidence.y0 ?? 0) * 100}%`,
+                    width: `${((evidence.x1 ?? 0) - (evidence.x0 ?? 0)) * 100}%`,
+                    height: `${((evidence.y1 ?? 0) - (evidence.y0 ?? 0)) * 100}%`,
+                    padding: "3px",
+                  }}
+                />
+              );
+            },
+          )}
+          <span className="absolute bottom-2 right-2 rounded-md bg-ink/70 px-2 py-0.5 text-xs font-semibold text-white">
             p.{pageNumber}
           </span>
         </div>

@@ -39,7 +39,9 @@ export function PasswordResetRequestForm() {
       }
       setResponse(payload as PasswordResetResponse);
     } catch {
-      setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
+      setError(
+        "The SiftEntry API is unavailable. Start FastAPI and try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -77,7 +79,7 @@ export function PasswordResetRequestForm() {
           <p>{response.message}</p>
           {response.reset_token && (
             <Link
-              className="mt-2 inline-flex break-all text-accent transition hover:text-cyan"
+              className="mt-2 inline-flex break-all text-accent-ink transition hover:text-cyan-ink"
               href={`/reset-password?token=${encodeURIComponent(response.reset_token)}`}
             >
               Open local reset link

@@ -76,7 +76,9 @@ async function fetchAuthenticatedUser() {
   const response = await fetch("/api/auth/me", { cache: "no-store" });
   if (response.status === 401 || response.status === 403) return null;
   if (!response.ok) {
-    throw new SessionRefreshError(`Session refresh failed (${response.status})`);
+    throw new SessionRefreshError(
+      `Session refresh failed (${response.status})`,
+    );
   }
   return (await response.json()) as AuthenticatedUser;
 }
@@ -96,9 +98,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
-  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(
-    null,
-  );
+  const [activeOrganizationId, setActiveOrganizationId] = useState<
+    string | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [idleWarningOpen, setIdleWarningOpen] = useState(false);
 
@@ -150,26 +152,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applyUser, clearUser]);
 
   const selectOrganization = useCallback((organizationId: string) => {
-    window.localStorage.setItem("siftentry-active-organization", organizationId);
+    window.localStorage.setItem(
+      "siftentry-active-organization",
+      organizationId,
+    );
     setActiveOrganizationId(organizationId);
   }, []);
 
-  const logout = useCallback(async (options: LogoutOptions = {}) => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch {
-      // Even if the network is unavailable, clear this browser session.
-    }
-    clearWorkspaceInvoiceCache();
-    clearPreviewInvoices();
-    setUser(null);
-    setActiveOrganizationId(null);
-    setIdleWarningOpen(false);
-    const destination =
-      options.reason === "inactive" ? "/login?reason=inactive" : "/login";
-    router.replace(destination);
-    router.refresh();
-  }, [router]);
+  const logout = useCallback(
+    async (options: LogoutOptions = {}) => {
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+      } catch {
+        // Even if the network is unavailable, clear this browser session.
+      }
+      clearWorkspaceInvoiceCache();
+      clearPreviewInvoices();
+      setUser(null);
+      setActiveOrganizationId(null);
+      setIdleWarningOpen(false);
+      const destination =
+        options.reason === "inactive" ? "/login?reason=inactive" : "/login";
+      router.replace(destination);
+      router.refresh();
+    },
+    [router],
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -228,14 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       selectOrganization,
       logout,
     }),
-    [
-      user,
-      activeOrganizationId,
-      loading,
-      refresh,
-      selectOrganization,
-      logout,
-    ],
+    [user, activeOrganizationId, loading, refresh, selectOrganization, logout],
   );
 
   return (
@@ -246,7 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role="status"
           className="fixed bottom-5 right-5 z-50 w-[min(360px,calc(100vw-2.5rem))] rounded-2xl border border-line-strong bg-panel p-4 shadow-2xl"
         >
-          <p className="text-sm font-extrabold text-ink">Still working?</p>
+          <p className="text-sm font-semibold text-ink">Still working?</p>
           <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
             This device will sign out soon to protect the workspace. Other
             devices stay signed in until they are inactive too.
@@ -254,7 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               type="button"
-              className="rounded-xl border border-line-strong bg-surface px-3 py-2 text-xs font-extrabold text-ink transition hover:border-accent/40 hover:text-accent"
+              className="rounded-xl border border-line-strong bg-surface px-3 py-2 text-xs font-semibold text-ink transition hover:border-accent/40 hover:text-accent-ink"
               onClick={() => {
                 writeLastActivityAt();
                 setIdleWarningOpen(false);
@@ -264,7 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             </button>
             <button
               type="button"
-              className="rounded-xl bg-accent px-3 py-2 text-xs font-extrabold text-white shadow-soft transition hover:bg-accent-strong"
+              className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white shadow-soft transition hover:bg-accent-strong"
               onClick={() => void logout()}
             >
               Sign out

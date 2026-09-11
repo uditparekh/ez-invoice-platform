@@ -9,7 +9,9 @@ export function BarList({
   currency?: string;
   emptyLabel: string;
 }) {
-  const cleanRows = rows.filter((row) => Number.isFinite(row.total) && row.total > 0);
+  const cleanRows = rows.filter(
+    (row) => Number.isFinite(row.total) && row.total > 0,
+  );
   const max = Math.max(...cleanRows.map((row) => row.total), 1);
 
   if (!cleanRows.length) {
@@ -21,10 +23,10 @@ export function BarList({
       {cleanRows.slice(0, 6).map((row) => (
         <div key={row.label}>
           <div className="flex min-w-0 items-center justify-between gap-4">
-            <p className="min-w-0 flex-1 truncate text-sm font-bold text-ink-secondary">
+            <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink-secondary">
               {row.label}
             </p>
-            <p className="max-w-[46%] shrink-0 truncate text-right font-mono text-sm font-black text-ink">
+            <p className="max-w-[46%] shrink-0 truncate text-right font-mono text-sm font-semibold text-ink">
               {formatCurrency(row.total, currency)}
             </p>
           </div>

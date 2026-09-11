@@ -18,7 +18,7 @@ const brandSizes: Record<
     mark: "size-11 rounded-xl",
     markPixels: 44,
     title: "text-[16px]",
-    subtitle: "mt-1 text-[11px]",
+    subtitle: "mt-1 text-xs",
   },
   lg: {
     gap: "gap-3.5",
@@ -52,10 +52,21 @@ export function BrandMark({
       />
       {!compact && (
         <span className="flex min-w-0 flex-col justify-center">
-          <span className={clsx("block truncate font-black leading-none text-ink", styles.title)}>
-            Sift<span className="text-accent dark:text-cyan">Entry</span>
+          <span
+            className={clsx(
+              "block truncate font-semibold leading-none text-ink",
+              styles.title,
+            )}
+          >
+            Sift
+            <span className="text-accent-ink">Entry</span>
           </span>
-          <span className={clsx("block truncate font-bold leading-none text-ink-muted", styles.subtitle)}>
+          <span
+            className={clsx(
+              "block truncate font-medium leading-none text-ink-muted",
+              styles.subtitle,
+            )}
+          >
             Invoices in. Entries ready.
           </span>
         </span>

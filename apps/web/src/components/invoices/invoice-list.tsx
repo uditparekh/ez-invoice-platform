@@ -21,12 +21,10 @@ export function InvoiceList({
     <div className="min-w-0 border-b border-line bg-surface lg:border-b-0 lg:border-r lg:border-line">
       {toolbar}
       <div className="flex h-14 items-center justify-between border-b border-line px-4 sm:px-6">
-        <span className="text-sm font-extrabold text-ink-secondary">
+        <span className="text-sm font-semibold text-ink-secondary">
           {invoices.length} invoice{invoices.length === 1 ? "" : "s"}
         </span>
-        <span className="text-xs font-bold text-ink-muted">
-          Newest first
-        </span>
+        <span className="text-xs font-medium text-ink-muted">Newest first</span>
       </div>
       <div className="max-h-[540px] overflow-y-auto lg:max-h-[calc(100vh-304px)]">
         {loading ? (
@@ -43,10 +41,10 @@ export function InvoiceList({
                   : "border-l-[4px] border-l-transparent bg-surface hover:bg-surface-subtle",
               )}
             >
-              <span className="truncate text-base font-black text-ink">
+              <span className="truncate text-base font-semibold text-ink">
                 {invoice.invoice_number || "Number pending"}
               </span>
-              <span className="whitespace-nowrap text-right font-mono text-xs font-black text-ink sm:text-sm">
+              <span className="whitespace-nowrap text-right font-mono text-xs font-semibold text-ink sm:text-sm">
                 {formatCurrency(invoice.total, invoice.currency)}
               </span>
               <span className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-ink-secondary">
@@ -55,7 +53,7 @@ export function InvoiceList({
               <span className="mt-3 row-span-2 justify-self-end">
                 <StatusBadge status={invoice.status} />
               </span>
-              <span className="mt-3 text-xs font-bold text-ink-muted">
+              <span className="mt-3 text-xs font-medium text-ink-muted">
                 {formatDate(invoice.invoice_date)}
               </span>
             </button>
@@ -73,11 +71,14 @@ function EmptyQueue({ loading = false }: { loading?: boolean }) {
     <div className="grid min-h-80 place-items-center border-b border-line px-6 text-center">
       <div>
         {loading ? (
-          <LoaderCircle className="mx-auto animate-spin text-accent" size={24} />
+          <LoaderCircle
+            className="mx-auto animate-spin text-accent-ink"
+            size={24}
+          />
         ) : (
           <FileSearch className="mx-auto text-ink-muted" size={26} />
         )}
-        <p className="mt-4 text-base font-black text-ink">
+        <p className="mt-4 text-base font-semibold text-ink">
           {loading ? "Loading invoice queue" : "No invoices found"}
         </p>
         <p className="mt-2 text-xs leading-5 text-ink-muted">

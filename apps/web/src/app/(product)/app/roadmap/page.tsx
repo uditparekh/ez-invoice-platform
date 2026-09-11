@@ -8,22 +8,43 @@ export default function RoadmapPage() {
     {
       title: "Reliable posting core",
       status: "Current",
-      items: ["QuickBooks pilot", "Tally pilot", "Zoho Books adapter", "Auth boundary"],
+      items: [
+        "QuickBooks pilot",
+        "Tally pilot",
+        "Zoho Books adapter",
+        "Auth boundary",
+      ],
     },
     {
       title: "React operating console",
       status: "In progress",
-      items: ["Queue parity", "ERP pages", "History", "Analytics", "Exceptions"],
+      items: [
+        "Queue parity",
+        "ERP pages",
+        "History",
+        "Analytics",
+        "Exceptions",
+      ],
     },
     {
       title: "AI extraction layer",
       status: "Next",
-      items: ["OCR fallback", "Field evidence", "Exception explanations", "Suggested corrections"],
+      items: [
+        "OCR fallback",
+        "Field evidence",
+        "Exception explanations",
+        "Suggested corrections",
+      ],
     },
     {
       title: "Client scale",
       status: "Future",
-      items: ["Email intake", "Mobile approval", "Vendor portal", "Production deployment"],
+      items: [
+        "Email intake",
+        "Mobile approval",
+        "Vendor portal",
+        "Production deployment",
+      ],
     },
   ];
 
@@ -46,17 +67,20 @@ export default function RoadmapPage() {
                 className="rounded-2xl border border-line bg-canvas p-5"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <Rocket className="text-cyan" size={19} />
-                  <span className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-black text-ink-secondary">
+                  <Rocket className="text-cyan-ink" size={19} />
+                  <span className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold text-ink-secondary">
                     {milestone.status}
                   </span>
                 </div>
-                <h2 className="mt-5 text-base font-black text-ink">
+                <h2 className="mt-5 text-base font-semibold text-ink">
                   {milestone.title}
                 </h2>
                 <ul className="mt-4 space-y-3">
                   {milestone.items.map((item) => (
-                    <li key={item} className="text-sm font-semibold text-ink-secondary">
+                    <li
+                      key={item}
+                      className="text-sm font-semibold text-ink-secondary"
+                    >
                       {item}
                     </li>
                   ))}

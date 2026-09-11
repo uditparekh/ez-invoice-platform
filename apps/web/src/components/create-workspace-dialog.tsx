@@ -39,6 +39,7 @@ export function CreateWorkspaceDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   // Reset the form on close rather than on open, so no state is set
   // synchronously inside an effect.
@@ -51,26 +52,24 @@ export function CreateWorkspaceDialog({
 
   useEffect(() => {
     if (!open) return;
-    const timer = window.setTimeout(() => nameRef.current?.focus(), 30);
-    return () => window.clearTimeout(timer);
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    nameRef.current?.focus();
+    return () => {
+      dialog?.close();
+      previousFocus?.focus();
+    };
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, saving]);
 
   if (!open) return null;
 
   async function submit() {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Give the workspace a name — usually the client's business name.");
+      setError(
+        "Give the workspace a name — usually the client's business name.",
+      );
       return;
     }
     setSaving(true);
@@ -85,7 +84,9 @@ export function CreateWorkspaceDialog({
         | CreatedOrganization
         | ApiErrorPayload;
       if (!response.ok || !("id" in payload)) {
-        throw new Error(apiErrorMessage(payload, "Workspace could not be created."));
+        throw new Error(
+          apiErrorMessage(payload, "Workspace could not be created."),
+        );
       }
       // Refresh first so the new workspace is in the memberships list, then
       // switch to it. Switching before the refresh briefly points the app at
@@ -103,23 +104,29 @@ export function CreateWorkspaceDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={dialogRef}
+      className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-md border-0 bg-transparent p-0 text-ink backdrop:bg-black/40 backdrop:backdrop-blur-sm"
       aria-labelledby="create-workspace-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
       }}
     >
-      <div className="w-full max-w-md rounded-3xl border border-line bg-surface p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div className="flex gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink">
               <Building2 size={20} />
             </span>
             <div>
-              <h2 id="create-workspace-title" className="text-lg font-black text-ink">
+              <h2
+                id="create-workspace-title"
+                className="text-lg font-semibold text-ink"
+              >
                 New workspace
               </h2>
               <p className="mt-1 text-sm leading-6 text-ink-secondary">
@@ -142,7 +149,7 @@ export function CreateWorkspaceDialog({
 
         <div className="mt-5 space-y-4">
           <label className="block">
-            <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+            <span className="text-xs font-semibold uppercase text-ink-muted">
               Workspace name
             </span>
             <input
@@ -154,21 +161,22 @@ export function CreateWorkspaceDialog({
               }}
               placeholder="Client's business name"
               maxLength={200}
-              className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
+              className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
             />
             <span className="mt-1.5 block text-xs font-semibold leading-5 text-ink-muted">
-              Shown in the header and on invitations. You can rename it later in Settings.
+              Shown in the header and on invitations. You can rename it later in
+              Settings.
             </span>
           </label>
 
           <label className="block">
-            <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+            <span className="text-xs font-semibold uppercase text-ink-muted">
               Default currency
             </span>
             <select
               value={currency}
               onChange={(event) => setCurrency(event.target.value)}
-              className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none transition-colors focus:border-accent"
+              className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink outline-none transition-colors focus:border-accent"
             >
               {currencyOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -179,7 +187,7 @@ export function CreateWorkspaceDialog({
           </label>
 
           {error && (
-            <p className="rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
+            <p className="rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
               {error}
             </p>
           )}
@@ -190,13 +198,17 @@ export function CreateWorkspaceDialog({
             Cancel
           </Button>
           <Button onClick={() => void submit()} disabled={saving}>
-            {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Building2 size={16} />}
+            {saving ? (
+              <LoaderCircle size={16} className="animate-spin" />
+            ) : (
+              <Building2 size={16} />
+            )}
             <span className={cn(saving && "opacity-80")}>
               {saving ? "Creating" : "Create workspace"}
             </span>
           </Button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

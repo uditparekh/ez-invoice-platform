@@ -14,7 +14,9 @@ export function ThemeToggle() {
     const saved =
       window.localStorage.getItem("siftentry-theme") ??
       window.localStorage.getItem("ez-theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
     const nextTheme: ThemeMode = saved
       ? saved === "dark"
         ? "dark"
@@ -70,9 +72,9 @@ function ThemeButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex h-7 min-w-8 items-center justify-center gap-1.5 rounded-full px-2.5 text-[11px] font-extrabold transition-colors",
+        "inline-flex h-7 min-w-8 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-semibold transition-colors",
         active
-          ? "bg-accent text-white shadow-sm shadow-accent/20 dark:bg-cyan dark:text-[var(--canvas)]"
+          ? "bg-accent text-white shadow-sm"
           : "text-ink-muted hover:bg-surface hover:text-ink",
       )}
     >

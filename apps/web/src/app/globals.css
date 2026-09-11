@@ -11,15 +11,15 @@
 :root {
   color-scheme: light;
   /* surfaces */
-  --canvas: #f6f8fc;
+  --canvas: #f7f8fa;
   --shell: #ffffff; /* sidebar + header layer */
   --surface: #ffffff; /* cards */
   --surface-subtle: #f8fafc;
   --surface-strong: #f1f5f9;
   /* text */
   --ink: #08111f;
-  --ink-secondary: #667085;
-  --ink-muted: #98a2b3;
+  --ink-secondary: #526077;
+  --ink-muted: #617087;
   /* lines */
   --line: #e6eaf2;
   --line-strong: #cbd5e1;
@@ -30,14 +30,15 @@
   --accent-ink: #4f46e5;
   --cyan: #06b6d4;
   --cyan-soft: #cffafe;
-  --cyan-ink: #0891b2;
+  --cyan-ink: #0e627a;
   /* semantic */
-  --success: #16a34a;
+  --success: #16723d;
   --success-soft: #dcfce7;
-  --gold: #d97706;
+  --gold: #995109;
   --gold-ink: #b45309;
   --gold-soft: #fef3c7;
-  --danger: #dc2626;
+  --danger: #b91c1c;
+  --danger-button: #b91c1c;
   --danger-soft: #fee2e2;
   /* accent gradient companions + cyan stat color on dark banners */
   --accent-grad-via: #6366f1;
@@ -56,21 +57,21 @@
 .dark {
   color-scheme: dark;
   /* surfaces — three-layer depth: canvas < shell < card < popover */
-  --canvas: #0b0f1a; /* hsl(222 40% 7%)  */
-  --shell: #131a2b; /* hsl(221 30% 11%) sidebar + header own layer */
-  --surface: #191f30; /* hsl(221 30% 14%) cards */
-  --surface-subtle: #141a2b;
-  --surface-strong: #212940; /* hsl(221 28% 18%) popovers/menus/hover */
+  --canvas: #10131a;
+  --shell: #151922;
+  --surface: #1b202b;
+  --surface-subtle: #181d27;
+  --surface-strong: #262d3b;
   /* text — warm off-white, never pure #fff */
   --ink: #eef2f9;
-  --ink-secondary: #97a2b8;
-  --ink-muted: #6f7b93;
+  --ink-secondary: #b2bdd0;
+  --ink-muted: #a3afc3;
   /* lines */
-  --line: #2f3a54; /* hsl(220 24% 25%) */
-  --line-strong: #3d4a69;
+  --line: #303848;
+  --line-strong: #4a566e;
   /* brand */
-  --accent: #7b78f5; /* hsl(243 90% 72%) */
-  --accent-hover: #918ff8;
+  --accent: #6358dc;
+  --accent-hover: #6d60e5;
   --accent-soft: #232948; /* indigo-tinted card layer */
   --accent-ink: #c7d2fe;
   --cyan: #67e8f9;
@@ -85,8 +86,7 @@
   --danger: #f87171;
   --danger-soft: #3b1012;
   /* elevation — shadows do the depth work in dark */
-  --shadow-card-value:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-card-value: 0 1px 2px rgba(0, 0, 0, 0.12);
   --shadow-pop-value: 0 12px 40px rgba(0, 0, 0, 0.6);
   --shadow-glow-value: 0 8px 28px -6px rgba(123, 120, 245, 0.55);
 }
@@ -115,19 +115,20 @@
   --color-gold-ink: var(--gold-ink);
   --color-gold-soft: var(--gold-soft);
   --color-danger: var(--danger);
+  --color-danger-button: var(--danger-button);
   --color-danger-soft: var(--danger-soft);
   --shadow-card: var(--shadow-card-value);
   --shadow-pop: var(--shadow-pop-value);
   --shadow-glow: var(--shadow-glow-value);
   --font-sans:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   --font-display:
-    "Space Grotesk", Inter, ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   --font-mono:
-    "JetBrains Mono", "SFMono-Regular", "SF Mono", "Cascadia Code", "Roboto Mono",
-    Consolas, monospace;
+    "JetBrains Mono", "SFMono-Regular", "SF Mono", "Cascadia Code",
+    "Roboto Mono", Consolas, monospace;
 }
 
 * {
@@ -182,8 +183,138 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
+}
+
+/* Calm Finance: one shared working-surface rhythm, in both color schemes. */
+.report-main {
+  max-width: 1440px;
+  margin-inline: auto;
+  padding: 24px 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+}
+.report-date {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+.report-date input {
+  min-height: 40px;
+  min-width: 0;
+  width: 155px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+}
+.report-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-block: 8px;
+}
+.report-metric {
+  padding: 4px 24px;
+  border-left: 1px solid var(--line);
+}
+.report-metric:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.report-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 20px;
+}
+.report-panel-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.report-panel-heading h2 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.report-table-scroll {
+  overflow-x: auto;
+  border-radius: 8px;
+}
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+.report-table th,
+.report-table td {
+  padding: 14px 16px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+.report-table thead {
+  background: var(--surface-subtle);
+  color: var(--ink-secondary);
+}
+.report-table th {
+  font-weight: 500;
+}
+.report-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.report-table tbody tr:hover {
+  background: var(--surface-subtle);
+}
+@media (max-width: 767px) {
+  .report-main {
+    padding: 20px 16px 28px;
+    gap: 20px;
+  }
+  .report-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 0;
+  }
+  .report-metric {
+    padding-inline: 16px;
+  }
+  .report-metric:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .report-panel {
+    padding: 16px;
+  }
+  .report-date input {
+    width: 136px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -241,7 +372,6 @@ a {
     animation-iteration-count: 1 !important;
   }
 }
-
 
 /* Installed-PWA polish: respect iPhone/Android notch and home-indicator
    insets when running standalone (Add to Home Screen). No effect in a

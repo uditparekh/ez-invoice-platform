@@ -97,7 +97,7 @@ function EmptyDetail() {
     <div className="grid min-h-[560px] place-items-center px-8 text-center">
       <div>
         <FileSearch className="mx-auto text-ink-muted" size={30} />
-        <p className="mt-4 text-lg font-black text-ink">Select an invoice</p>
+        <p className="mt-4 text-lg font-semibold text-ink">Select an invoice</p>
         <p className="mt-2 text-sm text-ink-muted">
           Extracted fields, validation, and line items will appear here.
         </p>
@@ -129,7 +129,8 @@ function InvoiceDetail({
 }) {
   const confidence =
     invoice.confidence == null ? null : Math.round(invoice.confidence * 100);
-  const isPreviewOnly = !invoice.source_path || invoice.id.startsWith("preview-");
+  const isPreviewOnly =
+    !invoice.source_path || invoice.id.startsWith("preview-");
   const postingTarget = useMemo(
     () => postingTargetForSystem(targetSystem),
     [targetSystem],
@@ -156,8 +157,8 @@ function InvoiceDetail({
   );
   const [savingReview, setSavingReview] = useState(false);
   const [reviewNotice, setReviewNotice] = useState("");
-  const [review, setReview] = useState<InvoiceReviewResult | null>(() =>
-    localReview,
+  const [review, setReview] = useState<InvoiceReviewResult | null>(
+    () => localReview,
   );
   const [reviewLoading, setReviewLoading] = useState(false);
 
@@ -172,10 +173,13 @@ function InvoiceDetail({
     async function loadReview() {
       setReviewLoading(true);
       try {
-        const response = await fetch(`/api/invoices/${invoice.id}/review${query}`, {
-          signal: controller.signal,
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/api/invoices/${invoice.id}/review${query}`,
+          {
+            signal: controller.signal,
+            cache: "no-store",
+          },
+        );
         if (!response.ok) return;
         setReview((await response.json()) as InvoiceReviewResult);
       } catch (error) {
@@ -189,12 +193,7 @@ function InvoiceDetail({
 
     void loadReview();
     return () => controller.abort();
-  }, [
-    invoice.id,
-    isPreviewOnly,
-    localReview,
-    reviewAccountingSystem,
-  ]);
+  }, [invoice.id, isPreviewOnly, localReview, reviewAccountingSystem]);
 
   useEffect(() => {
     if (isPreviewOnly) return;
@@ -372,7 +371,10 @@ function InvoiceDetail({
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(
-          apiErrorMessage(payload as ApiErrorPayload, "Could not save corrections."),
+          apiErrorMessage(
+            payload as ApiErrorPayload,
+            "Could not save corrections.",
+          ),
         );
       }
       onInvoiceUpdate?.(payload as Invoice);
@@ -389,11 +391,11 @@ function InvoiceDetail({
       <article className="mx-auto w-full max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8">
         <div className="mb-4 flex flex-col gap-4 border-b border-line pb-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-black text-ink-secondary">
+            <p className="text-sm font-semibold text-ink-secondary">
               <button
                 type="button"
                 onClick={onCloseReview}
-                className="text-ink-muted transition-colors hover:text-accent"
+                className="text-ink-muted transition-colors hover:text-accent-ink"
               >
                 Invoices
               </button>{" "}
@@ -403,14 +405,14 @@ function InvoiceDetail({
                 {invoice.invoice_number || "Number pending"}
               </span>
             </p>
-            <h2 className="mt-2 text-2xl font-black leading-tight text-ink sm:text-3xl">
+            <h2 className="mt-2 text-2xl font-semibold leading-tight text-ink sm:text-3xl">
               Review Workspace
             </h2>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
             <StatusBadge status={invoice.status} />
             {confidence != null && (
-              <span className="inline-flex h-9 items-center rounded-full border border-line-strong bg-canvas px-3 text-xs font-extrabold text-ink-secondary">
+              <span className="inline-flex h-9 items-center rounded-full border border-line-strong bg-canvas px-3 text-xs font-semibold text-ink-secondary">
                 {confidence}% confidence
               </span>
             )}
@@ -419,7 +421,7 @@ function InvoiceDetail({
               disabled={!canValidate || validating}
               onClick={() => void validateInvoice()}
               className={cn(
-                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition-colors",
+                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors",
                 canValidate
                   ? "border-line-strong bg-canvas text-ink hover:border-accent hover:bg-accent-soft"
                   : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -437,7 +439,7 @@ function InvoiceDetail({
               disabled={!canApprove || approving}
               onClick={() => void approveInvoice()}
               className={cn(
-                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition-colors",
+                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors",
                 canApprove
                   ? "border-success/30 bg-success-soft text-success hover:border-success"
                   : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -456,7 +458,7 @@ function InvoiceDetail({
               disabled={!canPost || posting}
               onClick={() => void postInvoice()}
               className={cn(
-                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition-colors",
+                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors",
                 canPost
                   ? "border-accent bg-accent text-white shadow-sm shadow-accent/20 hover:bg-accent-strong"
                   : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -479,7 +481,7 @@ function InvoiceDetail({
             <button
               type="button"
               onClick={onCloseReview}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-line-strong bg-canvas px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-line-strong bg-canvas px-4 text-sm font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
             >
               Back to invoice
             </button>
@@ -494,7 +496,7 @@ function InvoiceDetail({
         )}
 
         {isPreviewOnly && (
-          <div className="mb-4 flex gap-3 rounded-xl border border-cyan/25 bg-cyan-soft px-4 py-3 text-sm font-semibold text-cyan">
+          <div className="mb-4 flex gap-3 rounded-xl border border-cyan/25 bg-cyan-soft px-4 py-3 text-sm font-semibold text-cyan-ink">
             <FileSearch size={18} className="mt-0.5 shrink-0" />
             <span>
               Preview only. This invoice was parsed for demo review and was not
@@ -523,20 +525,20 @@ function InvoiceDetail({
     <article className="mx-auto w-full max-w-[1240px] px-4 py-7 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-5 pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
             Invoice
           </p>
-          <h2 className="mt-4 break-words text-3xl font-black leading-tight text-ink sm:text-4xl">
+          <h2 className="mt-4 break-words text-3xl font-semibold leading-tight text-ink sm:text-4xl">
             {invoice.invoice_number || "Number pending"}
           </h2>
-          <p className="mt-3 max-w-[760px] break-words text-base font-bold leading-6 text-ink-secondary">
+          <p className="mt-3 max-w-[760px] break-words text-base font-medium leading-6 text-ink-secondary">
             {invoice.supplier.name || "Supplier pending"}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <StatusBadge status={invoice.status} />
           {confidence != null && (
-            <span className="inline-flex h-7 items-center rounded-full border border-line-strong bg-surface px-2.5 text-[11px] font-extrabold text-ink-secondary">
+            <span className="inline-flex h-7 items-center rounded-full border border-line-strong bg-surface px-2.5 text-xs font-semibold text-ink-secondary">
               {confidence}% confidence
             </span>
           )}
@@ -563,7 +565,7 @@ function InvoiceDetail({
 
       {invoice.validation_issues.length > 0 && (
         <div className="mt-6 rounded-xl border border-gold/25 bg-gold-soft px-4 py-3">
-          <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-gold">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gold">
             Review required
           </p>
           <p className="mt-1 text-sm text-ink-secondary">
@@ -585,7 +587,7 @@ function InvoiceDetail({
           disabled={!canValidate || validating}
           onClick={() => void validateInvoice()}
           className={cn(
-            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-black transition-colors",
+            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-semibold transition-colors",
             canValidate
               ? "border-line-strong bg-surface text-ink hover:border-accent hover:bg-accent-soft"
               : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -603,7 +605,7 @@ function InvoiceDetail({
           disabled={!canApprove || approving}
           onClick={() => void approveInvoice()}
           className={cn(
-            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-black transition-colors",
+            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-semibold transition-colors",
             canApprove
               ? "border-accent/40 bg-accent-soft text-accent-ink hover:border-accent hover:bg-accent/15"
               : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -620,14 +622,14 @@ function InvoiceDetail({
         <button
           type="button"
           onClick={() => downloadInvoiceJson(invoice, "parsed")}
-          className="h-11 min-w-0 whitespace-nowrap rounded-xl border border-line-strong bg-surface px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+          className="h-11 min-w-0 whitespace-nowrap rounded-xl border border-line-strong bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
         >
           Parsed JSON
         </button>
         <button
           type="button"
           onClick={() => downloadInvoiceJson(invoice, "accounting")}
-          className="h-11 min-w-0 whitespace-nowrap rounded-xl border border-line-strong bg-surface px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+          className="h-11 min-w-0 whitespace-nowrap rounded-xl border border-line-strong bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
         >
           Accounting JSON
         </button>
@@ -636,7 +638,7 @@ function InvoiceDetail({
           disabled={!canPost || posting}
           onClick={() => void postInvoice()}
           className={cn(
-            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-black transition-colors",
+            "inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-semibold transition-colors",
             canPost
               ? "border-accent bg-accent text-white hover:bg-accent-strong"
               : "border-line bg-surface text-ink-muted disabled:cursor-not-allowed disabled:opacity-60",
@@ -668,7 +670,7 @@ function InvoiceDetail({
       )}
 
       {isPreviewOnly && (
-        <div className="mt-4 flex gap-3 rounded-xl border border-cyan/25 bg-cyan-soft px-4 py-3 text-sm font-semibold text-cyan">
+        <div className="mt-4 flex gap-3 rounded-xl border border-cyan/25 bg-cyan-soft px-4 py-3 text-sm font-semibold text-cyan-ink">
           <FileSearch size={18} className="mt-0.5 shrink-0" />
           <span>
             Preview only. This invoice was parsed for demo review and was not
@@ -695,10 +697,10 @@ function InvoiceDetail({
       <section className="mt-8 rounded-2xl border border-line bg-surface px-4 py-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
               Line items
             </p>
-            <h3 className="mt-1 text-xl font-black text-ink">
+            <h3 className="mt-1 text-xl font-semibold text-ink">
               {invoice.lines.length} extracted for review and mapping
             </h3>
             <p className="mt-1 max-w-3xl text-sm font-semibold leading-5 text-ink-secondary">
@@ -709,7 +711,7 @@ function InvoiceDetail({
           <button
             type="button"
             onClick={onOpenReview}
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line-strong bg-canvas px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line-strong bg-canvas px-4 text-sm font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
           >
             <FileSearch size={16} />
             Open review workspace
@@ -739,7 +741,7 @@ function ReviewSummaryCard({
     <section className="mt-6 rounded-2xl border border-line bg-surface px-4 py-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent-ink dark:text-cyan">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent-ink dark:text-cyan-ink">
             {reviewLoading ? (
               <LoaderCircle size={18} className="animate-spin" />
             ) : (
@@ -747,7 +749,7 @@ function ReviewSummaryCard({
             )}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-black text-ink">Extraction review</p>
+            <p className="text-sm font-semibold text-ink">Extraction review</p>
             <p className="mt-1 max-w-3xl text-sm leading-5 text-ink-secondary">
               Use the dedicated review page for PDF comparison, evidence focus,
               field corrections, and profile-aware recommendations.
@@ -768,7 +770,7 @@ function ReviewSummaryCard({
         <button
           type="button"
           onClick={onOpenReview}
-          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-black text-white transition-colors hover:bg-accent-strong"
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong"
         >
           <FileSearch size={16} />
           Review extraction
@@ -780,11 +782,11 @@ function ReviewSummaryCard({
 
 function ReviewSummaryPill({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-canvas px-3 py-1 text-xs font-bold text-ink-secondary">
-      <span className="font-extrabold uppercase tracking-[0.08em] text-ink-muted">
+    <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-canvas px-3 py-1 text-xs font-medium text-ink-secondary">
+      <span className="font-semibold uppercase tracking-[0.08em] text-ink-muted">
         {label}
       </span>
-      <span className="truncate font-black text-ink">{value}</span>
+      <span className="truncate font-semibold text-ink">{value}</span>
     </span>
   );
 }
@@ -796,7 +798,9 @@ function postingTargetForSystem(system: string): PostingTarget | null {
   return null;
 }
 
-function postingTargetForAccountingSystem(system: string): PostingTarget | null {
+function postingTargetForAccountingSystem(
+  system: string,
+): PostingTarget | null {
   if (system === "tally") return "tally";
   if (system === "zoho_books") return "zoho_books";
   if (system === "quickbooks") return "quickbooks";
@@ -1000,8 +1004,11 @@ function ReviewWorkspace({
       <div className="rounded-2xl border border-line bg-surface px-4 py-3 shadow-sm shadow-black/[0.03]">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-              <PencilLine size={15} className="text-accent dark:text-cyan" />
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+              <PencilLine
+                size={15}
+                className="text-accent-ink dark:text-cyan-ink"
+              />
               Extraction review
             </div>
             <p className="mt-1 max-w-3xl text-sm font-semibold leading-5 text-ink-secondary">
@@ -1012,7 +1019,13 @@ function ReviewWorkspace({
           <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
             <ReviewCommandPill
               label="Score"
-              value={reviewLoading && reviewScore == null ? "Checking" : reviewScore == null ? "Pending" : `${reviewScore}%`}
+              value={
+                reviewLoading && reviewScore == null
+                  ? "Checking"
+                  : reviewScore == null
+                    ? "Pending"
+                    : `${reviewScore}%`
+              }
             />
             <ReviewCommandPill
               label="Attention"
@@ -1042,13 +1055,13 @@ function ReviewWorkspace({
         <div className="min-w-0 rounded-2xl border border-line bg-surface p-4 shadow-sm shadow-black/[0.03]">
           <div className="flex items-center justify-between gap-3 pb-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
                 Source document
               </p>
-              <p className="mt-1 truncate text-sm font-black text-ink">
+              <p className="mt-1 truncate text-sm font-semibold text-ink">
                 {invoice.source_file}
               </p>
-              <p className="mt-0.5 text-xs font-bold text-ink-muted">
+              <p className="mt-0.5 text-xs font-medium text-ink-muted">
                 {invoice.parser} · {invoice.extraction_engine} ·{" "}
                 {invoice.page_count || 1} page
               </p>
@@ -1058,7 +1071,7 @@ function ReviewWorkspace({
                 href={`/api/invoices/${invoice.id}/document`}
                 target="_blank"
                 rel="noreferrer"
-                className="shrink-0 rounded-lg border border-line-strong bg-canvas px-3 py-2 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                className="shrink-0 rounded-lg border border-line-strong bg-canvas px-3 py-2 text-xs font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
               >
                 Open PDF
               </a>
@@ -1069,7 +1082,7 @@ function ReviewWorkspace({
             <div className="grid h-[620px] place-items-center rounded-xl border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
               <div>
                 <FileSearch className="mx-auto text-ink-muted" size={28} />
-                <p className="mt-3 text-sm font-black text-ink">
+                <p className="mt-3 text-sm font-semibold text-ink">
                   PDF preview is disabled in demo preview mode.
                 </p>
                 <p className="mt-1 text-xs font-semibold text-ink-muted">
@@ -1092,7 +1105,7 @@ function ReviewWorkspace({
                       className="h-[620px] w-full rounded-xl border border-line bg-surface"
                     >
                       <div className="grid h-[620px] place-items-center rounded-xl border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
-                        <p className="text-sm font-black text-ink">
+                        <p className="text-sm font-semibold text-ink">
                           Use Open PDF to review the source document.
                         </p>
                       </div>
@@ -1100,24 +1113,27 @@ function ReviewWorkspace({
                   }
                 />
               ) : (
-              <object
-                key={pdfUrl}
-                data={pdfUrl}
-                type="application/pdf"
-                className="h-[620px] w-full rounded-xl border border-line bg-surface"
-              >
-                <div className="grid h-[620px] place-items-center rounded-xl border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
-                  <div>
-                    <FileSearch className="mx-auto text-ink-muted" size={28} />
-                    <p className="mt-3 text-sm font-black text-ink">
-                      PDF preview is not available in this browser.
-                    </p>
-                    <p className="mt-1 text-xs font-semibold text-ink-muted">
-                      Use Open PDF to review the source document.
-                    </p>
+                <object
+                  key={pdfUrl}
+                  data={pdfUrl}
+                  type="application/pdf"
+                  className="h-[620px] w-full rounded-xl border border-line bg-surface"
+                >
+                  <div className="grid h-[620px] place-items-center rounded-xl border border-dashed border-line-strong bg-surface-subtle px-6 text-center">
+                    <div>
+                      <FileSearch
+                        className="mx-auto text-ink-muted"
+                        size={28}
+                      />
+                      <p className="mt-3 text-sm font-semibold text-ink">
+                        PDF preview is not available in this browser.
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-ink-muted">
+                        Use Open PDF to review the source document.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </object>
+                </object>
               )}
               {activeField && (
                 <span
@@ -1137,7 +1153,7 @@ function ReviewWorkspace({
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-60" />
                       <span className="relative inline-flex size-2.5 rounded-full bg-cyan" />
                     </span>
-                    <p className="min-w-0 truncate text-xs font-bold text-ink">
+                    <p className="min-w-0 truncate text-xs font-medium text-ink">
                       Evidence · p.{activePage}
                       {activeField.evidence[0]?.snippet ? (
                         <span className="font-semibold text-ink-secondary">
@@ -1167,7 +1183,7 @@ function ReviewWorkspace({
           <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm shadow-black/[0.03]">
             <div className="flex flex-col gap-2 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
                   Extracted fields
                 </p>
                 <p className="mt-1 text-sm font-semibold text-ink-secondary">
@@ -1176,7 +1192,7 @@ function ReviewWorkspace({
               </div>
               <p className="text-sm font-semibold text-ink-secondary">
                 Current total{" "}
-                <span className="font-mono font-black text-ink">
+                <span className="font-mono font-semibold text-ink">
                   {formatCurrency(invoice.total, invoice.currency)}
                 </span>
               </p>
@@ -1275,7 +1291,7 @@ function ReviewWorkspace({
                 />
                 <span>
                   Save corrections to vendor memory —{" "}
-                  <span className="font-black text-ink">{vendorShort}</span>{" "}
+                  <span className="font-semibold text-ink">{vendorShort}</span>{" "}
                   learns these fixes for future invoices.
                 </span>
               </label>
@@ -1283,7 +1299,7 @@ function ReviewWorkspace({
                 type="button"
                 disabled={saving || previewOnly}
                 onClick={() => onSave({ learnVendor })}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-black text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-accent bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
                 title={
                   previewOnly
                     ? "Preview-only invoices are not saved to the backend."
@@ -1304,7 +1320,7 @@ function ReviewWorkspace({
             </div>
 
             {notice && (
-              <div className="mt-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-bold text-success">
+              <div className="mt-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
                 {notice}
               </div>
             )}
@@ -1343,7 +1359,7 @@ function ReviewCommandPill({
   return (
     <span
       className={cn(
-        "inline-flex h-10 min-w-0 items-center gap-2 rounded-full border px-3 text-xs font-black",
+        "inline-flex h-10 min-w-0 items-center gap-2 rounded-full border px-3 text-xs font-semibold",
         wide ? "max-w-[320px]" : "max-w-[190px]",
         tone === "success"
           ? "border-success/25 bg-success-soft text-success"
@@ -1352,7 +1368,7 @@ function ReviewCommandPill({
             : "border-line bg-canvas text-ink-secondary",
       )}
     >
-      <span className="shrink-0 text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+      <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
         {label}
       </span>
       <span className="truncate text-ink">{value}</span>
@@ -1407,15 +1423,22 @@ function ReviewIntelligencePanel({
     <div className="space-y-3">
       <div className="grid gap-3 2xl:grid-cols-[240px_1fr]">
         <div className="rounded-xl border border-line bg-canvas p-4">
-          <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-            <Sparkles size={15} className="text-cyan" />
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+            <Sparkles size={15} className="text-cyan-ink" />
             AI review score
           </div>
           <div className="mt-4 flex items-end gap-2">
-            <span className={cn("text-4xl font-black", severityText(scoreSeverity))}>
+            <span
+              className={cn(
+                "text-4xl font-semibold",
+                severityText(scoreSeverity),
+              )}
+            >
               {score}
             </span>
-            <span className="pb-1 text-sm font-black text-ink-muted">/ 100</span>
+            <span className="pb-1 text-sm font-semibold text-ink-muted">
+              / 100
+            </span>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-strong">
             <div
@@ -1423,7 +1446,7 @@ function ReviewIntelligencePanel({
               style={{ width: `${Math.max(4, score)}%` }}
             />
           </div>
-          <p className="mt-3 text-xs font-bold leading-5 text-ink-secondary">
+          <p className="mt-3 text-xs font-medium leading-5 text-ink-secondary">
             {review.needs_attention
               ? `${review.needs_attention} item${review.needs_attention === 1 ? "" : "s"} need accountant review.`
               : "Core fields look ready for validation."}
@@ -1467,15 +1490,17 @@ function ReviewIntelligencePanel({
       {suggestedEntries.length > 0 && (
         <div className="rounded-xl border border-cyan/25 bg-cyan-soft px-4 py-3">
           <div className="flex items-start gap-3">
-            <Lightbulb className="mt-0.5 shrink-0 text-cyan" size={18} />
+            <Lightbulb className="mt-0.5 shrink-0 text-cyan-ink" size={18} />
             <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <p className="text-sm font-black text-ink">Suggested corrections</p>
+                <p className="text-sm font-semibold text-ink">
+                  Suggested corrections
+                </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {suggestedEntries.map(([key, value]) => (
                     <span
                       key={key}
-                      className="rounded-full border border-cyan/25 bg-surface px-2.5 py-1 text-xs font-black text-ink-secondary"
+                      className="rounded-full border border-cyan/25 bg-surface px-2.5 py-1 text-xs font-semibold text-ink-secondary"
                     >
                       {key}: {String(value || "blank")}
                     </span>
@@ -1485,7 +1510,7 @@ function ReviewIntelligencePanel({
               <button
                 type="button"
                 onClick={onApplySuggestedPatch}
-                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-cyan/30 bg-surface px-3 text-xs font-black text-cyan transition-colors hover:bg-cyan-soft"
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-cyan/30 bg-surface px-3 text-xs font-semibold text-cyan-ink transition-colors hover:bg-cyan-soft"
               >
                 Apply to fields
               </button>
@@ -1509,12 +1534,17 @@ function ReviewInsightCard({
   action: string;
 }) {
   return (
-    <div className={cn("rounded-xl border bg-canvas p-4", severityBorder(severity))}>
+    <div
+      className={cn(
+        "rounded-xl border bg-canvas p-4",
+        severityBorder(severity),
+      )}
+    >
       <div className="flex items-start gap-2">
         <ReviewSeverityIcon severity={severity} />
         <div className="min-w-0">
-          <p className="break-words text-sm font-black text-ink">{title}</p>
-          <p className="mt-1 break-words text-xs font-bold leading-5 text-ink-secondary">
+          <p className="break-words text-sm font-semibold text-ink">{title}</p>
+          <p className="mt-1 break-words text-xs font-medium leading-5 text-ink-secondary">
             {detail}
           </p>
           {action && (
@@ -1539,7 +1569,8 @@ function ReviewFieldCard({
 }) {
   const confidence =
     field.confidence == null ? "n/a" : `${Math.round(field.confidence * 100)}%`;
-  const evidenceSnippet = field.evidence[0]?.snippet || field.evidence[0]?.value || "";
+  const evidenceSnippet =
+    field.evidence[0]?.snippet || field.evidence[0]?.value || "";
   return (
     <button
       type="button"
@@ -1552,14 +1583,19 @@ function ReviewFieldCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
             {field.label}
           </p>
-          <p className="mt-1 truncate text-sm font-black text-ink">
+          <p className="mt-1 truncate text-sm font-semibold text-ink">
             {field.value || "Missing"}
           </p>
         </div>
-        <span className={cn("shrink-0 rounded-full px-2 py-1 text-[11px] font-black", severityPill(field.severity))}>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2 py-1 text-xs font-semibold",
+            severityPill(field.severity),
+          )}
+        >
           {confidence}
         </span>
       </div>
@@ -1569,7 +1605,7 @@ function ReviewFieldCard({
         </p>
       )}
       {evidenceSnippet && (
-        <p className="mt-2 line-clamp-2 rounded-lg bg-surface-subtle px-2.5 py-2 text-[11px] font-semibold leading-4 text-ink-muted">
+        <p className="mt-2 line-clamp-2 rounded-lg bg-surface-subtle px-2.5 py-2 text-xs font-semibold leading-4 text-ink-muted">
           {evidenceSnippet}
         </p>
       )}
@@ -1621,7 +1657,7 @@ function ReviewEvidenceFocus({
   if (!field) {
     return (
       <div className="mb-3 rounded-xl border border-line bg-surface-subtle px-3 py-3">
-        <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
           Evidence focus
         </p>
         <p className="mt-1 text-sm font-semibold text-ink-secondary">
@@ -1637,23 +1673,28 @@ function ReviewEvidenceFocus({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-extrabold uppercase tracking-[0.12em] text-accent-ink">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-ink">
               Evidence focus
             </span>
-            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-black", severityPill(field.severity))}>
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-xs font-semibold",
+                severityPill(field.severity),
+              )}
+            >
               {field.severity === "ok" ? "Clean" : field.severity}
             </span>
           </div>
-          <p className="mt-1 break-words text-sm font-black text-ink">
+          <p className="mt-1 break-words text-sm font-semibold text-ink">
             {field.label}: {field.value || "Missing"}
           </p>
         </div>
-        <span className="shrink-0 rounded-full border border-line-strong bg-canvas px-2.5 py-1 text-xs font-black text-ink-secondary">
+        <span className="shrink-0 rounded-full border border-line-strong bg-canvas px-2.5 py-1 text-xs font-semibold text-ink-secondary">
           Page {page}
         </span>
       </div>
       {field.issue && (
-        <p className="mt-2 text-xs font-bold leading-5 text-ink-secondary">
+        <p className="mt-2 text-xs font-medium leading-5 text-ink-secondary">
           {field.issue}
         </p>
       )}
@@ -1665,10 +1706,10 @@ function ReviewEvidenceFocus({
               className="rounded-lg border border-line bg-canvas px-3 py-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-black uppercase tracking-[0.1em] text-ink-muted">
+                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted">
                   Source snippet
                 </span>
-                <span className="text-[11px] font-black text-ink-muted">
+                <span className="text-xs font-semibold text-ink-muted">
                   {item.confidence == null
                     ? "n/a"
                     : `${Math.round(item.confidence * 100)}%`}
@@ -1718,11 +1759,16 @@ function ReviewTextField({
       )}
     >
       <span className="flex items-center justify-between gap-3">
-        <span className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
+        <span className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted">
           {label}
         </span>
         {fieldReview && (
-          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black", severityPill(severity))}>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-xs font-semibold",
+              severityPill(severity),
+            )}
+          >
             {confidence || (severity === "ok" ? "clean" : severity)}
           </span>
         )}
@@ -1732,17 +1778,17 @@ function ReviewTextField({
         onFocus={onFocus}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "mt-2 h-11 w-full rounded-xl border bg-canvas px-3 text-sm font-bold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent",
+          "mt-2 h-11 w-full rounded-xl border bg-canvas px-3 text-sm font-medium text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent",
           active ? "border-accent" : "border-line-strong",
         )}
       />
       {fieldReview?.suggestion && (
-        <p className="mt-2 line-clamp-2 text-[11px] font-semibold leading-4 text-ink-muted">
+        <p className="mt-2 line-clamp-2 text-xs font-semibold leading-4 text-ink-muted">
           {fieldReview.suggestion}
         </p>
       )}
       {fieldReview?.issue && (
-        <p className="mt-2 rounded-lg border border-gold/20 bg-gold-soft px-2.5 py-2 text-[11px] font-bold leading-4 text-gold">
+        <p className="mt-2 rounded-lg border border-gold/20 bg-gold-soft px-2.5 py-2 text-xs font-medium leading-4 text-gold">
           Why review: {fieldReview.issue}
         </p>
       )}
@@ -1769,13 +1815,15 @@ function ReviewLineItemsPanel({
     (sum, line) => sum + (line.net_amount ?? line.total_amount ?? 0),
     0,
   );
-  const variance = invoice.total ? invoice.total - lineTotal : 0;
+  // Compare like-for-like: net lines reconcile to the net subtotal, not gross.
+  const variance = invoice.subtotal - lineTotal;
   const suspiciousLines = lines.filter((line) =>
     /iban|acct|sort code|customer card|tel:|email|street|suite|invoice|due date/i.test(
       line.description,
     ),
   );
-  const hasVariance = Math.abs(variance) > Math.max(1, invoice.total * 0.03);
+  const hasVariance =
+    Math.abs(variance) > Math.max(0.01, Math.abs(invoice.subtotal) * 0.0001);
   const reviewState =
     fieldReview?.severity === "error" || hasVariance
       ? "error"
@@ -1822,24 +1870,24 @@ function ReviewLineItemsPanel({
       <div className="flex flex-col gap-3 border-b border-line px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
               Line items
             </p>
-            <h3 className="mt-1 text-lg font-black text-ink">
+            <h3 className="mt-1 text-lg font-semibold text-ink">
               {lines.length} line{lines.length === 1 ? "" : "s"}
-              <span className="ml-2 text-sm font-bold text-ink-muted">
+              <span className="ml-2 text-sm font-medium text-ink-muted">
                 edit inline · rows save with corrections
               </span>
             </h3>
             <p className="mt-1 max-w-2xl text-xs font-semibold leading-5 text-ink-secondary">
-              Keep billable goods/services, then confirm each row&apos;s
-              profile mapping before posting.
+              Keep billable goods/services, then confirm each row&apos;s profile
+              mapping before posting.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span
               className={cn(
-                "inline-flex h-8 items-center rounded-full px-3 text-xs font-black",
+                "inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold",
                 reviewState === "ok"
                   ? "bg-success-soft text-success"
                   : reviewState === "error"
@@ -1857,7 +1905,7 @@ function ReviewLineItemsPanel({
               <button
                 type="button"
                 onClick={addLine}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line-strong bg-canvas px-3 text-xs font-black text-accent transition-colors hover:border-accent hover:bg-accent-soft"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line-strong bg-canvas px-3 text-xs font-semibold text-accent-ink transition-colors hover:border-accent hover:bg-accent-soft"
               >
                 <Plus size={14} />
                 Add row
@@ -1867,12 +1915,12 @@ function ReviewLineItemsPanel({
         </div>
         <div className="grid w-full min-w-0 gap-2 sm:grid-cols-3">
           <ReviewLineMetric
-            label="Line total"
+            label="Net line total"
             value={formatCurrency(lineTotal, invoice.currency)}
           />
           <ReviewLineMetric
-            label="Invoice total"
-            value={formatCurrency(invoice.total, invoice.currency)}
+            label="Invoice subtotal"
+            value={formatCurrency(invoice.subtotal, invoice.currency)}
           />
           <ReviewLineMetric
             label="Variance"
@@ -1883,13 +1931,13 @@ function ReviewLineItemsPanel({
       </div>
 
       {(fieldReview?.issue || suspiciousLines.length > 0 || hasVariance) && (
-        <div className="border-b border-line bg-gold-soft px-5 py-3 text-sm font-bold leading-6 text-gold-ink">
+        <div className="border-b border-line bg-gold-soft px-5 py-3 text-sm font-medium leading-6 text-gold-ink">
           {fieldReview?.issue ||
             (suspiciousLines.length
               ? `${suspiciousLines.length} line item(s) may be non-billable text.`
               : "")}
           {hasVariance &&
-            ` Line total differs from invoice total by ${formatCurrency(variance, invoice.currency)}.`}
+            ` Net line total differs from invoice subtotal by ${formatCurrency(variance, invoice.currency)}. Tax is excluded from this comparison.`}
         </div>
       )}
 
@@ -1907,13 +1955,13 @@ function ReviewLineItemsPanel({
                 className="border-b border-line px-4 py-4"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
+                  <span className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted">
                     Line {index + 1}
                   </span>
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span
                       className={cn(
-                        "inline-flex max-w-[180px] truncate rounded-full px-2.5 py-1 text-[11px] font-black",
+                        "inline-flex max-w-[180px] truncate rounded-full px-2.5 py-1 text-xs font-semibold",
                         mapping.className,
                       )}
                     >
@@ -1936,14 +1984,14 @@ function ReviewLineItemsPanel({
                     value={line.description}
                     editable={editable}
                     placeholder="Description"
-                    className="text-sm font-black leading-5 text-ink"
+                    className="text-sm font-semibold leading-5 text-ink"
                     onCommit={(value) =>
                       updateLine(index, { description: value })
                     }
                   />
                   <span
                     className={cn(
-                      "mt-1.5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-black",
+                      "mt-1.5 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
                       noisy || reviewState === "error"
                         ? "bg-gold-soft text-gold-ink"
                         : "bg-success-soft text-success",
@@ -1971,7 +2019,7 @@ function ReviewLineItemsPanel({
                       value={line.uom}
                       editable={editable}
                       placeholder="—"
-                      className="text-sm font-bold text-ink-secondary"
+                      className="text-sm font-medium text-ink-secondary"
                       onCommit={(value) => updateLine(index, { uom: value })}
                     />
                   </MobileLineField>
@@ -1997,7 +2045,7 @@ function ReviewLineItemsPanel({
                       }
                       editable={editable}
                       placeholder="0.00"
-                      className="font-mono text-sm font-black text-ink"
+                      className="font-mono text-sm font-semibold text-ink"
                       onCommit={(value) => {
                         const amount = parseLineAmount(value);
                         updateLine(index, {
@@ -2019,10 +2067,13 @@ function ReviewLineItemsPanel({
         )}
       </div>
 
-      <div data-scroll-region="true" className="hidden overflow-x-auto md:block">
+      <div
+        data-scroll-region="true"
+        className="hidden overflow-x-auto md:block"
+      >
         <table className="w-full table-fixed border-collapse text-left">
           <thead className="bg-surface-subtle">
-            <tr className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
+            <tr className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted">
               <th className="w-[30%] px-3 py-3">Description</th>
               <th className="w-[9%] px-3 py-3 text-right">Qty</th>
               <th className="w-[8%] px-3 py-3">UOM</th>
@@ -2049,14 +2100,14 @@ function ReviewLineItemsPanel({
                         value={line.description}
                         editable={editable}
                         placeholder="Description"
-                        className="text-sm font-black leading-5 text-ink"
+                        className="text-sm font-semibold leading-5 text-ink"
                         onCommit={(value) =>
                           updateLine(index, { description: value })
                         }
                       />
                       <span
                         className={cn(
-                          "ml-2 mt-1.5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-black",
+                          "ml-2 mt-1.5 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
                           noisy || reviewState === "error"
                             ? "bg-gold-soft text-gold-ink"
                             : "bg-success-soft text-success",
@@ -2073,7 +2124,9 @@ function ReviewLineItemsPanel({
                         align="right"
                         className="font-mono text-sm text-ink"
                         onCommit={(value) =>
-                          updateLine(index, { quantity: parseLineAmount(value) })
+                          updateLine(index, {
+                            quantity: parseLineAmount(value),
+                          })
                         }
                       />
                     </td>
@@ -2082,7 +2135,7 @@ function ReviewLineItemsPanel({
                         value={line.uom}
                         editable={editable}
                         placeholder="—"
-                        className="text-sm font-bold text-ink-secondary"
+                        className="text-sm font-medium text-ink-secondary"
                         onCommit={(value) => updateLine(index, { uom: value })}
                       />
                     </td>
@@ -2110,7 +2163,7 @@ function ReviewLineItemsPanel({
                         editable={editable}
                         placeholder="0.00"
                         align="right"
-                        className="font-mono text-sm font-black text-ink"
+                        className="font-mono text-sm font-semibold text-ink"
                         onCommit={(value) => {
                           const amount = parseLineAmount(value);
                           updateLine(index, {
@@ -2123,7 +2176,7 @@ function ReviewLineItemsPanel({
                     <td className="px-3 py-3.5">
                       <span
                         className={cn(
-                          "inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-[11px] font-black",
+                          "inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-xs font-semibold",
                           mapping.className,
                         )}
                         title={
@@ -2202,7 +2255,7 @@ function ActivityTimeline({ invoiceId }: { invoiceId: string }) {
 
   return (
     <section className="border-t border-line px-4 py-5 sm:px-6">
-      <h3 className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
         Activity
       </h3>
       <ol className="mt-3 space-y-0">
@@ -2227,7 +2280,7 @@ function ActivityTimeline({ invoiceId }: { invoiceId: string }) {
               )}
             />
             <span className="min-w-0">
-              <span className="block text-sm font-black leading-5 text-ink">
+              <span className="block text-sm font-semibold leading-5 text-ink">
                 {event.title}
               </span>
               <span className="block text-xs font-semibold text-ink-secondary">
@@ -2256,7 +2309,7 @@ function MobileLineField({
 }) {
   return (
     <label className="block rounded-xl border border-line bg-surface-subtle px-3 py-2">
-      <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+      <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
         {label}
       </span>
       <span className="mt-1 block">{children}</span>
@@ -2281,7 +2334,11 @@ function lineMappingChip(line: InvoiceLine): {
   if (line.quantity > 0 && (line.uom || "").trim()) {
     return { label: "Stock item", className: "bg-cyan-soft text-cyan-ink" };
   }
-  if (/freight|transport|courier|shipping|round.?off|discount|charge|insurance/.test(description)) {
+  if (
+    /freight|transport|courier|shipping|round.?off|discount|charge|insurance/.test(
+      description,
+    )
+  ) {
     return {
       label: "Expense ledger",
       className: "bg-surface-strong text-ink-secondary",
@@ -2353,10 +2410,10 @@ function ReviewLineMetric({
         tone === "warning" ? "border-gold/30 bg-gold-soft" : "border-line",
       )}
     >
-      <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
         {label}
       </p>
-      <p className="mt-1 truncate font-mono text-sm font-black text-ink">
+      <p className="mt-1 truncate font-mono text-sm font-semibold text-ink">
         {value}
       </p>
     </div>
@@ -2376,14 +2433,14 @@ function PostingActivity({
     <section className="mt-6 rounded-xl border border-line bg-surface">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
             Posting activity
           </p>
           <p className="mt-1 text-sm font-semibold text-ink-secondary">
             Latest ERP attempts and connector responses.
           </p>
         </div>
-        <span className="rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-black text-ink-secondary">
+        <span className="rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-semibold text-ink-secondary">
           {postings.length}
         </span>
       </div>
@@ -2400,7 +2457,7 @@ function PostingActivity({
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span
                   className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-black capitalize",
+                    "rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
                     posting.status === "succeeded" &&
                       "bg-success-soft text-success",
                     posting.status === "failed" && "bg-danger-soft text-danger",
@@ -2410,16 +2467,16 @@ function PostingActivity({
                   {posting.dry_run ? "Dry run " : ""}
                   {posting.status}
                 </span>
-                <span className="rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-black text-ink-secondary">
+                <span className="rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-semibold text-ink-secondary">
                   {postingTargetLabel(posting.target)}
                 </span>
                 {profileLabel && (
-                  <span className="max-w-full truncate rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black text-accent-ink">
+                  <span className="max-w-full truncate rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent-ink">
                     {profileLabel}
                   </span>
                 )}
                 {retryOf && (
-                  <span className="rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-black text-ink-muted">
+                  <span className="rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-semibold text-ink-muted">
                     Retry
                   </span>
                 )}
@@ -2428,7 +2485,7 @@ function PostingActivity({
                 <p className="break-words font-semibold text-ink-secondary">
                   {posting.message}
                 </p>
-                <p className="mt-1 text-xs font-bold text-ink-muted">
+                <p className="mt-1 text-xs font-medium text-ink-muted">
                   {posting.external_id
                     ? `External ID ${posting.external_id}`
                     : `Attempt ${posting.id.slice(0, 8)}`}
@@ -2436,7 +2493,7 @@ function PostingActivity({
                 </p>
               </div>
               <div className="flex items-center gap-2 lg:justify-end">
-                <time className="text-xs font-bold text-ink-muted">
+                <time className="text-xs font-medium text-ink-muted">
                   {formatTimestamp(posting.updated_at)}
                 </time>
                 {posting.status === "failed" && (
@@ -2444,7 +2501,7 @@ function PostingActivity({
                     type="button"
                     disabled={isRetrying}
                     onClick={() => onRetry(posting.id)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-xs font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isRetrying ? (
                       <LoaderCircle size={14} className="animate-spin" />
@@ -2510,7 +2567,12 @@ function buildLocalReview(
 ): InvoiceReviewResult {
   const detected = detectLocalInvoiceProfile(invoice, clientProfile);
   const fields = [
-    localField("invoice_number", "Invoice number", invoice.invoice_number, invoice),
+    localField(
+      "invoice_number",
+      "Invoice number",
+      invoice.invoice_number,
+      invoice,
+    ),
     localField("supplier.name", "Supplier", invoice.supplier.name, invoice, {
       suspicious: /tel:|email:|phone:|www\.|@/i,
       issue: "Supplier may include contact text instead of the legal name.",
@@ -2533,7 +2595,13 @@ function buildLocalReview(
           : "",
     }),
     localAmountField("total", "Total", invoice.total, invoice),
-    localAmountField("tax_total", "Tax total", invoice.tax_total, invoice, true),
+    localAmountField(
+      "tax_total",
+      "Tax total",
+      invoice.tax_total,
+      invoice,
+      true,
+    ),
     localLinesField(invoice),
   ];
   const attention = fields.filter((field) => field.severity !== "ok").length;
@@ -2542,8 +2610,8 @@ function buildLocalReview(
     Math.min(
       1,
       Math.round(
-        ((fields.reduce((sum, field) => sum + (field.confidence ?? 0.5), 0) /
-          fields.length) -
+        (fields.reduce((sum, field) => sum + (field.confidence ?? 0.5), 0) /
+          fields.length -
           attention * 0.06) *
           100,
       ) / 100,
@@ -2572,7 +2640,9 @@ function buildLocalReview(
           : "Profiles keep ledgers, taxes, currency, and item mappings consistent.",
       },
       {
-        title: attention ? "Review suggested before approval" : "Core fields look ready",
+        title: attention
+          ? "Review suggested before approval"
+          : "Core fields look ready",
         detail: attention
           ? `${attention} field${attention === 1 ? "" : "s"} need attention.`
           : "No required field issues detected locally.",
@@ -2593,7 +2663,11 @@ function detectLocalInvoiceProfile(
   invoice: Invoice,
   clientProfile: ClientProfile | null,
 ) {
-  const currency = (invoice.currency || clientProfile?.settings.default_currency || "USD")
+  const currency = (
+    invoice.currency ||
+    clientProfile?.settings.default_currency ||
+    "USD"
+  )
     .trim()
     .toUpperCase();
   const hasGst =
@@ -2602,14 +2676,17 @@ function detectLocalInvoiceProfile(
     invoice.lines.some((line) => line.hsn_sac);
   if (clientProfile) {
     return {
-      country_code: clientProfile.settings.country_code || (hasGst ? "IN" : "US"),
+      country_code:
+        clientProfile.settings.country_code || (hasGst ? "IN" : "US"),
       country_name:
         clientProfile.settings.country_name ||
         (hasGst ? "India" : "United States"),
       currency,
       invoice_format: clientProfile.settings.invoice_format || "auto",
-      tax_mode: clientProfile.settings.tax_mode || (hasGst ? "gst" : "sales_tax"),
-      tax_registration_label: clientProfile.settings.tax_registration_label || "",
+      tax_mode:
+        clientProfile.settings.tax_mode || (hasGst ? "gst" : "sales_tax"),
+      tax_registration_label:
+        clientProfile.settings.tax_registration_label || "",
       confidence: 0.78,
       signals: ["Client profile selected"],
     };
@@ -2622,7 +2699,9 @@ function detectLocalInvoiceProfile(
     tax_mode: hasGst ? "gst" : "auto",
     tax_registration_label: hasGst ? "GSTIN" : "",
     confidence: hasGst ? 0.7 : 0.45,
-    signals: hasGst ? ["GST or HSN/SAC detected"] : ["Generic invoice fallback"],
+    signals: hasGst
+      ? ["GST or HSN/SAC detected"]
+      : ["Generic invoice fallback"],
   };
 }
 
@@ -2677,9 +2756,7 @@ function localField(
       severity: options.issue ? "review" : "ok",
       issue: options.issue ?? "",
       suggestion: options.suggestion ?? "",
-      evidence: evidence.length
-        ? evidence
-        : localEvidence(fieldPath, clean),
+      evidence: evidence.length ? evidence : localEvidence(fieldPath, clean),
     };
   }
   return {
@@ -2771,7 +2848,8 @@ function suggestedLocalPatch(
   if ((invoice.currency || "USD").toUpperCase() !== detected.currency) {
     patch.currency = detected.currency;
   }
-  if (!invoice.due_date && invoice.invoice_date) patch.due_date = invoice.invoice_date;
+  if (!invoice.due_date && invoice.invoice_date)
+    patch.due_date = invoice.invoice_date;
   if (!invoice.total && invoice.lines.length) {
     patch.total = invoice.lines.reduce(
       (sum, line) => sum + (line.total_amount || line.net_amount || 0),
@@ -2826,12 +2904,12 @@ function Fact({
 }) {
   return (
     <div className="min-h-[92px] overflow-hidden rounded-xl border border-line bg-surface px-4 py-3.5">
-      <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
+      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted">
         {label}
       </p>
       <p
         className={cn(
-          "mt-3 text-base font-black leading-6 text-ink [overflow-wrap:anywhere]",
+          "mt-3 text-base font-semibold leading-6 text-ink [overflow-wrap:anywhere]",
           value.length > 28 && "text-sm leading-5",
           mono && "font-mono",
         )}

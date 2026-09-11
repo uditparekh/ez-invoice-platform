@@ -138,11 +138,16 @@ function postingTargetForSystem(system: string): PostingTarget | null {
   return null;
 }
 
-function exportKindForSystem(system: string): { kind: ExportKind; label: string } {
+function exportKindForSystem(system: string): {
+  kind: ExportKind;
+  label: string;
+} {
   if (system === "Tally") return { kind: "tally", label: "Tally XML" };
-  if (system === "Zoho Books") return { kind: "zoho", label: "Zoho Books JSON" };
+  if (system === "Zoho Books")
+    return { kind: "zoho", label: "Zoho Books JSON" };
   if (system === "Coupa") return { kind: "coupa", label: "Coupa JSON" };
-  if (system === "NetSuite") return { kind: "netsuite", label: "NetSuite JSON" };
+  if (system === "NetSuite")
+    return { kind: "netsuite", label: "NetSuite JSON" };
   if (system === "SAP") return { kind: "sap", label: "SAP JSON" };
   return { kind: "quickbooks", label: "QuickBooks JSON" };
 }
@@ -168,7 +173,9 @@ function tallyProfileFromClientProfile(
       settings.item_mappings[0]?.target_item_name ||
       "",
     stockItemHsn:
-      settings.stock_item_hsn || settings.item_mappings[0]?.source_hsn_sac || "",
+      settings.stock_item_hsn ||
+      settings.item_mappings[0]?.source_hsn_sac ||
+      "",
     stockItemUom:
       settings.stock_item_uom || settings.item_mappings[0]?.target_uom || "",
     tcsLedger: settings.tcs_ledger,
@@ -176,7 +183,9 @@ function tallyProfileFromClientProfile(
   };
 }
 
-export function InvoiceWorkspace() {
+export function InvoiceWorkspace({
+  initialInvoiceId,
+}: { initialInvoiceId?: string } = {}) {
   const { activeOrganizationId: organizationId, user } = useAuth();
   const isPublicDemo =
     user?.email.trim().toLowerCase() === publicDemoEmail &&
@@ -193,14 +202,22 @@ export function InvoiceWorkspace() {
   const uploadMenuRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialInvoiceId ?? null,
+  );
   const [detailMode, setDetailMode] = useState<"detail" | "review">("detail");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<InvoiceStatus | undefined>();
+  const [status, setStatus] = useState<InvoiceStatus | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    const value = new URLSearchParams(window.location.search).get("status");
+    return statusOptions.find((option) => option.status === value)?.status;
+  });
   const parserMode = "auto";
   const [targetSystem, setTargetSystem] = useState("QuickBooks");
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
+    null,
+  );
   const [manualProfileOverride, setManualProfileOverride] = useState(false);
   const [profileRecommendation, setProfileRecommendation] =
     useState<ProfileRecommendationResult | null>(null);
@@ -250,9 +267,21 @@ export function InvoiceWorkspace() {
       }
     }
 
-    document.addEventListener("pointerdown", closeMenusOnOutsideInteraction, true);
-    document.addEventListener("mousedown", closeMenusOnOutsideInteraction, true);
-    document.addEventListener("touchstart", closeMenusOnOutsideInteraction, true);
+    document.addEventListener(
+      "pointerdown",
+      closeMenusOnOutsideInteraction,
+      true,
+    );
+    document.addEventListener(
+      "mousedown",
+      closeMenusOnOutsideInteraction,
+      true,
+    );
+    document.addEventListener(
+      "touchstart",
+      closeMenusOnOutsideInteraction,
+      true,
+    );
     document.addEventListener("click", closeMenusOnOutsideInteraction, true);
     document.addEventListener("keydown", closeMenusOnEscape);
     return () => {
@@ -271,7 +300,11 @@ export function InvoiceWorkspace() {
         closeMenusOnOutsideInteraction,
         true,
       );
-      document.removeEventListener("click", closeMenusOnOutsideInteraction, true);
+      document.removeEventListener(
+        "click",
+        closeMenusOnOutsideInteraction,
+        true,
+      );
       document.removeEventListener("keydown", closeMenusOnEscape);
     };
   }, [filterOpen, uploadOpen, exportOpen]);
@@ -295,6 +328,22 @@ export function InvoiceWorkspace() {
         });
         if (!response.ok) throw new Error("Unable to load invoices.");
         const nextInvoices = (await response.json()) as Invoice[];
+        if (
+          initialInvoiceId &&
+          !nextInvoices.some((invoice) => invoice.id === initialInvoiceId)
+        ) {
+          const detailResponse = await fetch(
+            `/api/invoices/${encodeURIComponent(initialInvoiceId)}`,
+            { signal: controller.signal, cache: "no-store" },
+          );
+          if (!detailResponse.ok)
+            throw new Error("This invoice is unavailable or has been removed.");
+          const requested = (await detailResponse.json()) as Invoice;
+          if (requested.organization_id !== orgId)
+            throw new Error("Switch to this invoice’s workspace to view it.");
+          nextInvoices.unshift(requested);
+        }
+        if (controller.signal.aborted) return;
         setInvoices(nextInvoices);
         setSelectedId((current) =>
           current && nextInvoices.some((invoice) => invoice.id === current)
@@ -318,7 +367,7 @@ export function InvoiceWorkspace() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [organizationId, status]);
+  }, [organizationId, status, initialInvoiceId]);
 
   const visibleInvoices = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -355,12 +404,12 @@ export function InvoiceWorkspace() {
         targetProfiles[0]?.id ??
         null);
   const selectedClientProfile =
-    targetProfiles.find((profile) => profile.id === effectiveProfileId) ??
-    null;
+    targetProfiles.find((profile) => profile.id === effectiveProfileId) ?? null;
   const recommendedProfile =
     activeProfileRecommendation?.recommendations.find(
       (recommendation) =>
-        recommendation.profile.id === activeProfileRecommendation.auto_profile_id,
+        recommendation.profile.id ===
+        activeProfileRecommendation.auto_profile_id,
     ) ??
     activeProfileRecommendation?.recommendations[0] ??
     null;
@@ -452,14 +501,17 @@ export function InvoiceWorkspace() {
           parser_mode: parserMode,
           persist: previewOnlyUploads ? "false" : "true",
         });
-        if (selectedProfileId) query.set("client_profile_id", selectedProfileId);
+        if (selectedProfileId)
+          query.set("client_profile_id", selectedProfileId);
         const response = await fetch(`/api/invoices/upload?${query}`, {
           method: "POST",
           body: formData,
         });
         if (!response.ok) {
           const payload = (await response.json()) as ApiErrorPayload;
-          throw new Error(apiErrorMessage(payload, `Could not process ${file.name}.`));
+          throw new Error(
+            apiErrorMessage(payload, `Could not process ${file.name}.`),
+          );
         }
         uploadedInvoices.push((await response.json()) as Invoice);
       }
@@ -487,12 +539,17 @@ export function InvoiceWorkspace() {
     setClearing(true);
     setError("");
     try {
-      const response = await fetch(`/api/organizations/${organizationId}/invoices`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/organizations/${organizationId}/invoices`,
+        {
+          method: "DELETE",
+        },
+      );
       if (!response.ok) {
         const payload = (await response.json()) as ApiErrorPayload;
-        throw new Error(apiErrorMessage(payload, "Could not clear the invoice queue."));
+        throw new Error(
+          apiErrorMessage(payload, "Could not clear the invoice queue."),
+        );
       }
       setInvoices([]);
       setSelectedId(null);
@@ -679,10 +736,10 @@ export function InvoiceWorkspace() {
       <section className="border-b border-line bg-canvas px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-[1440px] flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
           <div className="min-w-0">
-            <h1 className="flex flex-wrap items-baseline gap-x-1 text-3xl font-black leading-tight text-ink">
+            <h1 className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold leading-tight text-ink">
               <span>Invoices</span>
               <span className="text-ink-secondary">/</span>
-              <span className="text-2xl font-extrabold text-ink-secondary">
+              <span className="text-base font-medium text-ink-secondary">
                 Queue
               </span>
             </h1>
@@ -712,7 +769,10 @@ export function InvoiceWorkspace() {
               )}
             </label>
 
-            <div ref={filterMenuRef} className="relative w-full shrink-0 sm:w-[128px]">
+            <div
+              ref={filterMenuRef}
+              className="relative w-full shrink-0 sm:w-[128px]"
+            >
               <ControlButton
                 label="Filter"
                 icon={<SlidersHorizontal size={15} />}
@@ -761,7 +821,8 @@ export function InvoiceWorkspace() {
                       score={recommendedProfile?.score}
                       autoSelected={
                         Boolean(activeProfileRecommendation.auto_profile_id) &&
-                        selectedClientProfile?.id === activeProfileRecommendation.auto_profile_id
+                        selectedClientProfile?.id ===
+                          activeProfileRecommendation.auto_profile_id
                       }
                     />
                   )}
@@ -787,11 +848,11 @@ export function InvoiceWorkspace() {
                       }}
                     />
                   ) : (
-                    <p className="mt-2 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-bold text-ink-secondary">
+                    <p className="mt-2 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-medium text-ink-secondary">
                       No saved profile yet. Add one in{" "}
                       <a
                         href="/app/client-profiles"
-                        className="font-black text-accent hover:text-accent-hover"
+                        className="font-semibold text-accent-ink hover:text-accent-hover"
                       >
                         Client profiles
                       </a>
@@ -819,7 +880,10 @@ export function InvoiceWorkspace() {
               }}
             />
 
-            <div ref={uploadMenuRef} className="relative w-full shrink-0 sm:w-[172px]">
+            <div
+              ref={uploadMenuRef}
+              className="relative w-full shrink-0 sm:w-[172px]"
+            >
               <ControlButton
                 label="Upload PDFs"
                 open={uploadOpen}
@@ -858,13 +922,17 @@ export function InvoiceWorkspace() {
                     <span className="grid size-12 place-items-center rounded-xl bg-accent text-white">
                       <Upload size={20} />
                     </span>
-                    <span className="mt-3 block text-sm font-black text-ink">
+                    <span className="mt-3 block text-sm font-semibold text-ink">
                       {selectedFiles.length
                         ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected`
                         : "Choose invoice PDFs"}
                     </span>
                     <span className="mt-1 block text-xs font-semibold text-ink-muted">
-                      Parser: {parserOptions.find((item) => item.value === parserMode)?.label}
+                      Parser:{" "}
+                      {
+                        parserOptions.find((item) => item.value === parserMode)
+                          ?.label
+                      }
                     </span>
                   </button>
 
@@ -877,7 +945,7 @@ export function InvoiceWorkspace() {
                         >
                           <FileText size={16} className="text-ink-muted" />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-bold text-ink">
+                            <span className="block truncate text-sm font-medium text-ink">
                               {file.name}
                             </span>
                             <span className="text-xs font-semibold text-ink-muted">
@@ -890,7 +958,7 @@ export function InvoiceWorkspace() {
                   )}
 
                   {previewOnlyUploads && (
-                    <p className="mt-3 rounded-xl border border-cyan/25 bg-cyan-soft px-3 py-2 text-xs font-bold text-cyan">
+                    <p className="mt-3 rounded-xl border border-cyan/25 bg-cyan-soft px-3 py-2 text-xs font-medium text-cyan-ink">
                       Demo mode: processed invoices stay local to this browser
                       and are removed by Clear queue.
                     </p>
@@ -900,7 +968,9 @@ export function InvoiceWorkspace() {
                     <Button
                       variant="primary"
                       className="h-12 w-full"
-                      disabled={!selectedFiles.length || uploading || !organizationId}
+                      disabled={
+                        !selectedFiles.length || uploading || !organizationId
+                      }
                       onClick={() => void uploadFiles()}
                     >
                       {uploading ? (
@@ -912,7 +982,9 @@ export function InvoiceWorkspace() {
                     </Button>
                     <Button
                       className="h-12 w-full"
-                      disabled={clearing || (!invoices.length && !selectedFiles.length)}
+                      disabled={
+                        clearing || (!invoices.length && !selectedFiles.length)
+                      }
                       onClick={() => void clearQueue()}
                     >
                       {clearing ? (
@@ -927,7 +999,7 @@ export function InvoiceWorkspace() {
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <a
                       href="/app/integrations"
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
                     >
                       <Mail size={15} />
                       Import from email
@@ -936,7 +1008,7 @@ export function InvoiceWorkspace() {
                       <button
                         type="button"
                         onClick={addSampleInvoice}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-xs font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
                       >
                         <PlayCircle size={15} />
                         Try sample invoice
@@ -949,12 +1021,12 @@ export function InvoiceWorkspace() {
 
             <Link
               href="/app/sift"
-              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent to-cyan px-4 text-sm font-black text-white shadow-glow transition-transform hover:scale-[1.02] sm:w-[124px]"
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent-hover sm:w-[124px]"
             >
               <Sparkles size={16} />
               Sift
               {siftCount > 0 && (
-                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-black tabular-nums">
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold tabular-nums">
                   {siftCount}
                 </span>
               )}
@@ -999,38 +1071,22 @@ export function InvoiceWorkspace() {
           <InvoiceList
             toolbar={
               <>
-              {untrained.length > 0 && (
-                <Link
-                  href="/app/client-profiles"
-                  className="flex items-center justify-between gap-3 border-b border-dashed border-accent/40 bg-accent-soft/50 px-4 py-2.5 sm:px-6"
-                >
-                  <span className="min-w-0 truncate text-xs font-black text-accent-ink">
-                    ✨ New format detected: {untrained[0].supplier_name}
-                    {untrained.length > 1 ? ` +${untrained.length - 1} more` : ""}
-                  </span>
-                  <span className="shrink-0 text-xs font-black text-accent">
-                    Train it →
-                  </span>
-                </Link>
-              )}
-              <div className="flex flex-wrap gap-2 border-b border-line px-4 py-3 sm:px-6">
-              <QueueChip
-                label="All"
-                active={status === undefined}
-                onClick={() => setStatus(undefined)}
-              />
-              <QueueChip
-                label="Needs review"
-                active={status === "needs_review"}
-                onClick={() => setStatus("needs_review")}
-              />
-              <QueueChip
-                label={`Exceptions${counts.exceptions ? ` · ${counts.exceptions}` : ""}`}
-                tone="warning"
-                active={status === "failed"}
-                onClick={() => setStatus("failed")}
-              />
-              </div>
+                {untrained.length > 0 && (
+                  <Link
+                    href="/app/client-profiles"
+                    className="flex items-center justify-between gap-3 border-b border-dashed border-accent/40 bg-accent-soft/50 px-4 py-2.5 sm:px-6"
+                  >
+                    <span className="min-w-0 truncate text-xs font-semibold text-accent-ink">
+                      ✨ New format detected: {untrained[0].supplier_name}
+                      {untrained.length > 1
+                        ? ` +${untrained.length - 1} more`
+                        : ""}
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-accent-ink">
+                      Train it →
+                    </span>
+                  </Link>
+                )}
               </>
             }
             invoices={visibleInvoices}
@@ -1082,7 +1138,10 @@ function ExportPackageMenu({
   onClose: () => void;
   onToggle: () => void;
 }) {
-  const total = invoices.reduce((sum, invoice) => sum + (invoice.total || 0), 0);
+  const total = invoices.reduce(
+    (sum, invoice) => sum + (invoice.total || 0),
+    0,
+  );
   const currency = invoices[0]?.currency || "USD";
   const invoiceCount = invoices.length;
   const noun = invoiceCount === 1 ? "invoice" : "invoices";
@@ -1156,7 +1215,9 @@ function ExportPackageMenu({
             <ExportFact
               label="Total"
               value={
-                invoiceCount ? formatCurrency(total, currency) : "No ready invoices"
+                invoiceCount
+                  ? formatCurrency(total, currency)
+                  : "No ready invoices"
               }
             />
           </div>
@@ -1196,7 +1257,7 @@ function ExportPackageMenu({
           {(bulkMessage || bulkError) && (
             <p
               className={cn(
-                "mt-3 rounded-xl border px-3 py-2 text-xs font-extrabold",
+                "mt-3 rounded-xl border px-3 py-2 text-xs font-semibold",
                 bulkError
                   ? "border-danger/25 bg-danger-soft text-danger"
                   : "border-success/25 bg-success-soft text-success",
@@ -1235,7 +1296,12 @@ function QueueTabsStrip({
     tone?: "default" | "warning" | "danger" | "success";
   }[] = [
     { label: "All", count: invoices.length },
-    { label: "Needs review", count: needsReview, status: "needs_review", tone: "warning" },
+    {
+      label: "Needs review",
+      count: needsReview,
+      status: "needs_review",
+      tone: "warning",
+    },
     { label: "Ready", count: readyCount, status: "validated", tone: "success" },
     {
       label: "Posted",
@@ -1258,7 +1324,7 @@ function QueueTabsStrip({
             type="button"
             onClick={() => onStatusChange(tab.status)}
             className={cn(
-              "relative min-h-11 min-w-0 rounded-xl px-2 text-xs font-black leading-4 text-ink-secondary transition-colors hover:bg-surface hover:text-ink sm:h-11 sm:shrink-0 sm:px-3 sm:text-sm",
+              "relative min-h-11 min-w-0 rounded-xl px-2 text-xs font-semibold leading-4 text-ink-secondary transition-colors hover:bg-surface hover:text-ink sm:h-11 sm:shrink-0 sm:px-3 sm:text-sm",
               status === tab.status && "bg-accent-soft text-accent-ink",
             )}
           >
@@ -1269,7 +1335,7 @@ function QueueTabsStrip({
                 tab.tone === "warning" && "text-gold",
                 tab.tone === "danger" && "text-danger",
                 tab.tone === "success" && "text-success",
-                !tab.tone && "text-accent",
+                !tab.tone && "text-accent-ink",
               )}
             >
               {tab.count}
@@ -1295,18 +1361,18 @@ function QueueReadinessStrip({
   return (
     <section className="bg-canvas px-4 pb-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1440px]">
-        <div className="flex min-h-20 flex-col gap-4 rounded-[24px] border border-line bg-surface px-5 py-4 shadow-card xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-ink-muted">
+            <p className="text-xs font-medium text-ink-muted">
               Export readiness
             </p>
-            <p className="mt-1 truncate text-xl font-black text-ink">
+            <p className="mt-1 text-sm font-medium text-ink">
               {readyCount
                 ? `${readyCount} invoice${readyCount === 1 ? "" : "s"} ready for export`
                 : "No invoices ready for export"}
             </p>
           </div>
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:justify-end">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
             <ReadinessInline label="Target" value={targetSystem} />
             <ReadinessInline
               label="Mapping"
@@ -1330,10 +1396,10 @@ function QueueReadinessStrip({
 function ReadinessInline({ label, value }: { label: string; value: string }) {
   return (
     <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-line bg-canvas px-3 py-2">
-      <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.16em] text-ink-muted">
+      <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
         {label}
       </span>
-      <span className="truncate text-sm font-black text-ink">{value}</span>
+      <span className="truncate text-sm font-semibold text-ink">{value}</span>
     </div>
   );
 }
@@ -1352,10 +1418,10 @@ function ProfileRecommendationCard({
   return (
     <div className="mt-2 rounded-xl border border-accent/20 bg-accent-soft px-3 py-2 text-xs text-ink-secondary">
       <div className="flex items-center justify-between gap-3">
-        <span className="font-black text-ink">
+        <span className="font-semibold text-ink">
           {detected.country_name} · {detected.currency}
         </span>
-        <span className="shrink-0 font-extrabold text-accent-ink">
+        <span className="shrink-0 font-semibold text-accent-ink">
           {Math.round(detected.confidence * 100)}%
         </span>
       </div>
@@ -1363,13 +1429,13 @@ function ProfileRecommendationCard({
         {humanize(detected.invoice_format)} · {humanize(detected.tax_mode)}
       </p>
       {recommendedProfileName ? (
-        <p className="mt-2 font-bold text-ink">
+        <p className="mt-2 font-medium text-ink">
           {autoSelected ? "Auto-selected" : "Recommended"}:{" "}
           {recommendedProfileName}
           {typeof score === "number" ? ` (${Math.round(score * 100)}%)` : ""}
         </p>
       ) : (
-        <p className="mt-2 font-bold text-ink">
+        <p className="mt-2 font-medium text-ink">
           No saved matching profile yet.
         </p>
       )}
@@ -1400,7 +1466,7 @@ function ControlButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-xl border px-3.5 text-sm font-black transition-colors",
+        "inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-xl border px-3.5 text-sm font-semibold transition-colors",
         variant === "primary"
           ? "border-accent bg-accent text-white shadow-sm shadow-accent/15 hover:bg-accent-hover"
           : "border-line-strong bg-surface text-ink-secondary hover:border-accent hover:text-ink",
@@ -1415,35 +1481,6 @@ function ControlButton({
         size={16}
         className={cn("shrink-0 transition-transform", open && "rotate-180")}
       />
-    </button>
-  );
-}
-
-function QueueChip({
-  label,
-  active,
-  onClick,
-  tone = "default",
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  tone?: "default" | "warning";
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-9 items-center rounded-full border px-3.5 text-xs font-black transition-colors",
-        active
-          ? tone === "warning"
-            ? "border-gold/40 bg-gold-soft text-gold-ink"
-            : "border-accent/40 bg-accent-soft text-accent-ink"
-          : "border-line bg-surface text-ink-secondary hover:border-line-strong hover:text-ink",
-      )}
-    >
-      {label}
     </button>
   );
 }
@@ -1473,7 +1510,7 @@ function DropdownPanel({
 function PanelTitle({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="rounded-xl bg-surface px-4 py-3">
-      <p className="text-base font-black text-ink">{title}</p>
+      <p className="text-base font-semibold text-ink">{title}</p>
       <p className="mt-1 text-sm leading-5 text-ink-secondary">{detail}</p>
     </div>
   );
@@ -1481,7 +1518,7 @@ function PanelTitle({ title, detail }: { title: string; detail: string }) {
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="mt-4 text-[11px] font-extrabold uppercase text-ink-muted">
+    <p className="mt-4 text-xs font-semibold uppercase text-ink-muted">
       {children}
     </p>
   );
@@ -1504,7 +1541,7 @@ function RadioRow({
     <button
       type="button"
       onClick={onClick}
-      className="mt-2 flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm font-bold text-ink-secondary hover:bg-surface"
+      className="mt-2 flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm font-medium text-ink-secondary hover:bg-surface"
     >
       <span
         className={cn(
@@ -1522,10 +1559,10 @@ function RadioRow({
 function ExportFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center border-b border-line px-4 py-3 last:border-b-0">
-      <p className="text-[11px] font-extrabold uppercase text-ink-muted">
-        {label}
+      <p className="text-xs font-semibold uppercase text-ink-muted">{label}</p>
+      <p className="truncate text-right text-sm font-semibold text-ink">
+        {value}
       </p>
-      <p className="truncate text-right text-sm font-black text-ink">{value}</p>
     </div>
   );
 }
@@ -1544,7 +1581,7 @@ function ExportButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="h-12 rounded-xl border border-line-strong bg-surface px-4 text-sm font-black text-ink transition-colors hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-45"
+      className="h-12 rounded-xl border border-line-strong bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-45"
     >
       {label}
     </button>
@@ -1698,41 +1735,61 @@ ${messages}
 }
 
 function buildTallyVoucher(invoice: Invoice, profile: TallyExportProfile) {
-  const invoiceNumber = invoice.invoice_number || invoice.source_file || "SiftEntry";
+  const invoiceNumber =
+    invoice.invoice_number || invoice.source_file || "SiftEntry";
   const date = toTallyDate(invoice.invoice_date);
   const total = invoice.total || invoice.subtotal + invoice.tax_total;
-  const canBuildItemInvoice = profile.postingMode === "Item Invoice" && invoice.lines.length > 0;
+  const canBuildItemInvoice =
+    profile.postingMode === "Item Invoice" && invoice.lines.length > 0;
 
   if (!canBuildItemInvoice) {
-    return buildTallyAccountingVoucher(invoice, profile, invoiceNumber, date, total);
+    return buildTallyAccountingVoucher(
+      invoice,
+      profile,
+      invoiceNumber,
+      date,
+      total,
+    );
   }
 
   const inventoryEntries = invoice.lines.length
-    ? invoice.lines.map((line) => buildTallyInventoryEntry(line, profile)).join("\n")
+    ? invoice.lines
+        .map((line) => buildTallyInventoryEntry(line, profile))
+        .join("\n")
     : buildTallyInventoryEntry(
-      {
-        line_number: 1,
-        description: profile.stockItemName || "Invoice item",
-        quantity: 1,
-        uom: "EA",
-        unit_price: invoice.subtotal || total,
-        net_amount: invoice.subtotal || total,
-        tax_amount: invoice.tax_total,
-        total_amount: total,
-        hsn_sac: profile.stockItemHsn,
-        category: "",
-        gl_code: "",
-        confidence: null,
-      },
-      profile,
-    );
-  const netTotal = invoice.lines.reduce((sum, line) => sum + lineNetAmount(line), 0);
+        {
+          line_number: 1,
+          description: profile.stockItemName || "Invoice item",
+          quantity: 1,
+          uom: "EA",
+          unit_price: invoice.subtotal || total,
+          net_amount: invoice.subtotal || total,
+          tax_amount: invoice.tax_total,
+          total_amount: total,
+          hsn_sac: profile.stockItemHsn,
+          category: "",
+          gl_code: "",
+          confidence: null,
+        },
+        profile,
+      );
+  const netTotal = invoice.lines.reduce(
+    (sum, line) => sum + lineNetAmount(line),
+    0,
+  );
   const taxTotal =
-    invoice.tax_total || invoice.lines.reduce((sum, line) => sum + (line.tax_amount || 0), 0);
-  const roundDelta = roundMoney(total - (netTotal || invoice.subtotal || 0) - taxTotal);
+    invoice.tax_total ||
+    invoice.lines.reduce((sum, line) => sum + (line.tax_amount || 0), 0);
+  const roundDelta = roundMoney(
+    total - (netTotal || invoice.subtotal || 0) - taxTotal,
+  );
   const roundEntry =
     Math.abs(roundDelta) >= 0.01 && profile.roundOffLedger
-      ? ledgerEntry(profile.roundOffLedger, -roundDelta, roundDelta > 0 ? "Yes" : "No")
+      ? ledgerEntry(
+          profile.roundOffLedger,
+          -roundDelta,
+          roundDelta > 0 ? "Yes" : "No",
+        )
       : "";
   const taxEntry =
     taxTotal && profile.taxLedger
@@ -1768,10 +1825,15 @@ function buildTallyAccountingVoucher(
   date: string,
   total: number,
 ) {
-  const netTotal = invoice.subtotal || invoice.lines.reduce((sum, line) => sum + lineNetAmount(line), 0);
+  const netTotal =
+    invoice.subtotal ||
+    invoice.lines.reduce((sum, line) => sum + lineNetAmount(line), 0);
   const taxTotal =
-    invoice.tax_total || invoice.lines.reduce((sum, line) => sum + (line.tax_amount || 0), 0);
-  const purchaseAmount = profile.taxLedger ? netTotal || total - taxTotal : total;
+    invoice.tax_total ||
+    invoice.lines.reduce((sum, line) => sum + (line.tax_amount || 0), 0);
+  const purchaseAmount = profile.taxLedger
+    ? netTotal || total - taxTotal
+    : total;
   const taxEntry =
     profile.taxLedger && taxTotal
       ? ledgerEntry(profile.taxLedger, -taxTotal, "Yes")
@@ -1850,10 +1912,17 @@ function ledgerEntry(
       </ALLLEDGERENTRIES.LIST>`;
 }
 
-function tallyStockItem(line: Invoice["lines"][number], profile: TallyExportProfile) {
+function tallyStockItem(
+  line: Invoice["lines"][number],
+  profile: TallyExportProfile,
+) {
   const hsn = (line.hsn_sac || "").replace(/\D/g, "");
   const description = line.description || "";
-  if (profile.stockItemName && profile.stockItemHsn && hsn === profile.stockItemHsn) {
+  if (
+    profile.stockItemName &&
+    profile.stockItemHsn &&
+    hsn === profile.stockItemHsn
+  ) {
     return profile.stockItemName;
   }
   if (profile.stockItemName && !profile.stockItemHsn) {
@@ -1863,7 +1932,10 @@ function tallyStockItem(line: Invoice["lines"][number], profile: TallyExportProf
 }
 
 function lineNetAmount(line: Invoice["lines"][number]) {
-  return line.net_amount || Math.max(0, (line.total_amount || 0) - (line.tax_amount || 0));
+  return (
+    line.net_amount ||
+    Math.max(0, (line.total_amount || 0) - (line.tax_amount || 0))
+  );
 }
 
 function toTallyDate(value: string) {
@@ -1885,7 +1957,9 @@ function toTallyDate(value: string) {
     NOV: "11",
     DEC: "12",
   };
-  const tally = text.toUpperCase().match(/^(\d{1,2})[-\s]([A-Z]{3})[-\s](\d{4})$/);
+  const tally = text
+    .toUpperCase()
+    .match(/^(\d{1,2})[-\s]([A-Z]{3})[-\s](\d{4})$/);
   if (tally && monthNames[tally[2]]) {
     return `${tally[3]}${monthNames[tally[2]]}${tally[1].padStart(2, "0")}`;
   }
@@ -1901,7 +1975,8 @@ function formatMoney(value: number) {
 }
 
 function formatQty(value: number) {
-  if (Math.abs(value - Math.round(value)) < 0.0001) return String(Math.round(value));
+  if (Math.abs(value - Math.round(value)) < 0.0001)
+    return String(Math.round(value));
   return value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
 }
 

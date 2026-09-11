@@ -26,7 +26,9 @@ export default function VendorsPage() {
   useEffect(() => {
     if (!activeOrganizationId) return;
     let mounted = true;
-    fetch(`/api/organizations/${activeOrganizationId}/corrections/learning?limit=25`)
+    fetch(
+      `/api/organizations/${activeOrganizationId}/corrections/learning?limit=25`,
+    )
       .then((response) => (response.ok ? response.json() : []))
       .then((payload: CorrectionLearningSignal[]) => {
         if (mounted) setLearningSignals(payload);
@@ -81,7 +83,11 @@ export default function VendorsPage() {
             subtitle="This becomes the starting point for vendor master matching and duplicate checks."
           >
             {suppliers.length ? (
-              <BarList rows={suppliers} currency={currency} emptyLabel="No vendors yet." />
+              <BarList
+                rows={suppliers}
+                currency={currency}
+                emptyLabel="No vendors yet."
+              />
             ) : (
               <EmptyState
                 icon={Users}
@@ -120,14 +126,14 @@ function CorrectionRow({ signal }: { signal: CorrectionLearningSignal }) {
     <article className="rounded-2xl border border-line bg-canvas p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="truncate text-sm font-black text-ink">
+          <p className="truncate text-sm font-semibold text-ink">
             {signal.supplier_name}
           </p>
           <p className="mt-1 text-xs font-semibold text-ink-secondary">
             {signal.invoice_number} · {signal.field_path}
           </p>
         </div>
-        <span className="inline-flex w-fit rounded-full border border-accent/25 bg-accent-soft px-3 py-1 text-[11px] font-extrabold uppercase text-accent">
+        <span className="inline-flex w-fit rounded-full border border-accent/25 bg-accent-soft px-3 py-1 text-xs font-semibold uppercase text-accent-ink">
           Learned
         </span>
       </div>
@@ -161,11 +167,9 @@ function ValueBlock({
         : JSON.stringify(value);
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-extrabold uppercase text-ink-muted">
-        {label}
-      </p>
+      <p className="text-xs font-semibold uppercase text-ink-muted">{label}</p>
       <p
-        className={`mt-1 truncate ${strong ? "font-black text-ink" : "text-ink-secondary"}`}
+        className={`mt-1 truncate ${strong ? "font-semibold text-ink" : "text-ink-secondary"}`}
       >
         {rendered}
       </p>

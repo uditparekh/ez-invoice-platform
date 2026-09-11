@@ -53,8 +53,7 @@ export default function ClientProfilesPage() {
   const pending = useMemo(
     () =>
       profiles.filter(
-        (profile) =>
-          onboardingStatus(profile) === "ready_for_admin_review",
+        (profile) => onboardingStatus(profile) === "ready_for_admin_review",
       ),
     [profiles],
   );
@@ -92,10 +91,10 @@ export default function ClientProfilesPage() {
               type="button"
               onClick={() => setEditorOpen((open) => !open)}
               className={cn(
-                "inline-flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-black transition-colors",
+                "inline-flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition-colors",
                 editorOpen
                   ? "border-accent bg-accent-soft text-accent-ink"
-                  : "border-line-strong bg-surface text-ink-secondary hover:border-accent hover:text-accent",
+                  : "border-line-strong bg-surface text-ink-secondary hover:border-accent hover:text-accent-ink",
               )}
             >
               <Settings2 size={16} />
@@ -104,7 +103,7 @@ export default function ClientProfilesPage() {
             <button
               type="button"
               onClick={() => setWizardOpen(true)}
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-black text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-hover"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-hover"
             >
               <Plus size={16} />
               New profile
@@ -117,13 +116,13 @@ export default function ClientProfilesPage() {
         {loading ? (
           <LoadingState label="Loading client profiles" />
         ) : error ? (
-          <p className="rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
+          <p className="rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
             {error}
           </p>
         ) : (
           <>
             {notice && (
-              <p className="rounded-2xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-bold text-success">
+              <p className="rounded-2xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
                 {notice}
               </p>
             )}
@@ -135,9 +134,9 @@ export default function ClientProfilesPage() {
                 className="flex flex-col gap-3 rounded-2xl border border-gold-soft bg-gold-soft/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-black text-ink">
+                  <p className="text-sm font-semibold text-ink">
                     {profile.name}{" "}
-                    <span className="ml-1 rounded-full bg-gold/15 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide text-gold-ink">
+                    <span className="ml-1 rounded-full bg-gold/15 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-gold-ink">
                       Pending approval
                     </span>
                   </p>
@@ -152,7 +151,7 @@ export default function ClientProfilesPage() {
                   <button
                     type="button"
                     onClick={() => setEditorOpen(true)}
-                    className="inline-flex h-10 items-center rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-black text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+                    className="inline-flex h-10 items-center rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-semibold text-ink-secondary transition-colors hover:border-accent hover:text-accent-ink"
                   >
                     Review setup
                   </button>
@@ -160,7 +159,7 @@ export default function ClientProfilesPage() {
                     type="button"
                     disabled={activating === profile.id || saving}
                     onClick={() => void approveAndActivate(profile)}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-success px-4 text-sm font-black text-white transition-colors hover:bg-success/90 disabled:opacity-60"
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-success px-4 text-sm font-semibold text-white transition-colors hover:bg-success/90 disabled:opacity-60"
                   >
                     {activating === profile.id ? (
                       <LoaderCircle size={15} className="animate-spin" />
@@ -178,26 +177,25 @@ export default function ClientProfilesPage() {
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {profiles.map((profile) => {
                   const status = onboardingStatus(profile);
-                  const mappings =
-                    profile.settings.item_mappings?.length ?? 0;
+                  const mappings = profile.settings.item_mappings?.length ?? 0;
                   return (
                     <article
                       key={profile.id}
                       className="flex flex-col rounded-2xl border border-line bg-surface p-5 shadow-card transition-shadow hover:shadow-pop"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft font-display text-sm font-black text-accent-ink">
+                        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft font-display text-sm font-semibold text-accent-ink">
                           {initials(profile.name)}
                         </span>
                         <div className="flex flex-wrap justify-end gap-1.5">
                           {profile.is_default && (
-                            <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-accent-ink">
+                            <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-accent-ink">
                               Default
                             </span>
                           )}
                           <span
                             className={cn(
-                              "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide",
+                              "rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide",
                               status === "active"
                                 ? "bg-success-soft text-success"
                                 : status === "ready_for_admin_review"
@@ -209,10 +207,10 @@ export default function ClientProfilesPage() {
                           </span>
                         </div>
                       </div>
-                      <h3 className="mt-3 truncate text-lg font-black text-ink">
+                      <h3 className="mt-3 truncate text-lg font-semibold text-ink">
                         {profile.name}
                       </h3>
-                      <p className="mt-0.5 text-sm font-bold text-ink-secondary">
+                      <p className="mt-0.5 text-sm font-medium text-ink-secondary">
                         {systemLabel(profile)} · {postingLabel(profile)}
                       </p>
                       <p className="text-sm font-semibold text-ink-muted">
@@ -220,7 +218,7 @@ export default function ClientProfilesPage() {
                         {profile.settings.tax_registration_label} ·{" "}
                         {profile.settings.default_currency}
                       </p>
-                      <div className="mt-4 flex items-center gap-4 border-t border-line pt-3 text-xs font-bold text-ink-secondary">
+                      <div className="mt-4 flex items-center gap-4 border-t border-line pt-3 text-xs font-medium text-ink-secondary">
                         <span>
                           {sampleCount(profile)} sample
                           {sampleCount(profile) === 1 ? "" : "s"}
@@ -231,7 +229,7 @@ export default function ClientProfilesPage() {
                         <button
                           type="button"
                           onClick={() => setEditorOpen(true)}
-                          className="ml-auto inline-flex items-center gap-1 font-black text-accent transition-colors hover:text-accent-hover"
+                          className="ml-auto inline-flex items-center gap-1 font-semibold text-accent-ink transition-colors hover:text-accent-hover"
                         >
                           Open profile
                           <ArrowRight size={13} />
@@ -253,13 +251,13 @@ export default function ClientProfilesPage() {
             {editorOpen && (
               <section id="advanced-editor" className="pt-2">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-lg font-black text-ink">
+                  <h2 className="text-lg font-semibold text-ink">
                     Advanced editor
                   </h2>
                   <button
                     type="button"
                     onClick={() => setEditorOpen(false)}
-                    className="text-sm font-black text-ink-secondary hover:text-accent"
+                    className="text-sm font-semibold text-ink-secondary hover:text-accent-ink"
                   >
                     Collapse
                   </button>

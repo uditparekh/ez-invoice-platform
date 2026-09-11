@@ -6,6 +6,7 @@ import json
 import sqlite3
 
 from . import db
+from .reporting import ReportingRepository
 import threading
 import uuid
 from dataclasses import dataclass
@@ -118,7 +119,7 @@ class InvoiceFileRecord:
         )
 
 
-class InvoiceRepository:
+class InvoiceRepository(ReportingRepository):
     def __init__(self, database_path: Path, database_url: str = ""):
         self.database_path = Path(database_path)
         self.database_url = (database_url or "").strip()
@@ -419,6 +420,11 @@ class InvoiceRepository:
                     tally_detected INTEGER,
                     last_seen_at TEXT NOT NULL
                 );
+
+                CREATE INDEX IF NOT EXISTS idx_audit_org_created_id
+                ON audit_events(organization_id, created_at DESC, id DESC);
+                CREATE INDEX IF NOT EXISTS idx_invoice_org_created
+                ON invoices(organization_id, created_at);
                 """
             )
             if db.is_postgres_url(self.database_url):
@@ -1762,7 +1768,7 @@ class InvoiceRepository:
                 updated.organization_id,
                 invoice_id,
                 "invoice.corrected",
-                {"fields": list(updates)},
+                {"fields": list(updates), "actor_id": actor_id},
             )
         return self.get_invoice(invoice_id)
 
@@ -1947,7 +1953,7 @@ class InvoiceRepository:
             )
         return self.get_invoice(invoice_id)
 
-    def set_status(self, invoice_id: str, status: InvoiceStatus) -> Optional[Invoice]:
+    def set_status(self, invoice_id: str, status: InvoiceStatus, actor_id: str = "") -> Optional[Invoice]:
         current = self.get_invoice(invoice_id)
         if not current:
             return None
@@ -1962,7 +1968,7 @@ class InvoiceRepository:
                 current.organization_id,
                 invoice_id,
                 f"invoice.{status.value}",
-                {"status": status.value},
+                {"status": status.value, "actor_id": actor_id},
             )
         return self.get_invoice(invoice_id)
 

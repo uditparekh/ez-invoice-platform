@@ -20,13 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -104,14 +98,70 @@ const commands: Command[] = [
       window.localStorage.setItem("siftentry-theme", dark ? "dark" : "light");
     },
   },
-  { id: "pg-home", group: "Pages", label: "Home", keywords: "home dashboard start", icon: <Grid2X2 size={16} />, run: (router) => router.push("/app") },
-  { id: "pg-invoices", group: "Pages", label: "Invoices", keywords: "invoices queue documents bills", icon: <FileText size={16} />, run: (router) => router.push("/app/invoices") },
-  { id: "pg-history", group: "Pages", label: "History", keywords: "history audit log postings retry", icon: <FileClock size={16} />, run: (router) => router.push("/app/history") },
-  { id: "pg-insights", group: "Pages", label: "Insights", keywords: "insights analytics charts spend touchless finance", icon: <BarChart3 size={16} />, run: (router) => router.push("/app/analytics") },
-  { id: "pg-integrations", group: "Pages", label: "Integrations", keywords: "integrations tally quickbooks zoho connect", icon: <PlugZap size={16} />, run: (router) => router.push("/app/integrations") },
-  { id: "pg-rules", group: "Pages", label: "Rules & mapping", keywords: "rules mapping gl ledger simulator vendor memory training", icon: <Workflow size={16} />, run: (router) => router.push("/app/rules") },
-  { id: "pg-clients", group: "Pages", label: "Client profiles", keywords: "clients profiles onboarding wizard", icon: <Users size={16} />, run: (router) => router.push("/app/client-profiles") },
-  { id: "pg-settings", group: "Pages", label: "Settings", keywords: "settings team retention notifications appearance security", icon: <SlidersHorizontal size={16} />, run: (router) => router.push("/app/settings") },
+  {
+    id: "pg-home",
+    group: "Pages",
+    label: "Home",
+    keywords: "home dashboard start",
+    icon: <Grid2X2 size={16} />,
+    run: (router) => router.push("/app"),
+  },
+  {
+    id: "pg-invoices",
+    group: "Pages",
+    label: "Invoices",
+    keywords: "invoices queue documents bills",
+    icon: <FileText size={16} />,
+    run: (router) => router.push("/app/invoices"),
+  },
+  {
+    id: "pg-history",
+    group: "Pages",
+    label: "History",
+    keywords: "history audit log postings retry",
+    icon: <FileClock size={16} />,
+    run: (router) => router.push("/app/history"),
+  },
+  {
+    id: "pg-insights",
+    group: "Pages",
+    label: "Insights",
+    keywords: "insights analytics charts spend touchless finance",
+    icon: <BarChart3 size={16} />,
+    run: (router) => router.push("/app/analytics"),
+  },
+  {
+    id: "pg-integrations",
+    group: "Pages",
+    label: "Integrations",
+    keywords: "integrations tally quickbooks zoho connect",
+    icon: <PlugZap size={16} />,
+    run: (router) => router.push("/app/integrations"),
+  },
+  {
+    id: "pg-rules",
+    group: "Pages",
+    label: "Rules & mapping",
+    keywords: "rules mapping gl ledger simulator vendor memory training",
+    icon: <Workflow size={16} />,
+    run: (router) => router.push("/app/rules"),
+  },
+  {
+    id: "pg-clients",
+    group: "Pages",
+    label: "Client profiles",
+    keywords: "clients profiles onboarding wizard",
+    icon: <Users size={16} />,
+    run: (router) => router.push("/app/client-profiles"),
+  },
+  {
+    id: "pg-settings",
+    group: "Pages",
+    label: "Settings",
+    keywords: "settings team retention notifications appearance security",
+    icon: <SlidersHorizontal size={16} />,
+    run: (router) => router.push("/app/settings"),
+  },
 ];
 
 export function CommandCenter() {
@@ -127,8 +177,7 @@ export function CommandCenter() {
         return;
       }
       const tag = (event.target as HTMLElement)?.tagName;
-      const typing =
-        tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
       if (event.key === "?" && !typing && !event.metaKey && !event.ctrlKey) {
         event.preventDefault();
         setPaletteOpen(false);
@@ -242,8 +291,14 @@ function Palette({ onClose }: { onClose: () => void }) {
 
   const rows: Row[] = useMemo(
     () => [
-      ...matchedCommands.map((command) => ({ kind: "command" as const, command })),
-      ...matchedInvoices.map((invoice) => ({ kind: "invoice" as const, invoice })),
+      ...matchedCommands.map((command) => ({
+        kind: "command" as const,
+        command,
+      })),
+      ...matchedInvoices.map((invoice) => ({
+        kind: "invoice" as const,
+        invoice,
+      })),
     ],
     [matchedCommands, matchedInvoices],
   );
@@ -252,10 +307,7 @@ function Palette({ onClose }: { onClose: () => void }) {
     (row: Row) => {
       onClose();
       if (row.kind === "command") row.command.run(router);
-      else
-        router.push(
-          `/app/invoices?invoice=${row.invoice.id}&mode=review`,
-        );
+      else router.push(`/app/invoices?invoice=${row.invoice.id}&mode=review`);
     },
     [onClose, router],
   );
@@ -320,13 +372,16 @@ function Palette({ onClose }: { onClose: () => void }) {
             </p>
           )}
           {rows.map((row, index) => {
-            const group = row.kind === "command" ? row.command.group : "Invoices";
+            const group =
+              row.kind === "command" ? row.command.group : "Invoices";
             const header =
               group !== renderedGroup ? (renderedGroup = group) : null;
             return (
-              <div key={row.kind === "command" ? row.command.id : row.invoice.id}>
+              <div
+                key={row.kind === "command" ? row.command.id : row.invoice.id}
+              >
                 {header && (
-                  <p className="px-3 pb-1 pt-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted first:pt-1">
+                  <p className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted first:pt-1">
                     {header}
                   </p>
                 )}
@@ -354,7 +409,7 @@ function Palette({ onClose }: { onClose: () => void }) {
                       >
                         {row.command.icon}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-black text-ink">
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
                         {row.command.label}
                       </span>
                       {row.command.hint && (
@@ -376,18 +431,25 @@ function Palette({ onClose }: { onClose: () => void }) {
                         <FileText size={15} />
                       </span>
                       <span className="min-w-0 flex-1 truncate">
-                        <span className="block truncate text-sm font-black text-ink">
+                        <span className="block truncate text-sm font-semibold text-ink">
                           {row.invoice.supplier.name || "Supplier pending"} ·{" "}
                           <span className="font-mono">
-                            {row.invoice.invoice_number || row.invoice.id.slice(0, 8)}
+                            {row.invoice.invoice_number ||
+                              row.invoice.id.slice(0, 8)}
                           </span>
                         </span>
-                        <span className="block text-xs font-bold text-ink-muted">
-                          {formatCurrency(row.invoice.total, row.invoice.currency)} ·{" "}
-                          {row.invoice.status.replaceAll("_", " ")}
+                        <span className="block text-xs font-medium text-ink-muted">
+                          {formatCurrency(
+                            row.invoice.total,
+                            row.invoice.currency,
+                          )}{" "}
+                          · {row.invoice.status.replaceAll("_", " ")}
                         </span>
                       </span>
-                      <ArrowUpRight size={14} className="shrink-0 text-ink-muted" />
+                      <ArrowUpRight
+                        size={14}
+                        className="shrink-0 text-ink-muted"
+                      />
                     </>
                   )}
                 </button>
@@ -396,11 +458,19 @@ function Palette({ onClose }: { onClose: () => void }) {
           })}
         </div>
 
-        <div className="flex items-center gap-4 border-t border-line bg-surface-subtle px-4 py-2.5 text-[11px] font-bold text-ink-muted">
-          <span><Kbd>↑↓</Kbd> navigate</span>
-          <span><Kbd>↵</Kbd> open</span>
-          <span><Kbd>esc</Kbd> close</span>
-          <span className="ml-auto"><Kbd>?</Kbd> all shortcuts</span>
+        <div className="flex items-center gap-4 border-t border-line bg-surface-subtle px-4 py-2.5 text-xs font-medium text-ink-muted">
+          <span>
+            <Kbd>↑↓</Kbd> navigate
+          </span>
+          <span>
+            <Kbd>↵</Kbd> open
+          </span>
+          <span>
+            <Kbd>esc</Kbd> close
+          </span>
+          <span className="ml-auto">
+            <Kbd>?</Kbd> all shortcuts
+          </span>
         </div>
       </div>
     </div>
@@ -480,8 +550,8 @@ function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <p className="flex items-center gap-2 text-sm font-black text-ink">
-            <Keyboard size={16} className="text-accent" />
+          <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <Keyboard size={16} className="text-accent-ink" />
             Keyboard shortcuts
           </p>
           <Kbd>esc</Kbd>
@@ -489,7 +559,7 @@ function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
         <div className="max-h-[56vh] space-y-5 overflow-y-auto p-5">
           {groups.map((group) => (
             <div key={group.title}>
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
                 {group.title}
               </p>
               <div className="mt-2 divide-y divide-line rounded-xl border border-line">
@@ -515,7 +585,7 @@ function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
 
 function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-md border border-line-strong bg-surface-strong px-1.5 py-0.5 font-mono text-[11px] font-black text-ink-secondary">
+    <kbd className="rounded-md border border-line-strong bg-surface-strong px-1.5 py-0.5 font-mono text-xs font-semibold text-ink-secondary">
       {children}
     </kbd>
   );

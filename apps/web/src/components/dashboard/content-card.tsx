@@ -19,7 +19,7 @@ export function ContentCard({
     >
       <div className="flex min-w-0 flex-col gap-3 border-b border-line px-5 py-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-black text-ink">{title}</h2>
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
           {subtitle && (
             <p className="mt-1 text-sm leading-5 text-ink-secondary">
               {subtitle}

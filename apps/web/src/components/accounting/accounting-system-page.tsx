@@ -55,11 +55,16 @@ const statusLabels: Record<AccountingSystemConfig["status"], string> = {
   planned: "Planned",
 };
 
-export function AccountingSystemPage({ config }: { config: AccountingSystemConfig }) {
+export function AccountingSystemPage({
+  config,
+}: {
+  config: AccountingSystemConfig;
+}) {
   const { invoices, loading, error } = useWorkspaceInvoices();
-  const ready = config.system === "tally"
-    ? invoices.filter((invoice) => invoice.status === "approved")
-    : readyInvoices(invoices);
+  const ready =
+    config.system === "tally"
+      ? invoices.filter((invoice) => invoice.status === "approved")
+      : readyInvoices(invoices);
   const blocked = exceptionInvoices(invoices);
   const total = invoiceTotal(ready);
 
@@ -96,7 +101,11 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
               <MetricCard
                 label="Ready invoices"
                 value={ready.length}
-                detail={config.system === "tally" ? "Approved for Tally posting" : "Validated or approved for posting"}
+                detail={
+                  config.system === "tally"
+                    ? "Approved for Tally posting"
+                    : "Validated or approved for posting"
+                }
                 tone="success"
                 icon={<CheckCircle2 size={18} />}
               />
@@ -125,7 +134,7 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
           <ContentCard
             title={`${config.name} posting workflow`}
             subtitle="Review the client setup and confirm each step before enabling live posting."
-            action={<Link2 size={18} className="text-cyan" />}
+            action={<Link2 size={18} className="text-cyan-ink" />}
           >
             <div className="space-y-4">
               {config.checklist.map((item, index) => (
@@ -133,21 +142,20 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
                   key={item}
                   className="flex gap-4 border-b border-line pb-4 last:border-b-0 last:pb-0"
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-sm font-black text-accent-ink dark:text-cyan">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-sm font-semibold text-accent-ink dark:text-cyan-ink">
                     {index + 1}
                   </span>
                   <div>
-                    <p className="text-sm font-black text-ink">{item}</p>
+                    <p className="text-sm font-semibold text-ink">{item}</p>
                     <p className="mt-1 text-sm leading-6 text-ink-secondary">
-                      Verify this step against the client&apos;s accounting setup
-                      before approving a live invoice.
+                      Verify this step against the client&apos;s accounting
+                      setup before approving a live invoice.
                     </p>
                   </div>
                 </div>
               ))}
             </div>
           </ContentCard>
-
         </section>
 
         <ClientProfilesPanel
@@ -164,10 +172,8 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
 function InfoCell({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[11px] font-extrabold uppercase text-ink-muted">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-black text-ink">{value}</p>
+      <p className="text-xs font-semibold uppercase text-ink-muted">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
     </div>
   );
 }
@@ -219,7 +225,7 @@ function describeLastSeen(seconds: number | null): string {
 function ConnectorBadge({ status }: { status: TallyConnectorProfileStatus }) {
   if (!status.connector_enabled) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs font-black text-ink-muted">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs font-semibold text-ink-muted">
         <CircleDashed size={13} />
         Disabled
       </span>
@@ -227,7 +233,7 @@ function ConnectorBadge({ status }: { status: TallyConnectorProfileStatus }) {
   }
   if (status.connected) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success-soft px-3 py-1 text-xs font-black text-success">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success-soft px-3 py-1 text-xs font-semibold text-success">
         <span className="size-2 rounded-full bg-success" />
         Connected
       </span>
@@ -235,14 +241,14 @@ function ConnectorBadge({ status }: { status: TallyConnectorProfileStatus }) {
   }
   if (status.last_seen_at) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger-soft px-3 py-1 text-xs font-black text-danger">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger-soft px-3 py-1 text-xs font-semibold text-danger">
         <span className="size-2 rounded-full bg-danger" />
         Disconnected
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold-soft px-3 py-1 text-xs font-black text-gold">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold-soft px-3 py-1 text-xs font-semibold text-gold">
       <CircleDashed size={13} />
       Waiting for first check-in
     </span>
@@ -304,7 +310,7 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
         <button
           type="button"
           onClick={() => void loadStatus()}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-semibold text-ink-secondary transition-colors hover:border-accent hover:text-accent-ink"
         >
           <RotateCcw size={13} />
           Refresh
@@ -317,7 +323,7 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
             Checking connector status…
           </p>
         ) : error ? (
-          <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
+          <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
             {error}
           </div>
         ) : statuses.length === 0 ? (
@@ -333,7 +339,7 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
               className="rounded-xl border border-line bg-surface-subtle px-4 py-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-black text-ink">
+                <p className="text-sm font-semibold text-ink">
                   {status.profile_name}
                 </p>
                 <ConnectorBadge status={status} />
@@ -399,7 +405,7 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
                 )}
               </div>
               {!status.connector_configured && (
-                <p className="mt-3 rounded-lg border border-gold/30 bg-gold-soft px-3 py-2 text-xs font-bold leading-5 text-gold">
+                <p className="mt-3 rounded-lg border border-gold/30 bg-gold-soft px-3 py-2 text-xs font-medium leading-5 text-gold">
                   Add a workspace ID and connector token to this profile&apos;s
                   connection settings, then enter the same two values in the
                   connector on the client&apos;s computer.
@@ -420,15 +426,15 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
           className="flex items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 transition-colors hover:border-accent"
         >
           <span className="min-w-0">
-            <span className="block text-sm font-black text-accent-ink dark:text-cyan">
+            <span className="block text-sm font-semibold text-accent-ink dark:text-cyan-ink">
               Download the Windows connector installer
             </span>
             <span className="mt-0.5 block text-xs font-semibold leading-5 text-ink-secondary">
-              One-click setup — no Python needed. Installs per user, starts
-              with Windows, uninstalls cleanly.
+              One-click setup — no Python needed. Installs per user, starts with
+              Windows, uninstalls cleanly.
             </span>
           </span>
-          <ArrowRight size={16} className="shrink-0 text-accent" />
+          <ArrowRight size={16} className="shrink-0 text-accent-ink" />
         </a>
         <a
           href="/downloads/SiftEntry-Tally-Connector-Kit.zip"
@@ -436,7 +442,7 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
           className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-subtle px-4 py-3 transition-colors hover:border-line-strong"
         >
           <span className="min-w-0">
-            <span className="block text-xs font-black text-ink-secondary">
+            <span className="block text-xs font-semibold text-ink-secondary">
               Script kit (fallback)
             </span>
             <span className="mt-0.5 block text-xs font-semibold leading-5 text-ink-muted">
@@ -480,12 +486,15 @@ function ConnectorCredentialsReveal({
         `/api/organizations/${organizationId}/client-profiles/${profileId}/connector-credentials`,
       );
       if (response.status === 403) {
-        throw new Error("Only owners and admins can reveal the connector token.");
+        throw new Error(
+          "Only owners and admins can reveal the connector token.",
+        );
       }
       if (!response.ok) throw new Error("Could not load the connector token.");
       const payload = (await response.json()) as { connector_token?: string };
       setToken(payload.connector_token || "");
-      if (!payload.connector_token) setError("No token is saved on this profile yet.");
+      if (!payload.connector_token)
+        setError("No token is saved on this profile yet.");
     } catch (revealError) {
       setError((revealError as Error).message);
     } finally {
@@ -497,7 +506,7 @@ function ConnectorCredentialsReveal({
     <div className="mt-3 flex flex-wrap items-center gap-2">
       {token ? (
         <>
-          <code className="rounded-lg border border-line bg-canvas px-2 py-1 text-xs font-bold text-ink">
+          <code className="rounded-lg border border-line bg-canvas px-2 py-1 text-xs font-medium text-ink">
             {token}
           </code>
           <Button
@@ -512,11 +521,18 @@ function ConnectorCredentialsReveal({
           </Button>
         </>
       ) : (
-        <Button size="sm" variant="secondary" onClick={() => void reveal()} disabled={busy}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => void reveal()}
+          disabled={busy}
+        >
           {busy ? "Loading…" : "Reveal connector token"}
         </Button>
       )}
-      {error && <span className="text-xs font-bold text-danger">{error}</span>}
+      {error && (
+        <span className="text-xs font-medium text-danger">{error}</span>
+      )}
       {!token && !error && (
         <span className="text-xs font-semibold text-ink-muted">
           Owners and admins only. Needed once, when installing the connector.
@@ -537,11 +553,9 @@ function StatusLine({
 }) {
   return (
     <div>
-      <p className="text-[11px] font-extrabold uppercase text-ink-muted">
-        {label}
-      </p>
+      <p className="text-xs font-semibold uppercase text-ink-muted">{label}</p>
       <p
-        className={`mt-0.5 text-sm font-bold ${
+        className={`mt-0.5 text-sm font-medium ${
           tone === "warning" ? "text-gold" : "text-ink"
         }`}
       >
@@ -560,7 +574,8 @@ const stepperSteps: Record<string, { title: string; detail: string }[]> = {
     },
     {
       title: "Enable HTTP/XML in TallyPrime",
-      detail: "F1 › Settings › Connectivity — allow local XML requests (port 9000).",
+      detail:
+        "F1 › Settings › Connectivity — allow local XML requests (port 9000).",
     },
     {
       title: "Enter the workspace ID & connector token",
@@ -570,7 +585,7 @@ const stepperSteps: Record<string, { title: string; detail: string }[]> = {
     {
       title: "Watch the status card turn green",
       detail:
-        "\"Connected\" plus \"Tally detected\" in the connector status card below means the pipe is live.",
+        '"Connected" plus "Tally detected" in the connector status card below means the pipe is live.',
     },
     {
       title: "Post a sample voucher (dry run)",
@@ -581,7 +596,8 @@ const stepperSteps: Record<string, { title: string; detail: string }[]> = {
   cloud: [
     {
       title: "Authorize the workspace",
-      detail: "Connect via OAuth — secrets stay server-side, never in the browser.",
+      detail:
+        "Connect via OAuth — secrets stay server-side, never in the browser.",
     },
     {
       title: "Pick the company / organization",
@@ -599,7 +615,8 @@ const stepperSteps: Record<string, { title: string; detail: string }[]> = {
   export: [
     {
       title: "Choose the export template",
-      detail: "Bill package with attachments, mapped to this system's import format.",
+      detail:
+        "Bill package with attachments, mapped to this system's import format.",
     },
     {
       title: "Map fields on the client profile",
@@ -654,15 +671,15 @@ function SetupStepper({ config }: { config: AccountingSystemConfig }) {
   if (collapsed && completed === steps.length) {
     return (
       <section className="flex flex-col gap-3 rounded-2xl border border-success/30 bg-success-soft/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-black text-success">
+        <p className="text-sm font-semibold text-success">
           <CheckCircle2 size={16} className="mr-1.5 inline" />
-          Setup complete — all {steps.length} steps verified. This page now leads
-          with live status and client profiles.
+          Setup complete — all {steps.length} steps verified. This page now
+          leads with live status and client profiles.
         </p>
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-semibold text-ink-secondary transition-colors hover:border-accent hover:text-accent-ink"
         >
           <RotateCcw size={13} />
           Re-run setup steps
@@ -680,7 +697,7 @@ function SetupStepper({ config }: { config: AccountingSystemConfig }) {
           <button
             type="button"
             onClick={() => setCollapsed(true)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-semibold text-ink-secondary transition-colors hover:border-accent hover:text-accent-ink"
           >
             <ChevronDown size={13} />
             Collapse
@@ -697,7 +714,7 @@ function SetupStepper({ config }: { config: AccountingSystemConfig }) {
             className="flex w-full gap-4 border-b border-line py-4 text-left transition-colors last:border-b-0 hover:bg-surface-subtle first:pt-0 last:pb-0"
           >
             <span
-              className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-black transition-colors ${
+              className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors ${
                 done[index]
                   ? "bg-success text-white"
                   : index === done.findIndex((value) => !value)
@@ -709,7 +726,7 @@ function SetupStepper({ config }: { config: AccountingSystemConfig }) {
             </span>
             <span className="min-w-0">
               <span
-                className={`block text-sm font-black ${done[index] ? "text-ink-muted line-through" : "text-ink"}`}
+                className={`block text-sm font-semibold ${done[index] ? "text-ink-muted line-through" : "text-ink"}`}
               >
                 {step.title}
               </span>
@@ -731,7 +748,7 @@ function SystemStatus({
 }) {
   const ready = status === "pilot-ready" || status === "configured";
   return (
-    <span className="inline-flex h-10 items-center gap-2 rounded-full border border-line bg-surface px-4 text-sm font-black text-ink-secondary">
+    <span className="inline-flex h-10 items-center gap-2 rounded-full border border-line bg-surface px-4 text-sm font-semibold text-ink-secondary">
       {ready ? (
         <ShieldCheck size={16} className="text-success" />
       ) : (

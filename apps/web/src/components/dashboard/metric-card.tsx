@@ -18,15 +18,15 @@ export function MetricCard({
   return (
     <article className="min-h-36 rounded-2xl border border-line bg-surface p-5 shadow-card">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-extrabold uppercase text-ink-muted">
+        <p className="text-xs font-semibold uppercase text-ink-muted">
           {label}
         </p>
         {icon && <div className="text-ink-muted">{icon}</div>}
       </div>
       <div
         className={cn(
-          "mt-5 truncate font-mono text-[clamp(1.9rem,2.9vw,2.5rem)] font-black leading-none text-ink",
-          tone === "accent" && "text-accent dark:text-cyan",
+          "mt-5 truncate font-mono text-[clamp(1.9rem,2.9vw,2.5rem)] font-semibold leading-none text-ink",
+          tone === "accent" && "text-accent-ink dark:text-cyan-ink",
           tone === "success" && "text-success",
           tone === "warning" && "text-gold",
           tone === "danger" && "text-danger",

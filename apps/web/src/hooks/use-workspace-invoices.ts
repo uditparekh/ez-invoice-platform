@@ -20,6 +20,7 @@ export function useWorkspaceInvoices({
   const cacheKey = `${organizationId ?? ""}|${status ?? ""}|${limit}`;
   const cached = invoiceCache.get(cacheKey);
   const [invoices, setInvoices] = useState<Invoice[]>(cached ?? []);
+  const [responseKey, setResponseKey] = useState(cacheKey);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState("");
 
@@ -27,6 +28,7 @@ export function useWorkspaceInvoices({
     async (signal?: AbortSignal) => {
       if (!organizationId) {
         setInvoices([]);
+        setResponseKey(cacheKey);
         setLoading(false);
         return;
       }
@@ -34,6 +36,7 @@ export function useWorkspaceInvoices({
       const hit = invoiceCache.get(cacheKey);
       if (hit) {
         setInvoices(hit);
+        setResponseKey(cacheKey);
         setLoading(false);
       } else {
         setLoading(true);
@@ -54,14 +57,18 @@ export function useWorkspaceInvoices({
           organizationId,
           (await response.json()) as Invoice[],
         );
+        if (signal?.aborted) return;
         invoiceCache.set(cacheKey, fresh);
         setInvoices(fresh);
+        setResponseKey(cacheKey);
       } catch (loadError) {
         if ((loadError as Error).name !== "AbortError") {
+          setInvoices(hit ?? []);
+          setResponseKey(cacheKey);
           setError((loadError as Error).message);
         }
       } finally {
-        setLoading(false);
+        if (!signal?.aborted) setLoading(false);
       }
     },
     [organizationId, limit, status, cacheKey],
@@ -79,9 +86,9 @@ export function useWorkspaceInvoices({
   }, [loadInvoices]);
 
   return {
-    invoices,
-    loading,
-    error,
+    invoices: responseKey === cacheKey ? invoices : [],
+    loading: loading || responseKey !== cacheKey,
+    error: responseKey === cacheKey ? error : "",
     reload: () => loadInvoices(),
   };
 }

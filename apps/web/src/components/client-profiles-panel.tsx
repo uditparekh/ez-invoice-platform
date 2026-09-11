@@ -456,7 +456,8 @@ function optionsWithCurrent(
   options: { label: string; value: string }[],
   value: string,
 ) {
-  if (!value || options.some((option) => option.value === value)) return options;
+  if (!value || options.some((option) => option.value === value))
+    return options;
   return [{ label: `Custom (${value})`, value }, ...options];
 }
 
@@ -555,7 +556,12 @@ export function ClientProfilesPanel({
   );
 
   useEffect(() => {
-    if (loading || selectedId || preserveBlankDraftRef.current || !profiles.length) {
+    if (
+      loading ||
+      selectedId ||
+      preserveBlankDraftRef.current ||
+      !profiles.length
+    ) {
       return;
     }
 
@@ -650,7 +656,9 @@ export function ClientProfilesPanel({
   }
 
   function toggleExpectedTrainingField(field: string) {
-    const trainingProfile = coerceTrainingProfile(draft.settings.training_profile);
+    const trainingProfile = coerceTrainingProfile(
+      draft.settings.training_profile,
+    );
     const fieldSet = new Set(trainingProfile.expected_fields);
     if (fieldSet.has(field)) {
       fieldSet.delete(field);
@@ -805,7 +813,9 @@ export function ClientProfilesPanel({
 
   async function submitForReview() {
     if (!selectedProfile) {
-      setNotice("Save the client profile before submitting it for admin review.");
+      setNotice(
+        "Save the client profile before submitting it for admin review.",
+      );
       return;
     }
     setNotice("");
@@ -879,7 +889,9 @@ export function ClientProfilesPanel({
   );
   const taxModeOptions = optionsWithCurrent(taxModes, draft.settings.tax_mode);
   const draftSystem = accountingSystem ?? draft.accounting_system;
-  const trainingProfile = coerceTrainingProfile(draft.settings.training_profile);
+  const trainingProfile = coerceTrainingProfile(
+    draft.settings.training_profile,
+  );
   const onboardingChecklist = getOnboardingChecklist(draft, draftSystem);
   const onboardingStatus = trainingProfile.onboarding_status || "draft";
 
@@ -946,15 +958,17 @@ export function ClientProfilesPanel({
             <div
               className={cn(
                 "flex items-start gap-3",
-                libraryCollapsed ? "justify-between xl:flex-col xl:items-center" : "justify-between",
+                libraryCollapsed
+                  ? "justify-between xl:flex-col xl:items-center"
+                  : "justify-between",
               )}
             >
               {!libraryCollapsed && (
                 <div className="min-w-0">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
                     Profile library
                   </p>
-                  <h3 className="mt-1 text-base font-black text-ink">
+                  <h3 className="mt-1 text-base font-semibold text-ink">
                     Workspace setups
                   </h3>
                 </div>
@@ -966,7 +980,7 @@ export function ClientProfilesPanel({
                 )}
               >
                 <span
-                  className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-black text-ink-secondary"
+                  className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink-secondary"
                   title={`${filteredProfiles.length} profile${filteredProfiles.length === 1 ? "" : "s"}`}
                 >
                   {filteredProfiles.length}
@@ -976,14 +990,26 @@ export function ClientProfilesPanel({
                   onClick={() => toggleLibrary()}
                   aria-expanded={!libraryCollapsed}
                   aria-controls="profile-library-list"
-                  title={libraryCollapsed ? "Expand profile library" : "Collapse profile library"}
-                  className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-surface text-ink-secondary transition-colors hover:border-accent hover:text-accent"
+                  title={
+                    libraryCollapsed
+                      ? "Expand profile library"
+                      : "Collapse profile library"
+                  }
+                  className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-surface text-ink-secondary transition-colors hover:border-accent hover:text-accent-ink"
                 >
                   <span className="hidden xl:block">
-                    {libraryCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                    {libraryCollapsed ? (
+                      <PanelLeftOpen size={16} />
+                    ) : (
+                      <PanelLeftClose size={16} />
+                    )}
                   </span>
                   <span className="xl:hidden">
-                    {libraryCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                    {libraryCollapsed ? (
+                      <ChevronDown size={16} />
+                    ) : (
+                      <ChevronUp size={16} />
+                    )}
                   </span>
                 </button>
               </div>
@@ -1000,12 +1026,14 @@ export function ClientProfilesPanel({
                     onClick={() => selectProfile(profile)}
                     title={`${profile.name} · ${systemLabel(profile.accounting_system)}`}
                     aria-label={`Open profile ${profile.name}`}
-                    aria-current={selectedId === profile.id ? "true" : undefined}
+                    aria-current={
+                      selectedId === profile.id ? "true" : undefined
+                    }
                     className={cn(
-                      "grid size-10 place-items-center rounded-xl border text-xs font-black uppercase transition-colors",
+                      "grid size-10 place-items-center rounded-xl border text-xs font-semibold uppercase transition-colors",
                       selectedId === profile.id
                         ? "border-accent bg-accent-soft text-accent-ink"
-                        : "border-line bg-surface text-ink-secondary hover:border-accent hover:text-accent",
+                        : "border-line bg-surface text-ink-secondary hover:border-accent hover:text-accent-ink",
                     )}
                   >
                     {profile.accounting_system.slice(0, 2)}
@@ -1014,7 +1042,7 @@ export function ClientProfilesPanel({
               </div>
             ) : (
               <div id="profile-library-list">
-                <label className="mt-4 flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink-secondary">
+                <label className="mt-4 flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink-secondary">
                   <Search size={16} className="shrink-0 text-ink-muted" />
                   <input
                     value={profileSearch}
@@ -1026,7 +1054,7 @@ export function ClientProfilesPanel({
 
                 <div className="mt-4 space-y-3">
                   {loading ? (
-                    <div className="rounded-2xl border border-line bg-surface px-4 py-6 text-sm font-bold text-ink-secondary">
+                    <div className="rounded-2xl border border-line bg-surface px-4 py-6 text-sm font-medium text-ink-secondary">
                       <LoaderCircle
                         className="mr-2 inline animate-spin"
                         size={16}
@@ -1047,23 +1075,26 @@ export function ClientProfilesPanel({
                         )}
                       >
                         <div className="flex items-start gap-3">
-                          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-xs font-black uppercase text-accent-ink">
+                          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-xs font-semibold uppercase text-accent-ink">
                             {profile.accounting_system.slice(0, 2)}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-black text-ink">
+                            <span className="block truncate text-sm font-semibold text-ink">
                               {profile.name}
                             </span>
-                            <span className="mt-1 block truncate text-xs font-bold text-ink-muted">
+                            <span className="mt-1 block truncate text-xs font-medium text-ink-muted">
                               {systemLabel(profile.accounting_system)} /{" "}
-                              {profile.settings.company_name || "Company not set"}
+                              {profile.settings.company_name ||
+                                "Company not set"}
                             </span>
                             <span className="mt-2 flex flex-wrap gap-1.5">
                               <MiniChip>
                                 {profile.settings.default_currency || "USD"}
                               </MiniChip>
                               <MiniChip>
-                                {postingModeLabel(profile.settings.posting_mode)}
+                                {postingModeLabel(
+                                  profile.settings.posting_mode,
+                                )}
                               </MiniChip>
                               {profile.is_default && (
                                 <MiniChip tone="accent">Default</MiniChip>
@@ -1073,7 +1104,7 @@ export function ClientProfilesPanel({
                           {profile.is_default && (
                             <Star
                               size={16}
-                              className="shrink-0 fill-accent text-accent"
+                              className="shrink-0 fill-accent text-accent-ink"
                             />
                           )}
                         </div>
@@ -1094,10 +1125,10 @@ export function ClientProfilesPanel({
           <section className="overflow-hidden rounded-2xl border border-line bg-canvas">
             <div className="flex flex-col gap-4 border-b border-line bg-surface px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
                   {selectedProfile ? "Editing profile" : "New profile"}
                 </p>
-                <h3 className="mt-1 text-xl font-black text-ink">
+                <h3 className="mt-1 text-xl font-semibold text-ink">
                   {draft.name || "Untitled client setup"}
                 </h3>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1144,370 +1175,401 @@ export function ClientProfilesPanel({
               </div>
             </div>
 
-          {(notice || error) && (
-            <div
-              className={cn(
-                "mx-5 mt-5 rounded-xl border px-4 py-3 text-sm font-bold",
-                notice === "Client profile saved." ||
-                  notice === "Default profile updated." ||
-                  notice === "Client profile deleted."
-                  ? "border-success/30 bg-success-soft text-success"
-                  : "border-gold/30 bg-gold-soft text-gold",
-              )}
-            >
-              {notice || error}
-            </div>
-          )}
-
-          <div className="space-y-5 p-5">
-            <div className="rounded-2xl border border-line bg-surface p-4">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-                    Core setup
-                  </p>
-                  <h4 className="mt-1 text-lg font-black text-ink">
-                    Client identity
-                  </h4>
-                </div>
-                <span className="w-fit rounded-full border border-line bg-canvas px-3 py-1 text-xs font-black text-ink-secondary">
-                  {draft.settings.default_currency || "USD"} /{" "}
-                  {draft.settings.country_code || "US"}
-                </span>
+            {(notice || error) && (
+              <div
+                className={cn(
+                  "mx-5 mt-5 rounded-xl border px-4 py-3 text-sm font-medium",
+                  notice === "Client profile saved." ||
+                    notice === "Default profile updated." ||
+                    notice === "Client profile deleted."
+                    ? "border-success/30 bg-success-soft text-success"
+                    : "border-gold/30 bg-gold-soft text-gold",
+                )}
+              >
+                {notice || error}
               </div>
-              <FormGrid>
-                <TextField
-                  label="Profile name"
-                  value={draft.name}
-                  onChange={(value) => updateDraft("name", value)}
-                  placeholder="Client + workflow name"
-                />
-                {showSystemField && !accountingSystem && (
+            )}
+
+            <div className="space-y-5 p-5">
+              <div className="rounded-2xl border border-line bg-surface p-4">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                      Core setup
+                    </p>
+                    <h4 className="mt-1 text-lg font-semibold text-ink">
+                      Client identity
+                    </h4>
+                  </div>
+                  <span className="w-fit rounded-full border border-line bg-canvas px-3 py-1 text-xs font-semibold text-ink-secondary">
+                    {draft.settings.default_currency || "USD"} /{" "}
+                    {draft.settings.country_code || "US"}
+                  </span>
+                </div>
+                <FormGrid>
+                  <TextField
+                    label="Profile name"
+                    value={draft.name}
+                    onChange={(value) => updateDraft("name", value)}
+                    placeholder="Client + workflow name"
+                  />
+                  {showSystemField && !accountingSystem && (
+                    <SelectField
+                      label="Accounting system"
+                      value={draft.accounting_system}
+                      options={accountingSystems}
+                      onChange={(value) => {
+                        const nextSystem = value as AccountingSystem;
+                        const nextDefaults = blankProfile(nextSystem).settings;
+                        setDraft((current) => ({
+                          ...current,
+                          accounting_system: nextSystem,
+                          settings: {
+                            ...current.settings,
+                            connection_settings:
+                              nextDefaults.connection_settings,
+                            posting_mode: nextDefaults.posting_mode,
+                            voucher_type: nextDefaults.voucher_type,
+                          },
+                        }));
+                      }}
+                    />
+                  )}
+                  <TextField
+                    label="Company name"
+                    value={draft.settings.company_name}
+                    onChange={(value) => updateSettings("company_name", value)}
+                    placeholder="Exact Tally or ERP company"
+                  />
+                  <TextField
+                    label="Description"
+                    value={draft.description}
+                    onChange={(value) => updateDraft("description", value)}
+                    placeholder="When this profile should be used"
+                    wide
+                  />
+                </FormGrid>
+              </div>
+
+              <SettingsPanel
+                title="Market and tax behavior"
+                detail="Country, currency, parser, and tax format used while reviewing invoices."
+                defaultOpen
+              >
+                <FormGrid>
                   <SelectField
-                    label="Accounting system"
-                    value={draft.accounting_system}
-                    options={accountingSystems}
+                    label="Country profile"
+                    value={draft.settings.country_code}
+                    options={countryOptions}
+                    onChange={applyCountryProfile}
+                  />
+                  <TextField
+                    label="Country name"
+                    value={draft.settings.country_name}
+                    onChange={(value) => updateSettings("country_name", value)}
+                    placeholder="United States"
+                  />
+                  <TextField
+                    label="Default currency"
+                    value={draft.settings.default_currency}
+                    onChange={(value) =>
+                      updateSettings("default_currency", value.toUpperCase())
+                    }
+                    placeholder="USD"
+                  />
+                  <SelectField
+                    label="Invoice format"
+                    value={draft.settings.invoice_format}
+                    options={invoiceFormatOptions}
+                    onChange={(value) =>
+                      updateSettings("invoice_format", value)
+                    }
+                  />
+                  <SelectField
+                    label="Tax mode"
+                    value={draft.settings.tax_mode}
+                    options={taxModeOptions}
                     onChange={(value) => {
-                      const nextSystem = value as AccountingSystem;
-                      const nextDefaults = blankProfile(nextSystem).settings;
                       setDraft((current) => ({
                         ...current,
-                        accounting_system: nextSystem,
                         settings: {
                           ...current.settings,
-                          connection_settings:
-                            nextDefaults.connection_settings,
-                          posting_mode: nextDefaults.posting_mode,
-                          voucher_type: nextDefaults.voucher_type,
+                          tax_mode: value,
+                          tax_settings: {
+                            ...current.settings.tax_settings,
+                            tax_mode: value,
+                          },
                         },
                       }));
                     }}
                   />
-                )}
-                <TextField
-                  label="Company name"
-                  value={draft.settings.company_name}
-                  onChange={(value) => updateSettings("company_name", value)}
-                  placeholder="Exact Tally or ERP company"
-                />
-                <TextField
-                  label="Description"
-                  value={draft.description}
-                  onChange={(value) => updateDraft("description", value)}
-                  placeholder="When this profile should be used"
-                  wide
-                />
-              </FormGrid>
-            </div>
-
-            <SettingsPanel
-              title="Market and tax behavior"
-              detail="Country, currency, parser, and tax format used while reviewing invoices."
-              defaultOpen
-            >
-              <FormGrid>
-                <SelectField
-                  label="Country profile"
-                  value={draft.settings.country_code}
-                  options={countryOptions}
-                  onChange={applyCountryProfile}
-                />
-                <TextField
-                  label="Country name"
-                  value={draft.settings.country_name}
-                  onChange={(value) => updateSettings("country_name", value)}
-                  placeholder="United States"
-                />
-                <TextField
-                  label="Default currency"
-                  value={draft.settings.default_currency}
-                  onChange={(value) =>
-                    updateSettings("default_currency", value.toUpperCase())
-                  }
-                  placeholder="USD"
-                />
-                <SelectField
-                  label="Invoice format"
-                  value={draft.settings.invoice_format}
-                  options={invoiceFormatOptions}
-                  onChange={(value) => updateSettings("invoice_format", value)}
-                />
-                <SelectField
-                  label="Tax mode"
-                  value={draft.settings.tax_mode}
-                  options={taxModeOptions}
-                  onChange={(value) => {
-                    setDraft((current) => ({
-                      ...current,
-                      settings: {
-                        ...current.settings,
-                        tax_mode: value,
-                        tax_settings: {
-                          ...current.settings.tax_settings,
-                          tax_mode: value,
-                        },
-                      },
-                    }));
-                  }}
-                />
-                <TextField
-                  label="Tax ID label"
-                  value={draft.settings.tax_registration_label}
-                  onChange={(value) =>
-                    updateSettings("tax_registration_label", value)
-                  }
-                  placeholder="GSTIN, VAT, TRN"
-                />
-              </FormGrid>
-            </SettingsPanel>
-
-            <SettingsPanel
-              title="Posting behavior"
-              detail="Profile-owned ERP mode, voucher type, and connector metadata."
-              defaultOpen
-            >
-              <FormGrid>
-                <TextField
-                  label="Environment"
-                  value={draft.settings.environment}
-                  onChange={(value) => updateSettings("environment", value)}
-                  placeholder="production or sandbox"
-                />
-                <SelectField
-                  label="Default parser"
-                  value={draft.settings.default_parser}
-                  options={parsers}
-                  onChange={(value) => updateSettings("default_parser", value)}
-                />
-                <TextField
-                  label="Direction"
-                  value={draft.settings.direction}
-                  onChange={(value) => updateSettings("direction", value)}
-                  placeholder="inbound"
-                />
-                <SelectField
-                  label="Posting mode"
-                  value={draft.settings.posting_mode}
-                  options={postingModes}
-                  onChange={(value) =>
-                    updateSettings("posting_mode", value as ProfilePostingMode)
-                  }
-                />
-                <TextField
-                  label="Voucher type"
-                  value={draft.settings.voucher_type}
-                  onChange={(value) => updateSettings("voucher_type", value)}
-                  placeholder="Purchase"
-                />
-              </FormGrid>
-              <div className="mt-4">
-                {renderConnectionFields(
-                  draftSystem,
-                  draft.settings.connection_settings ?? {},
-                  updateConnectionSetting,
-                )}
-              </div>
-            </SettingsPanel>
-
-            <SettingsPanel
-              title="Ledgers and stock items"
-              detail="The exact names from this client's books. Postings fail if a name here differs from the accounting system by even one character — copy names, don't type them."
-            >
-              <div className="space-y-4">
-                <FieldGroup
-                  title="Where purchases post"
-                  detail="Every invoice debits the purchase ledger and credits the supplier. Tax is split out to its own ledgers."
-                >
                   <TextField
-                    label="Purchase ledger"
-                    value={draft.settings.purchase_ledger}
-                    onChange={(value) => updateSettings("purchase_ledger", value)}
-                    hint="Copy the exact ledger name from the accounting system."
-                  />
-                  <TextField
-                    label="Tax ledger"
-                    value={draft.settings.tax_ledger}
-                    onChange={(value) => updateSettings("tax_ledger", value)}
-                    hint="Used when tax is posted as one line, or as the IGST fallback."
-                  />
-                  <TextField
-                    label="Input IGST ledger"
-                    value={String(draft.settings.tax_settings.igst_ledger ?? "")}
-                    onChange={(value) => updateTaxSetting("igst_ledger", value)}
-                    hint="Interstate GST. Leave blank to use the tax ledger."
-                  />
-                  <TextField
-                    label="Input CGST ledger"
-                    value={String(draft.settings.tax_settings.cgst_ledger ?? "")}
-                    onChange={(value) => updateTaxSetting("cgst_ledger", value)}
-                    hint="Central half of intrastate GST."
-                  />
-                  <TextField
-                    label="Input SGST ledger"
-                    value={String(draft.settings.tax_settings.sgst_ledger ?? "")}
-                    onChange={(value) => updateTaxSetting("sgst_ledger", value)}
-                    hint="State half of intrastate GST."
-                  />
-                  <TextField
-                    label="TCS ledger"
-                    optional
-                    value={draft.settings.tcs_ledger}
-                    onChange={(value) => updateSettings("tcs_ledger", value)}
-                    hint="Only if suppliers charge TCS on invoices."
-                  />
-                  <TextField
-                    label="Round-off ledger"
-                    optional
-                    value={draft.settings.round_off_ledger}
+                    label="Tax ID label"
+                    value={draft.settings.tax_registration_label}
                     onChange={(value) =>
-                      updateSettings("round_off_ledger", value)
+                      updateSettings("tax_registration_label", value)
                     }
-                    hint="Absorbs paise differences between line totals and the invoice total."
+                    placeholder="GSTIN, VAT, TRN"
                   />
-                </FieldGroup>
+                </FormGrid>
+              </SettingsPanel>
 
-                {isInventoryPostingMode(draft.settings.posting_mode) ? (
+              <SettingsPanel
+                title="Posting behavior"
+                detail="Profile-owned ERP mode, voucher type, and connector metadata."
+                defaultOpen
+              >
+                <FormGrid>
+                  <TextField
+                    label="Environment"
+                    value={draft.settings.environment}
+                    onChange={(value) => updateSettings("environment", value)}
+                    placeholder="production or sandbox"
+                  />
+                  <SelectField
+                    label="Default parser"
+                    value={draft.settings.default_parser}
+                    options={parsers}
+                    onChange={(value) =>
+                      updateSettings("default_parser", value)
+                    }
+                  />
+                  <TextField
+                    label="Direction"
+                    value={draft.settings.direction}
+                    onChange={(value) => updateSettings("direction", value)}
+                    placeholder="inbound"
+                  />
+                  <SelectField
+                    label="Posting mode"
+                    value={draft.settings.posting_mode}
+                    options={postingModes}
+                    onChange={(value) =>
+                      updateSettings(
+                        "posting_mode",
+                        value as ProfilePostingMode,
+                      )
+                    }
+                  />
+                  <TextField
+                    label="Voucher type"
+                    value={draft.settings.voucher_type}
+                    onChange={(value) => updateSettings("voucher_type", value)}
+                    placeholder="Purchase"
+                  />
+                </FormGrid>
+                <div className="mt-4">
+                  {renderConnectionFields(
+                    draftSystem,
+                    draft.settings.connection_settings ?? {},
+                    updateConnectionSetting,
+                  )}
+                </div>
+              </SettingsPanel>
+
+              <SettingsPanel
+                title="Ledgers and stock items"
+                detail="The exact names from this client's books. Postings fail if a name here differs from the accounting system by even one character — copy names, don't type them."
+              >
+                <div className="space-y-4">
                   <FieldGroup
-                    title="Default stock item"
-                    detail="Used for any invoice line that no item mapping matches. Stock moves in the accounting system under this item."
+                    title="Where purchases post"
+                    detail="Every invoice debits the purchase ledger and credits the supplier. Tax is split out to its own ledgers."
                   >
                     <TextField
-                      label="Stock item"
-                      value={draft.settings.stock_item_name}
-                      onChange={(value) => updateSettings("stock_item_name", value)}
-                      hint="Exact stock item name as it appears in the accounting system."
+                      label="Purchase ledger"
+                      value={draft.settings.purchase_ledger}
+                      onChange={(value) =>
+                        updateSettings("purchase_ledger", value)
+                      }
+                      hint="Copy the exact ledger name from the accounting system."
                     />
                     <TextField
-                      label="Unit (UOM)"
-                      value={draft.settings.stock_item_uom}
-                      onChange={(value) => updateSettings("stock_item_uom", value)}
-                      hint="The unit symbol that stock item uses — for example Nos or KGS."
+                      label="Tax ledger"
+                      value={draft.settings.tax_ledger}
+                      onChange={(value) => updateSettings("tax_ledger", value)}
+                      hint="Used when tax is posted as one line, or as the IGST fallback."
                     />
                     <TextField
-                      label="HSN/SAC"
+                      label="Input IGST ledger"
+                      value={String(
+                        draft.settings.tax_settings.igst_ledger ?? "",
+                      )}
+                      onChange={(value) =>
+                        updateTaxSetting("igst_ledger", value)
+                      }
+                      hint="Interstate GST. Leave blank to use the tax ledger."
+                    />
+                    <TextField
+                      label="Input CGST ledger"
+                      value={String(
+                        draft.settings.tax_settings.cgst_ledger ?? "",
+                      )}
+                      onChange={(value) =>
+                        updateTaxSetting("cgst_ledger", value)
+                      }
+                      hint="Central half of intrastate GST."
+                    />
+                    <TextField
+                      label="Input SGST ledger"
+                      value={String(
+                        draft.settings.tax_settings.sgst_ledger ?? "",
+                      )}
+                      onChange={(value) =>
+                        updateTaxSetting("sgst_ledger", value)
+                      }
+                      hint="State half of intrastate GST."
+                    />
+                    <TextField
+                      label="TCS ledger"
                       optional
-                      value={draft.settings.stock_item_hsn}
-                      onChange={(value) => updateSettings("stock_item_hsn", value)}
-                      hint="Recommended for GST validation on India profiles."
+                      value={draft.settings.tcs_ledger}
+                      onChange={(value) => updateSettings("tcs_ledger", value)}
+                      hint="Only if suppliers charge TCS on invoices."
                     />
                     <TextField
-                      label="Godown / location"
+                      label="Round-off ledger"
                       optional
-                      value={draft.settings.godown_name}
-                      onChange={(value) => updateSettings("godown_name", value)}
-                      hint="Only if the accounting system prompts for a godown during entry."
+                      value={draft.settings.round_off_ledger}
+                      onChange={(value) =>
+                        updateSettings("round_off_ledger", value)
+                      }
+                      hint="Absorbs paise differences between line totals and the invoice total."
                     />
                   </FieldGroup>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-3 text-xs font-semibold leading-5 text-ink-secondary">
-                    Stock item settings are hidden because this profile posts
-                    ledger-only accounting vouchers. Switch the posting mode to
-                    an inventory-backed mode to configure stock items.
-                  </div>
-                )}
 
-                <div className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-black text-ink">Item mapping rules</p>
-                    <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
-                      {draft.settings.item_mappings.length
-                        ? `${draft.settings.item_mappings.length} rule${draft.settings.item_mappings.length === 1 ? "" : "s"} override the default stock item for matching invoice lines.`
-                        : "No rules yet. Rules override the default stock item for specific invoice lines and are built from real invoice data."}
-                    </p>
+                  {isInventoryPostingMode(draft.settings.posting_mode) ? (
+                    <FieldGroup
+                      title="Default stock item"
+                      detail="Used for any invoice line that no item mapping matches. Stock moves in the accounting system under this item."
+                    >
+                      <TextField
+                        label="Stock item"
+                        value={draft.settings.stock_item_name}
+                        onChange={(value) =>
+                          updateSettings("stock_item_name", value)
+                        }
+                        hint="Exact stock item name as it appears in the accounting system."
+                      />
+                      <TextField
+                        label="Unit (UOM)"
+                        value={draft.settings.stock_item_uom}
+                        onChange={(value) =>
+                          updateSettings("stock_item_uom", value)
+                        }
+                        hint="The unit symbol that stock item uses — for example Nos or KGS."
+                      />
+                      <TextField
+                        label="HSN/SAC"
+                        optional
+                        value={draft.settings.stock_item_hsn}
+                        onChange={(value) =>
+                          updateSettings("stock_item_hsn", value)
+                        }
+                        hint="Recommended for GST validation on India profiles."
+                      />
+                      <TextField
+                        label="Godown / location"
+                        optional
+                        value={draft.settings.godown_name}
+                        onChange={(value) =>
+                          updateSettings("godown_name", value)
+                        }
+                        hint="Only if the accounting system prompts for a godown during entry."
+                      />
+                    </FieldGroup>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-3 text-xs font-semibold leading-5 text-ink-secondary">
+                      Stock item settings are hidden because this profile posts
+                      ledger-only accounting vouchers. Switch the posting mode
+                      to an inventory-backed mode to configure stock items.
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">
+                        Item mapping rules
+                      </p>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
+                        {draft.settings.item_mappings.length
+                          ? `${draft.settings.item_mappings.length} rule${draft.settings.item_mappings.length === 1 ? "" : "s"} override the default stock item for matching invoice lines.`
+                          : "No rules yet. Rules override the default stock item for specific invoice lines and are built from real invoice data."}
+                      </p>
+                    </div>
+                    <Link
+                      href="/app/rules"
+                      className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-accent-ink transition-colors hover:border-accent"
+                    >
+                      Manage in Rules &amp; mapping
+                      <ArrowRight size={14} />
+                    </Link>
                   </div>
-                  <Link
-                    href="/app/rules"
-                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-black text-accent transition-colors hover:border-accent"
-                  >
-                    Manage in Rules &amp; mapping
-                    <ArrowRight size={14} />
-                  </Link>
                 </div>
-              </div>
-            </SettingsPanel>
+              </SettingsPanel>
 
-            <SettingsPanel
-              title="AI extraction and parser training"
-              detail="Upload real invoices and describe how they are laid out. Everything here is sent to the AI with every extraction for this client."
-            >
-              <div className="mb-5">
-                <AiReadinessPanel
-                  aiStatus={aiStatus}
-                  aiStatusError={aiStatusError}
-                  profileName={draft.name || "Untitled client setup"}
-                  accountingSystem={draftSystem}
-                  countryCode={draft.settings.country_code}
-                  currency={draft.settings.default_currency || "USD"}
+              <SettingsPanel
+                title="AI extraction and parser training"
+                detail="Upload real invoices and describe how they are laid out. Everything here is sent to the AI with every extraction for this client."
+              >
+                <div className="mb-5">
+                  <AiReadinessPanel
+                    aiStatus={aiStatus}
+                    aiStatusError={aiStatusError}
+                    profileName={draft.name || "Untitled client setup"}
+                    accountingSystem={draftSystem}
+                    countryCode={draft.settings.country_code}
+                    currency={draft.settings.default_currency || "USD"}
+                    trainingProfile={trainingProfile}
+                  />
+                </div>
+                <TrainingProfileSection
+                  selectedProfile={selectedProfile}
                   trainingProfile={trainingProfile}
+                  sampleFile={trainingSampleFile}
+                  sampleNotes={trainingSampleNotes}
+                  uploading={trainingUploading}
+                  onUpdate={updateTrainingProfile}
+                  onToggleField={toggleExpectedTrainingField}
+                  onFileChange={setTrainingSampleFile}
+                  onNotesChange={setTrainingSampleNotes}
+                  onUpload={() => void uploadTrainingSampleAction()}
                 />
-              </div>
-              <TrainingProfileSection
+              </SettingsPanel>
+
+              <OnboardingApprovalPanel
                 selectedProfile={selectedProfile}
-                trainingProfile={trainingProfile}
-                sampleFile={trainingSampleFile}
-                sampleNotes={trainingSampleNotes}
-                uploading={trainingUploading}
-                onUpdate={updateTrainingProfile}
-                onToggleField={toggleExpectedTrainingField}
-                onFileChange={setTrainingSampleFile}
-                onNotesChange={setTrainingSampleNotes}
-                onUpload={() => void uploadTrainingSampleAction()}
+                status={onboardingStatus}
+                checklist={onboardingChecklist}
+                saving={saving}
+                onRecommend={() => void generateRecommendations()}
+                onSubmitReview={() => void submitForReview()}
+                onActivate={() => void approveAndActivate()}
               />
-            </SettingsPanel>
 
-            <OnboardingApprovalPanel
-              selectedProfile={selectedProfile}
-              status={onboardingStatus}
-              checklist={onboardingChecklist}
-              saving={saving}
-              onRecommend={() => void generateRecommendations()}
-              onSubmitReview={() => void submitForReview()}
-              onActivate={() => void approveAndActivate()}
-            />
+              {draft.is_default && (
+                <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
+                  <CheckCircle2 size={16} />
+                  This profile will become the default for{" "}
+                  {systemLabel(draftSystem)}.
+                </div>
+              )}
 
-            {draft.is_default && (
-              <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-bold text-success">
-                <CheckCircle2 size={16} />
-                This profile will become the default for{" "}
-                {systemLabel(draftSystem)}.
-              </div>
-            )}
-
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-bold text-ink-secondary">
-              <input
-                type="checkbox"
-                checked={draft.is_default}
-                onChange={(event) =>
-                  updateDraft("is_default", event.target.checked)
-                }
-                className="size-4 accent-[var(--accent)]"
-              />
-              Use as default for this accounting system
-            </label>
-          </div>
-        </section>
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-ink-secondary">
+                <input
+                  type="checkbox"
+                  checked={draft.is_default}
+                  onChange={(event) =>
+                    updateDraft("is_default", event.target.checked)
+                  }
+                  className="size-4 accent-[var(--accent)]"
+                />
+                Use as default for this accounting system
+              </label>
+            </div>
+          </section>
+        </div>
       </div>
-    </div>
     </ContentCard>
   );
 }
@@ -1577,7 +1639,9 @@ function getOnboardingChecklist(
     },
     {
       label: "Parser instructions",
-      detail: trainingProfile.extraction_instructions ? "Configured" : "Recommended",
+      detail: trainingProfile.extraction_instructions
+        ? "Configured"
+        : "Recommended",
       ready: Boolean(trainingProfile.extraction_instructions),
       required: false,
     },
@@ -1605,7 +1669,9 @@ function getOnboardingChecklist(
       },
       {
         label: "Tax ledgers",
-        detail: taxMode.includes("gst") ? "GST ledger mapping" : "Tax ledger mapping",
+        detail: taxMode.includes("gst")
+          ? "GST ledger mapping"
+          : "Tax ledger mapping",
         ready: taxMode.includes("gst") ? taxLedgerReady : true,
         required: taxMode.includes("gst"),
       },
@@ -1615,7 +1681,9 @@ function getOnboardingChecklist(
         {
           label: "Stock item",
           detail: settings.stock_item_name || "Exact Tally stock item",
-          ready: Boolean(settings.stock_item_name || settings.item_mappings.length),
+          ready: Boolean(
+            settings.stock_item_name || settings.item_mappings.length,
+          ),
           required: true,
         },
         {
@@ -1700,10 +1768,10 @@ function OnboardingApprovalPanel({
     <div className="overflow-hidden rounded-2xl border border-line bg-surface">
       <div className="flex flex-col gap-4 border-b border-line px-4 py-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
             Client onboarding
           </p>
-          <h4 className="mt-1 text-lg font-black text-ink">
+          <h4 className="mt-1 text-lg font-semibold text-ink">
             Setup review and activation
           </h4>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-ink-secondary">
@@ -1713,7 +1781,7 @@ function OnboardingApprovalPanel({
         </div>
         <span
           className={cn(
-            "inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black",
+            "inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold",
             active
               ? "border-success/30 bg-success-soft text-success"
               : blockers.length
@@ -1742,10 +1810,14 @@ function OnboardingApprovalPanel({
                     : "bg-surface-subtle text-ink-muted",
               )}
             >
-              {item.ready ? <CheckCircle2 size={14} /> : <CircleDashed size={14} />}
+              {item.ready ? (
+                <CheckCircle2 size={14} />
+              ) : (
+                <CircleDashed size={14} />
+              )}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-sm font-black text-ink">
+              <span className="block truncate text-sm font-semibold text-ink">
                 {item.label}
               </span>
               <span className="mt-0.5 block text-xs font-semibold leading-5 text-ink-secondary">
@@ -1818,11 +1890,7 @@ function AiReadinessPanel({
   currency: string;
   trainingProfile: ClientTrainingProfile;
 }) {
-  const readiness = getAiReadiness(
-    aiStatus,
-    trainingProfile,
-    accountingSystem,
-  );
+  const readiness = getAiReadiness(aiStatus, trainingProfile, accountingSystem);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface">
@@ -1832,10 +1900,10 @@ function AiReadinessPanel({
             <Sparkles size={20} />
           </span>
           <div className="min-w-0">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
               AI/OCR readiness
             </p>
-            <h4 className="mt-1 truncate text-lg font-black text-ink">
+            <h4 className="mt-1 truncate text-lg font-semibold text-ink">
               {profileName}
             </h4>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-ink-secondary">
@@ -1847,7 +1915,7 @@ function AiReadinessPanel({
         </div>
         <span
           className={cn(
-            "inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black",
+            "inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold",
             readiness.blockers.length
               ? "border-gold/30 bg-gold-soft text-gold"
               : "border-success/30 bg-success-soft text-success",
@@ -1864,10 +1932,10 @@ function AiReadinessPanel({
 
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_310px]">
         <div className="rounded-2xl border border-line bg-canvas p-4">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
             Where this profile stands
           </p>
-          <p className="mt-2 text-base font-black leading-7 text-ink">
+          <p className="mt-2 text-base font-semibold leading-7 text-ink">
             {readiness.headline}
           </p>
           <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-ink-secondary">
@@ -1892,7 +1960,11 @@ function AiReadinessPanel({
             label="Training samples"
             value={`${trainingProfile.sample_invoices.length}`}
             detail="2 or more is recommended"
-            tone={trainingProfile.sample_invoices.length >= 2 ? "success" : "default"}
+            tone={
+              trainingProfile.sample_invoices.length >= 2
+                ? "success"
+                : "default"
+            }
           />
           <ReadinessMetric
             label="Fields"
@@ -1902,7 +1974,11 @@ function AiReadinessPanel({
           <ReadinessMetric
             label="AI policy"
             value={humanizeToken(trainingProfile.llm_policy || "review_only")}
-            detail={trainingProfile.llm_ready ? "Approved for live use" : "Review before live use"}
+            detail={
+              trainingProfile.llm_ready
+                ? "Approved for live use"
+                : "Review before live use"
+            }
             tone={trainingProfile.llm_ready ? "success" : "default"}
           />
         </div>
@@ -1910,7 +1986,7 @@ function AiReadinessPanel({
 
       {(aiStatusError || readiness.blockers.length > 0) && (
         <div className="border-t border-line bg-canvas px-4 py-3">
-          <p className="flex items-start gap-2 text-sm font-bold leading-6 text-ink-secondary">
+          <p className="flex items-start gap-2 text-sm font-medium leading-6 text-ink-secondary">
             <AlertTriangle className="mt-0.5 shrink-0 text-gold" size={15} />
             <span>
               {aiStatusError
@@ -1940,7 +2016,7 @@ function ReadinessChecklistItem({ item }: { item: ReadinessItem }) {
         {item.ready ? <CheckCircle2 size={14} /> : <CircleDashed size={14} />}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-black leading-5 text-ink">
+        <span className="block text-sm font-semibold leading-5 text-ink">
           {item.label}
         </span>
         <span className="mt-0.5 block text-xs font-semibold leading-5 text-ink-secondary">
@@ -1971,11 +2047,11 @@ function ReadinessMetric({
         tone === "default" && "border-line",
       )}
     >
-      <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
         {label}
       </p>
-      <p className="mt-1 truncate text-base font-black text-ink">{value}</p>
-      <p className="mt-1 truncate text-xs font-bold text-ink-secondary">
+      <p className="mt-1 truncate text-base font-semibold text-ink">{value}</p>
+      <p className="mt-1 truncate text-xs font-medium text-ink-secondary">
         {detail}
       </p>
     </div>
@@ -2064,7 +2140,10 @@ function getAiReadiness(
   // Recommended items improve accuracy but never block AI use. They are
   // surfaced as plain suggestions rather than folded into a percentage.
   const recommendations = items
-    .filter((item) => !item.required && !item.ready && item.label !== "Policy approval")
+    .filter(
+      (item) =>
+        !item.required && !item.ready && item.label !== "Policy approval",
+    )
     .map((item) => item.label.toLowerCase());
 
   const providerLabel = aiStatus
@@ -2131,8 +2210,10 @@ function Pill({
   children: React.ReactNode;
 }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-line bg-canvas px-2.5 py-1 text-xs font-black text-ink-secondary">
-      <span className="shrink-0 text-accent dark:text-cyan">{icon}</span>
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-line bg-canvas px-2.5 py-1 text-xs font-semibold text-ink-secondary">
+      <span className="shrink-0 text-accent-ink dark:text-cyan-ink">
+        {icon}
+      </span>
       <span className="truncate">{children}</span>
     </span>
   );
@@ -2148,7 +2229,7 @@ function MiniChip({
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em]",
+        "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em]",
         tone === "accent"
           ? "border-accent/30 bg-accent-soft text-accent-ink"
           : "border-line bg-canvas text-ink-muted",
@@ -2219,7 +2300,11 @@ function renderConnectionFields(
           />
           <TextField
             label="Tally URL"
-            value={connectionText(settings, "tally_url", "http://localhost:9000")}
+            value={connectionText(
+              settings,
+              "tally_url",
+              "http://localhost:9000",
+            )}
             onChange={(value) => onChange("tally_url", value)}
             placeholder="http://localhost:9000"
           />
@@ -2335,7 +2420,9 @@ function normalizeImportedProfile(
   const rawSystem = stringValue(raw.accounting_system);
   const accountingSystem = lockedSystem ?? rawSystem;
   if (!isAccountingSystem(accountingSystem)) {
-    throw new Error("Imported profile is missing a supported accounting system.");
+    throw new Error(
+      "Imported profile is missing a supported accounting system.",
+    );
   }
   if (lockedSystem && rawSystem && rawSystem !== lockedSystem) {
     throw new Error(
@@ -2429,7 +2516,7 @@ function CheckboxField({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-bold text-ink-secondary">
+    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-ink-secondary">
       <input
         type="checkbox"
         checked={checked}
@@ -2442,7 +2529,9 @@ function CheckboxField({
 }
 
 function FormGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{children}</div>;
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+  );
 }
 
 function SettingsPanel({
@@ -2463,7 +2552,7 @@ function SettingsPanel({
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-surface-subtle">
         <span className="min-w-0">
-          <span className="block text-sm font-black text-ink">{title}</span>
+          <span className="block text-sm font-semibold text-ink">{title}</span>
           <span className="mt-1 block text-sm leading-5 text-ink-secondary">
             {detail}
           </span>
@@ -2531,11 +2620,14 @@ function TrainingProfileSection({
     <div className="overflow-hidden rounded-2xl border border-line bg-surface">
       <div className="flex flex-col gap-4 border-b border-line px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-            <BrainCircuit size={15} className="text-accent dark:text-cyan" />
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+            <BrainCircuit
+              size={15}
+              className="text-accent-ink dark:text-cyan-ink"
+            />
             Client learning context
           </div>
-          <h4 className="mt-2 text-lg font-black text-ink">
+          <h4 className="mt-2 text-lg font-semibold text-ink">
             Onboarding profile
           </h4>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-ink-secondary">
@@ -2543,7 +2635,7 @@ function TrainingProfileSection({
             parser should use when recommending extraction and ERP payloads.
           </p>
         </div>
-        <span className="inline-flex w-fit items-center rounded-full border border-line bg-canvas px-3 py-1.5 text-xs font-black text-ink-secondary">
+        <span className="inline-flex w-fit items-center rounded-full border border-line bg-canvas px-3 py-1.5 text-xs font-semibold text-ink-secondary">
           {trainingProfile.onboarding_status || "draft"}
         </span>
       </div>
@@ -2560,10 +2652,10 @@ function TrainingProfileSection({
                 step.ready ? "bg-success" : "bg-ink-muted/35",
               )}
             />
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
               {step.label}
             </span>
-            <span className="truncate text-xs font-black text-ink">
+            <span className="truncate text-xs font-semibold text-ink">
               {step.detail}
             </span>
           </div>
@@ -2593,7 +2685,7 @@ function TrainingProfileSection({
         </div>
 
         <div>
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
             Expected fields
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -2605,7 +2697,7 @@ function TrainingProfileSection({
                 <label
                   key={field.value}
                   className={cn(
-                    "flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm font-bold transition-colors",
+                    "flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
                     checked
                       ? "border-accent/45 bg-accent-soft text-accent-ink"
                       : "border-line bg-canvas text-ink-secondary hover:border-accent/50",
@@ -2628,9 +2720,7 @@ function TrainingProfileSection({
           <TextAreaField
             label="Extraction instructions"
             value={trainingProfile.extraction_instructions}
-            onChange={(value) =>
-              onUpdate({ extraction_instructions: value })
-            }
+            onChange={(value) => onUpdate({ extraction_instructions: value })}
             hint="Describe where things sit on this client's invoices — e.g. which block holds the supplier name, and which total to use. Two or three sentences is plenty."
             status={{
               ready: trainingProfile.extraction_instructions.trim().length > 0,
@@ -2685,10 +2775,10 @@ function TrainingProfileSection({
         <div className="rounded-2xl border border-line bg-canvas p-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(240px,320px)_minmax(0,1fr)] xl:items-end">
             <label className="min-w-0">
-              <span className="mb-2 block text-[11px] font-extrabold uppercase text-ink-muted">
+              <span className="mb-2 block text-xs font-semibold uppercase text-ink-muted">
                 Sample invoice
               </span>
-              <span className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink transition-colors hover:border-accent hover:bg-accent-soft">
+              <span className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink transition-colors hover:border-accent hover:bg-accent-soft">
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-white">
                   <Upload size={15} />
                 </span>
@@ -2716,7 +2806,7 @@ function TrainingProfileSection({
           </div>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             {!selectedProfile ? (
-              <p className="text-xs font-bold text-gold">
+              <p className="text-xs font-medium text-gold">
                 Save this client profile once before attaching sample invoices.
               </p>
             ) : (
@@ -2744,10 +2834,10 @@ function TrainingProfileSection({
 
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
               Uploaded samples
             </p>
-            <span className="rounded-full border border-line bg-canvas px-2.5 py-1 text-xs font-black text-ink-secondary">
+            <span className="rounded-full border border-line bg-canvas px-2.5 py-1 text-xs font-semibold text-ink-secondary">
               {samples.length}
             </span>
           </div>
@@ -2762,10 +2852,10 @@ function TrainingProfileSection({
                     <FileText size={16} />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-black text-ink">
+                    <span className="block truncate text-sm font-semibold text-ink">
                       {sample.filename || "Sample invoice"}
                     </span>
-                    <span className="mt-1 block truncate text-xs font-bold text-ink-secondary">
+                    <span className="mt-1 block truncate text-xs font-medium text-ink-secondary">
                       {formatBytes(sample.size_bytes)} /{" "}
                       {sample.status || "uploaded"}
                     </span>
@@ -2811,10 +2901,10 @@ function TextField({
 }) {
   return (
     <label className={cn("block", wide && "md:col-span-2 xl:col-span-full")}>
-      <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+      <span className="text-xs font-semibold uppercase text-ink-muted">
         {label}
         {optional && (
-          <span className="ml-1.5 font-bold normal-case tracking-normal text-ink-muted/70">
+          <span className="ml-1.5 font-medium normal-case tracking-normal text-ink-muted/70">
             · optional
           </span>
         )}
@@ -2823,7 +2913,7 @@ function TextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
+        className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
       />
       {hint && (
         <span className="mt-1.5 block text-xs font-semibold leading-5 text-ink-muted">
@@ -2845,11 +2935,13 @@ function FieldGroup({
 }) {
   return (
     <div className="rounded-2xl border border-line bg-canvas p-4">
-      <p className="text-sm font-black text-ink">{title}</p>
+      <p className="text-sm font-semibold text-ink">{title}</p>
       <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
         {detail}
       </p>
-      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {children}
+      </div>
     </div>
   );
 }
@@ -2876,19 +2968,23 @@ function TextAreaField({
   return (
     <label className={cn("block", wide && "md:col-span-2 xl:col-span-full")}>
       <span className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+        <span className="text-xs font-semibold uppercase text-ink-muted">
           {label}
         </span>
         {status && (
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black",
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
               status.ready
                 ? "bg-success-soft text-success"
                 : "bg-surface-subtle text-ink-muted",
             )}
           >
-            {status.ready ? <CheckCircle2 size={12} /> : <CircleDashed size={12} />}
+            {status.ready ? (
+              <CheckCircle2 size={12} />
+            ) : (
+              <CircleDashed size={12} />
+            )}
             {status.ready ? status.readyText : status.emptyText}
           </span>
         )}
@@ -2903,7 +2999,7 @@ function TextAreaField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         rows={4}
-        className="mt-2 min-h-28 w-full resize-y rounded-xl border border-line-strong bg-surface px-3 py-3 text-sm font-bold leading-6 text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
+        className="mt-2 min-h-28 w-full resize-y rounded-xl border border-line-strong bg-surface px-3 py-3 text-sm font-medium leading-6 text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
       />
     </label>
   );
@@ -2922,13 +3018,13 @@ function SelectField<TValue extends string>({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-extrabold uppercase text-ink-muted">
+      <span className="text-xs font-semibold uppercase text-ink-muted">
         {label}
       </span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as TValue)}
-        className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none transition-colors focus:border-accent"
+        className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink outline-none transition-colors focus:border-accent"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

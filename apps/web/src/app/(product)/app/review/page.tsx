@@ -27,7 +27,9 @@ export default function ReviewPage() {
 
 function ReviewPageContent() {
   const searchParams = useSearchParams();
-  const { invoices, loading, error, reload } = useWorkspaceInvoices({ limit: 100 });
+  const { invoices, loading, error, reload } = useWorkspaceInvoices({
+    limit: 100,
+  });
 
   const queryInvoiceId = searchParams.get("invoice");
   const targetSystem = searchParams.get("target") || "QuickBooks";
@@ -35,7 +37,11 @@ function ReviewPageContent() {
   const selectedInvoice = useMemo(() => {
     if (!invoices.length) return null;
     if (!queryInvoiceId) return invoices[0] ?? null;
-    return invoices.find((invoice) => invoice.id === queryInvoiceId) ?? invoices[0] ?? null;
+    return (
+      invoices.find((invoice) => invoice.id === queryInvoiceId) ??
+      invoices[0] ??
+      null
+    );
   }, [invoices, queryInvoiceId]);
 
   return (
@@ -45,31 +51,33 @@ function ReviewPageContent() {
           <div className="min-w-0">
             <Link
               href="/app/invoices"
-              className="inline-flex items-center gap-2 text-sm font-black text-ink-secondary transition-colors hover:text-accent"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-ink-secondary transition-colors hover:text-accent-ink"
             >
               <ArrowLeft size={16} />
               Invoices
             </Link>
-            <h1 className="mt-3 flex flex-wrap items-baseline gap-x-1 text-3xl font-black leading-tight text-ink">
+            <h1 className="mt-3 flex flex-wrap items-baseline gap-x-1 text-3xl font-semibold leading-tight text-ink">
               <span>Review</span>
               <span className="text-ink-secondary">/</span>
-              <span className="text-2xl font-extrabold text-ink-secondary">
+              <span className="text-2xl font-semibold text-ink-secondary">
                 Extraction workspace
               </span>
             </h1>
             <p className="mt-1 text-sm font-semibold text-ink-secondary">
-              Verify source evidence, correct fields, and save vendor learning before posting.
+              Verify source evidence, correct fields, and save vendor learning
+              before posting.
             </p>
           </div>
 
           {invoices.length > 0 && (
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="inline-flex h-10 items-center rounded-full border border-line bg-surface px-3 text-xs font-black text-ink-secondary shadow-card">
-                {invoices.length} invoice{invoices.length === 1 ? "" : "s"} in queue
+              <span className="inline-flex h-10 items-center rounded-full border border-line bg-surface px-3 text-xs font-semibold text-ink-secondary shadow-card">
+                {invoices.length} invoice{invoices.length === 1 ? "" : "s"} in
+                queue
               </span>
               <Link
                 href="/app/sift"
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-cyan/25 bg-cyan-soft px-3 text-xs font-black text-cyan transition-colors hover:border-cyan"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-cyan/25 bg-cyan-soft px-3 text-xs font-semibold text-cyan-ink transition-colors hover:border-cyan"
               >
                 <ListChecks size={15} />
                 Open Sift mode
@@ -85,7 +93,7 @@ function ReviewPageContent() {
         </main>
       ) : error ? (
         <main className="mx-auto max-w-[980px] px-4 py-6 sm:px-6 lg:px-8">
-          <div className="rounded-[24px] border border-danger/25 bg-danger-soft p-6 text-sm font-bold text-danger">
+          <div className="rounded-[24px] border border-danger/25 bg-danger-soft p-6 text-sm font-medium text-danger">
             {error}
           </div>
         </main>
@@ -108,15 +116,16 @@ function ReviewPageContent() {
               <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-accent-soft text-accent-ink">
                 <FileSearch size={24} />
               </span>
-              <h2 className="mt-5 text-2xl font-black text-ink">
+              <h2 className="mt-5 text-2xl font-semibold text-ink">
                 No invoice selected for review
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink-secondary">
-                Upload or process a supplier invoice first. The review workspace opens here once extraction is ready.
+                Upload or process a supplier invoice first. The review workspace
+                opens here once extraction is ready.
               </p>
               <Link
                 href="/app/invoices"
-                className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-accent px-4 text-sm font-black text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover"
+                className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover"
               >
                 Go to invoice queue
               </Link>

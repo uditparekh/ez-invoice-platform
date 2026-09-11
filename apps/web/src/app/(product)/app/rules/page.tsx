@@ -67,12 +67,12 @@ export default function RulesPage() {
         description="Ledger mappings, posting controls, vendor memory, and parser training — the logic layer every invoice flows through."
         action={
           profiles.length > 1 ? (
-            <label className="flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-black text-ink">
+            <label className="flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-semibold text-ink">
               Profile
               <select
                 value={profile?.id ?? ""}
                 onChange={(event) => setProfileId(event.target.value)}
-                className="bg-transparent font-bold text-accent outline-none"
+                className="bg-transparent font-medium text-accent-ink outline-none"
               >
                 {profiles.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
@@ -87,17 +87,28 @@ export default function RulesPage() {
 
       <div className="border-b border-line bg-shell/95 backdrop-blur">
         <div className="mx-auto grid max-w-[1440px] grid-cols-2 gap-2 px-4 py-3 sm:flex sm:gap-1 sm:overflow-x-auto sm:px-6 sm:py-0 lg:px-8">
-          <TabButton active={tab === "mapping"} onClick={() => setTab("mapping")}>
+          <TabButton
+            active={tab === "mapping"}
+            onClick={() => setTab("mapping")}
+          >
             GL mapping
-            {unmapped.length > 0 && <CountBadge tone="warning">{unmapped.length}</CountBadge>}
+            {unmapped.length > 0 && (
+              <CountBadge tone="warning">{unmapped.length}</CountBadge>
+            )}
           </TabButton>
           <TabButton active={tab === "rules"} onClick={() => setTab("rules")}>
             Rules
           </TabButton>
-          <TabButton active={tab === "vendors"} onClick={() => setTab("vendors")}>
+          <TabButton
+            active={tab === "vendors"}
+            onClick={() => setTab("vendors")}
+          >
             Vendor memory
           </TabButton>
-          <TabButton active={tab === "training"} onClick={() => setTab("training")}>
+          <TabButton
+            active={tab === "training"}
+            onClick={() => setTab("training")}
+          >
             Parser training
           </TabButton>
         </div>
@@ -127,13 +138,18 @@ export default function RulesPage() {
         ) : tab === "rules" ? (
           <RulesTabView invoices={invoices} />
         ) : tab === "vendors" ? (
-          <VendorMemoryTab organizationId={activeOrganizationId} invoices={invoices} />
+          <VendorMemoryTab
+            organizationId={activeOrganizationId}
+            invoices={invoices}
+          />
         ) : (
           <TrainingTab
             profile={profile}
             invoices={invoices}
             saving={saving}
-            onUpload={(file, notes) => uploadTrainingSample(profile.id, file, notes)}
+            onUpload={(file, notes) =>
+              uploadTrainingSample(profile.id, file, notes)
+            }
           />
         )}
       </main>
@@ -155,7 +171,8 @@ function MappingTab({
   onSave: (mappings: ClientProfileItemMapping[]) => Promise<unknown>;
 }) {
   const [rows, setRows] = useState<ClientProfileItemMapping[]>(
-    () => profile.settings.item_mappings?.map((mapping) => ({ ...mapping })) ?? [],
+    () =>
+      profile.settings.item_mappings?.map((mapping) => ({ ...mapping })) ?? [],
   );
   const [notice, setNotice] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -189,8 +206,12 @@ function MappingTab({
     setNotice("");
     setSaveError("");
     try {
-      await onSave(rows.filter((row) => row.source_description_contains.trim()));
-      setNotice("Mappings saved to the profile — future invoices inherit them.");
+      await onSave(
+        rows.filter((row) => row.source_description_contains.trim()),
+      );
+      setNotice(
+        "Mappings saved to the profile — future invoices inherit them.",
+      );
     } catch (error) {
       setSaveError((error as Error).message);
     }
@@ -199,10 +220,16 @@ function MappingTab({
   return (
     <>
       <section className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-        <LedgerFact label="Purchase ledger" value={profile.settings.purchase_ledger} />
+        <LedgerFact
+          label="Purchase ledger"
+          value={profile.settings.purchase_ledger}
+        />
         <LedgerFact label="Tax ledger" value={profile.settings.tax_ledger} />
         <LedgerFact label="TCS ledger" value={profile.settings.tcs_ledger} />
-        <LedgerFact label="Round-off ledger" value={profile.settings.round_off_ledger} />
+        <LedgerFact
+          label="Round-off ledger"
+          value={profile.settings.round_off_ledger}
+        />
       </section>
 
       {unmapped.length > 0 && (
@@ -216,7 +243,7 @@ function MappingTab({
                 key={item.description}
                 className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
               >
-                <p className="min-w-0 flex-1 truncate text-sm font-bold text-gold-ink">
+                <p className="min-w-0 flex-1 truncate text-sm font-medium text-gold-ink">
                   <AlertTriangle size={13} className="mr-1.5 inline" />
                   {item.description}
                   <span className="ml-2 font-mono text-xs text-ink-muted">
@@ -228,7 +255,7 @@ function MappingTab({
                   onClick={() =>
                     addRow({ source_description_contains: item.description })
                   }
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-accent transition-colors hover:border-accent hover:bg-accent-soft"
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-semibold text-accent-ink transition-colors hover:border-accent hover:bg-accent-soft"
                 >
                   <Plus size={13} />
                   Map it
@@ -247,7 +274,7 @@ function MappingTab({
             <button
               type="button"
               onClick={() => addRow()}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-black text-accent transition-colors hover:border-accent hover:bg-accent-soft"
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-semibold text-accent-ink transition-colors hover:border-accent hover:bg-accent-soft"
             >
               <Plus size={15} />
               Add mapping
@@ -256,9 +283,13 @@ function MappingTab({
               type="button"
               disabled={saving || !dirty}
               onClick={() => void save()}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-black text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover disabled:opacity-50"
             >
-              {saving ? <LoaderCircle size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+              {saving ? (
+                <LoaderCircle size={15} className="animate-spin" />
+              ) : (
+                <CheckCircle2 size={15} />
+              )}
               Save mappings
             </button>
           </div>
@@ -266,77 +297,168 @@ function MappingTab({
       >
         {rows.length ? (
           <>
-          <div className="space-y-3 md:hidden">
-            {rows.map((row, index) => (
-              <article
-                key={`card-${index}`}
-                className="rounded-2xl border border-line bg-surface p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
-                    Mapping {index + 1}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-                    className="rounded-lg p-2.5 text-ink-muted transition-colors hover:bg-danger-soft hover:text-danger"
-                    aria-label={`Remove mapping ${index + 1}`}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-                <div className="mt-1 space-y-3">
-                  <MapField label="Description contains" value={row.source_description_contains} placeholder="e.g. PTA SWEEP" strong onChange={(value) => update(index, { source_description_contains: value })} />
-                  <div className="grid grid-cols-2 gap-3">
-                    <MapField label="HSN/SAC" value={row.source_hsn_sac} placeholder="—" onChange={(value) => update(index, { source_hsn_sac: value })} />
-                    <MapField label="UOM" value={row.target_uom} placeholder="KGS" onChange={(value) => update(index, { target_uom: value })} />
+            <div className="space-y-3 md:hidden">
+              {rows.map((row, index) => (
+                <article
+                  key={`card-${index}`}
+                  className="rounded-2xl border border-line bg-surface p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted">
+                      Mapping {index + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRows((current) =>
+                          current.filter((_, i) => i !== index),
+                        )
+                      }
+                      className="rounded-lg p-2.5 text-ink-muted transition-colors hover:bg-danger-soft hover:text-danger"
+                      aria-label={`Remove mapping ${index + 1}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <MapField label="Target item" value={row.target_item_name} placeholder="Stock item name" onChange={(value) => update(index, { target_item_name: value })} />
-                  <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
-                    <MapField label="Purchase ledger" value={row.purchase_ledger} placeholder="Purchase A/C" onChange={(value) => update(index, { purchase_ledger: value })} />
-                    <MapField label="Tax ledger" value={row.tax_ledger} placeholder="IGST A/C" onChange={(value) => update(index, { tax_ledger: value })} />
+                  <div className="mt-1 space-y-3">
+                    <MapField
+                      label="Description contains"
+                      value={row.source_description_contains}
+                      placeholder="e.g. PTA SWEEP"
+                      strong
+                      onChange={(value) =>
+                        update(index, { source_description_contains: value })
+                      }
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <MapField
+                        label="HSN/SAC"
+                        value={row.source_hsn_sac}
+                        placeholder="—"
+                        onChange={(value) =>
+                          update(index, { source_hsn_sac: value })
+                        }
+                      />
+                      <MapField
+                        label="UOM"
+                        value={row.target_uom}
+                        placeholder="KGS"
+                        onChange={(value) =>
+                          update(index, { target_uom: value })
+                        }
+                      />
+                    </div>
+                    <MapField
+                      label="Target item"
+                      value={row.target_item_name}
+                      placeholder="Stock item name"
+                      onChange={(value) =>
+                        update(index, { target_item_name: value })
+                      }
+                    />
+                    <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
+                      <MapField
+                        label="Purchase ledger"
+                        value={row.purchase_ledger}
+                        placeholder="Purchase A/C"
+                        onChange={(value) =>
+                          update(index, { purchase_ledger: value })
+                        }
+                      />
+                      <MapField
+                        label="Tax ledger"
+                        value={row.tax_ledger}
+                        placeholder="IGST A/C"
+                        onChange={(value) =>
+                          update(index, { tax_ledger: value })
+                        }
+                      />
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
-          <div className="hidden overflow-x-auto md:block" data-scroll-region="true">
-            <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-sm">
-              <thead>
-                <tr className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-muted">
-                  <th className="w-[22%] py-2 pr-2">Description contains</th>
-                  <th className="w-[10%] px-2 py-2">HSN/SAC</th>
-                  <th className="w-[20%] px-2 py-2">Target item</th>
-                  <th className="w-[8%] px-2 py-2">UOM</th>
-                  <th className="w-[17%] px-2 py-2">Purchase ledger</th>
-                  <th className="w-[17%] px-2 py-2">Tax ledger</th>
-                  <th className="w-[6%] py-2 pl-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, index) => (
-                  <tr key={index} className="border-t border-line">
-                    <MapCell value={row.source_description_contains} placeholder="e.g. PTA SWEEP" onChange={(value) => update(index, { source_description_contains: value })} strong />
-                    <MapCell value={row.source_hsn_sac} placeholder="—" onChange={(value) => update(index, { source_hsn_sac: value })} />
-                    <MapCell value={row.target_item_name} placeholder="Stock item name" onChange={(value) => update(index, { target_item_name: value })} />
-                    <MapCell value={row.target_uom} placeholder="KGS" onChange={(value) => update(index, { target_uom: value })} />
-                    <MapCell value={row.purchase_ledger} placeholder="Purchase A/C" onChange={(value) => update(index, { purchase_ledger: value })} />
-                    <MapCell value={row.tax_ledger} placeholder="IGST A/C" onChange={(value) => update(index, { tax_ledger: value })} />
-                    <td className="py-2 pl-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-                        className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-danger-soft hover:text-danger"
-                        aria-label={`Remove mapping ${index + 1}`}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
+                </article>
+              ))}
+            </div>
+            <div
+              className="hidden overflow-x-auto md:block"
+              data-scroll-region="true"
+            >
+              <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-sm">
+                <thead>
+                  <tr className="text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted">
+                    <th className="w-[22%] py-2 pr-2">Description contains</th>
+                    <th className="w-[10%] px-2 py-2">HSN/SAC</th>
+                    <th className="w-[20%] px-2 py-2">Target item</th>
+                    <th className="w-[8%] px-2 py-2">UOM</th>
+                    <th className="w-[17%] px-2 py-2">Purchase ledger</th>
+                    <th className="w-[17%] px-2 py-2">Tax ledger</th>
+                    <th className="w-[6%] py-2 pl-2" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => (
+                    <tr key={index} className="border-t border-line">
+                      <MapCell
+                        value={row.source_description_contains}
+                        placeholder="e.g. PTA SWEEP"
+                        onChange={(value) =>
+                          update(index, { source_description_contains: value })
+                        }
+                        strong
+                      />
+                      <MapCell
+                        value={row.source_hsn_sac}
+                        placeholder="—"
+                        onChange={(value) =>
+                          update(index, { source_hsn_sac: value })
+                        }
+                      />
+                      <MapCell
+                        value={row.target_item_name}
+                        placeholder="Stock item name"
+                        onChange={(value) =>
+                          update(index, { target_item_name: value })
+                        }
+                      />
+                      <MapCell
+                        value={row.target_uom}
+                        placeholder="KGS"
+                        onChange={(value) =>
+                          update(index, { target_uom: value })
+                        }
+                      />
+                      <MapCell
+                        value={row.purchase_ledger}
+                        placeholder="Purchase A/C"
+                        onChange={(value) =>
+                          update(index, { purchase_ledger: value })
+                        }
+                      />
+                      <MapCell
+                        value={row.tax_ledger}
+                        placeholder="IGST A/C"
+                        onChange={(value) =>
+                          update(index, { tax_ledger: value })
+                        }
+                      />
+                      <td className="py-2 pl-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRows((current) =>
+                              current.filter((_, i) => i !== index),
+                            )
+                          }
+                          className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-danger-soft hover:text-danger"
+                          aria-label={`Remove mapping ${index + 1}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         ) : (
           <p className="text-sm font-semibold text-ink-muted">
@@ -344,12 +466,12 @@ function MappingTab({
           </p>
         )}
         {notice && (
-          <p className="mt-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-bold text-success">
+          <p className="mt-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
             {notice}
           </p>
         )}
         {saveError && (
-          <p className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
+          <p className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
             {saveError}
           </p>
         )}
@@ -363,7 +485,9 @@ function MappingTab({
 function RulesTabView({ invoices }: { invoices: Invoice[] }) {
   const [threshold, setThreshold] = useState(() => {
     if (typeof window === "undefined") return 500000;
-    const stored = Number(window.localStorage.getItem("siftentry.rules.approvalThreshold"));
+    const stored = Number(
+      window.localStorage.getItem("siftentry.rules.approvalThreshold"),
+    );
     return Number.isFinite(stored) && stored > 0 ? stored : 500000;
   });
   const [approvalOn, setApprovalOn] = useState(() =>
@@ -406,7 +530,10 @@ function RulesTabView({ invoices }: { invoices: Invoice[] }) {
 
   function persistApproval(on: boolean, value: number) {
     window.localStorage.setItem("siftentry.rules.approvalOn", String(on));
-    window.localStorage.setItem("siftentry.rules.approvalThreshold", String(value));
+    window.localStorage.setItem(
+      "siftentry.rules.approvalThreshold",
+      String(value),
+    );
   }
 
   return (
@@ -451,10 +578,10 @@ function RulesTabView({ invoices }: { invoices: Invoice[] }) {
                 });
               }}
               className={cn(
-                "inline-flex h-9 items-center rounded-lg px-3.5 text-xs font-black transition-colors",
+                "inline-flex h-9 items-center rounded-lg px-3.5 text-xs font-semibold transition-colors",
                 approvalOn
                   ? "bg-success-soft text-success"
-                  : "border border-line-strong bg-surface text-ink-secondary hover:border-accent hover:text-accent",
+                  : "border border-line-strong bg-surface text-ink-secondary hover:border-accent hover:text-accent-ink",
               )}
             >
               {approvalOn ? "Turn off" : "Turn on"}
@@ -468,12 +595,13 @@ function RulesTabView({ invoices }: { invoices: Invoice[] }) {
         subtitle={`Test the approval rule against your last ${sample.length} invoices before turning it on — evidence, not faith.`}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="flex h-11 flex-1 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-black text-ink sm:max-w-xs">
+          <label className="flex h-11 flex-1 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-semibold text-ink sm:max-w-xs">
             Threshold
             <input
               value={threshold}
               onChange={(event) => {
-                const value = Number(event.target.value.replace(/[^0-9]/g, "")) || 0;
+                const value =
+                  Number(event.target.value.replace(/[^0-9]/g, "")) || 0;
                 setThreshold(value);
                 setSimulated(false);
                 persistApproval(approvalOn, value);
@@ -485,7 +613,7 @@ function RulesTabView({ invoices }: { invoices: Invoice[] }) {
           <button
             type="button"
             onClick={() => setSimulated(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-5 text-sm font-black text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover"
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-5 text-sm font-semibold text-white shadow-sm shadow-accent/20 transition-colors hover:bg-accent-hover"
           >
             <FlaskConical size={16} />
             Run simulation
@@ -493,10 +621,11 @@ function RulesTabView({ invoices }: { invoices: Invoice[] }) {
         </div>
 
         {simulated && (
-          <div className="mt-4 rounded-xl bg-accent-soft px-4 py-3.5 text-sm font-bold text-accent-ink">
+          <div className="mt-4 rounded-xl bg-accent-soft px-4 py-3.5 text-sm font-medium text-accent-ink">
             <Sparkles size={14} className="mr-1.5 inline" />
-            {hits.length} of {sample.length} invoices ({formatCurrency(invoiceSum(hits), currency)})
-            would have required approval · no false blocks below the threshold.
+            {hits.length} of {sample.length} invoices (
+            {formatCurrency(invoiceSum(hits), currency)}) would have required
+            approval · no false blocks below the threshold.
             {hits.length > 0 && (
               <span className="mt-2 block font-semibold">
                 {hits
@@ -525,7 +654,9 @@ function VendorMemoryTab({
   organizationId: string | null;
   invoices: Invoice[];
 }) {
-  const [records, setRecords] = useState<Record<string, unknown>[] | null>(null);
+  const [records, setRecords] = useState<Record<string, unknown>[] | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!organizationId) return;
@@ -551,10 +682,17 @@ function VendorMemoryTab({
   }, [organizationId]);
 
   const vendors = useMemo(() => {
-    const bySupplier = new Map<string, { invoices: number; flags: number; learned: number }>();
+    const bySupplier = new Map<
+      string,
+      { invoices: number; flags: number; learned: number }
+    >();
     for (const invoice of invoices) {
       const name = invoice.supplier.name || "Unknown supplier";
-      const entry = bySupplier.get(name) ?? { invoices: 0, flags: 0, learned: 0 };
+      const entry = bySupplier.get(name) ?? {
+        invoices: 0,
+        flags: 0,
+        learned: 0,
+      };
       entry.invoices += 1;
       if (invoice.validation_issues.length || invoice.status === "needs_review")
         entry.flags += 1;
@@ -566,7 +704,11 @@ function VendorMemoryTab({
         stringOf(record, "supplier") ||
         stringOf(record, "vendor");
       if (!name) continue;
-      const entry = bySupplier.get(name) ?? { invoices: 0, flags: 0, learned: 0 };
+      const entry = bySupplier.get(name) ?? {
+        invoices: 0,
+        flags: 0,
+        learned: 0,
+      };
       entry.learned += 1;
       bySupplier.set(name, entry);
     }
@@ -597,12 +739,17 @@ function VendorMemoryTab({
                 ? "Training"
                 : "Watching";
         return (
-          <article key={vendor.name} className="rounded-2xl border border-line bg-surface p-5 shadow-card">
+          <article
+            key={vendor.name}
+            className="rounded-2xl border border-line bg-surface p-5 shadow-card"
+          >
             <div className="flex items-start justify-between gap-3">
-              <h3 className="min-w-0 truncate text-base font-black text-ink">{vendor.name}</h3>
+              <h3 className="min-w-0 truncate text-base font-semibold text-ink">
+                {vendor.name}
+              </h3>
               <span
                 className={cn(
-                  "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black",
+                  "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
                   state.startsWith("Active")
                     ? "bg-success-soft text-success"
                     : state === "Learning"
@@ -613,7 +760,7 @@ function VendorMemoryTab({
                 {state}
               </span>
             </div>
-            <p className="mt-3 text-sm font-bold text-ink-secondary">
+            <p className="mt-3 text-sm font-medium text-ink-secondary">
               {vendor.invoices} invoice{vendor.invoices === 1 ? "" : "s"} ·{" "}
               {vendor.flags} flag{vendor.flags === 1 ? "" : "s"}
             </p>
@@ -648,12 +795,18 @@ function TrainingTab({
   const [uploadedCount, setUploadedCount] = useState(0);
 
   const weakVendors = useMemo(() => {
-    const byVendor = new Map<string, { sum: number; count: number; flags: number }>();
+    const byVendor = new Map<
+      string,
+      { sum: number; count: number; flags: number }
+    >();
     for (const invoice of invoices) {
       const name = invoice.supplier.name || "Unknown supplier";
       const entry = byVendor.get(name) ?? { sum: 0, count: 0, flags: 0 };
       if (invoice.confidence != null) {
-        entry.sum += invoice.confidence <= 1 ? invoice.confidence * 100 : invoice.confidence;
+        entry.sum +=
+          invoice.confidence <= 1
+            ? invoice.confidence * 100
+            : invoice.confidence;
         entry.count += 1;
       }
       if (invoice.validation_issues.length) entry.flags += 1;
@@ -665,7 +818,9 @@ function TrainingTab({
         avg: entry.count ? Math.round(entry.sum / entry.count) : null,
         flags: entry.flags,
       }))
-      .filter((vendor) => (vendor.avg != null && vendor.avg < 92) || vendor.flags > 0)
+      .filter(
+        (vendor) => (vendor.avg != null && vendor.avg < 92) || vendor.flags > 0,
+      )
       .sort((a, b) => (a.avg ?? 100) - (b.avg ?? 100));
   }, [invoices]);
 
@@ -697,18 +852,25 @@ function TrainingTab({
         {weakVendors.length ? (
           <div className="divide-y divide-line">
             {weakVendors.slice(0, 6).map((vendor) => (
-              <div key={vendor.name} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+              <div
+                key={vendor.name}
+                className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+              >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-ink">{vendor.name}</p>
-                  <p className="text-xs font-bold text-gold-ink">
-                    {vendor.avg != null ? `avg confidence ${vendor.avg}%` : "confidence pending"}
+                  <p className="truncate text-sm font-semibold text-ink">
+                    {vendor.name}
+                  </p>
+                  <p className="text-xs font-medium text-gold-ink">
+                    {vendor.avg != null
+                      ? `avg confidence ${vendor.avg}%`
+                      : "confidence pending"}
                     {vendor.flags ? ` · ${vendor.flags} flagged` : ""}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => fileInput.current?.click()}
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-black text-accent transition-colors hover:border-accent hover:bg-accent-soft"
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-semibold text-accent-ink transition-colors hover:border-accent hover:bg-accent-soft"
                 >
                   <UploadCloud size={13} />
                   Add samples
@@ -718,7 +880,8 @@ function TrainingTab({
           </div>
         ) : (
           <p className="text-sm font-semibold text-ink-muted">
-            All vendors ≥92% confidence with no flags — nothing needs training right now.
+            All vendors ≥92% confidence with no flags — nothing needs training
+            right now.
           </p>
         )}
       </ContentCard>
@@ -742,11 +905,11 @@ function TrainingTab({
           className="grid w-full place-items-center rounded-2xl border-2 border-dashed border-accent/40 bg-accent-soft/40 px-6 py-10 text-center transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-60"
         >
           {saving ? (
-            <LoaderCircle size={26} className="animate-spin text-accent" />
+            <LoaderCircle size={26} className="animate-spin text-accent-ink" />
           ) : (
-            <UploadCloud size={26} className="text-accent" />
+            <UploadCloud size={26} className="text-accent-ink" />
           )}
-          <span className="mt-3 text-sm font-black text-accent">
+          <span className="mt-3 text-sm font-semibold text-accent-ink">
             Drop PDFs here or click to browse
           </span>
           <span className="mt-1 text-xs font-semibold text-ink-muted">
@@ -762,19 +925,19 @@ function TrainingTab({
           </span>
         </button>
         {notice && (
-          <p className="mt-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-bold text-success">
+          <p className="mt-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
             {notice}
           </p>
         )}
         {uploadError && (
-          <p className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
+          <p className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
             {uploadError}
           </p>
         )}
         <p className="mt-4 text-xs font-semibold leading-5 text-ink-muted">
           Teach-fields region marking (click a field on the sample → the parser
-          learns its location) ships once extraction returns coordinates — samples
-          uploaded here already improve this vendor&apos;s parsing.
+          learns its location) ships once extraction returns coordinates —
+          samples uploaded here already improve this vendor&apos;s parsing.
         </p>
       </ContentCard>
     </div>
@@ -783,15 +946,23 @@ function TrainingTab({
 
 /* ================= shared ================= */
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-11 min-w-0 items-center justify-center rounded-xl border px-3 text-center text-xs font-black transition-colors sm:h-12 sm:shrink-0 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-4 sm:text-sm",
+        "inline-flex min-h-11 min-w-0 items-center justify-center rounded-xl border px-3 text-center text-xs font-semibold transition-colors sm:h-12 sm:shrink-0 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-4 sm:text-sm",
         active
-          ? "border-accent bg-accent-soft text-accent sm:bg-transparent"
+          ? "border-accent bg-accent-soft text-accent-ink sm:bg-transparent"
           : "border-line bg-surface text-ink-secondary hover:text-ink sm:border-transparent sm:bg-transparent",
       )}
     >
@@ -800,11 +971,17 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function CountBadge({ children, tone }: { children: ReactNode; tone: "warning" }) {
+function CountBadge({
+  children,
+  tone,
+}: {
+  children: ReactNode;
+  tone: "warning";
+}) {
   return (
     <span
       className={cn(
-        "ml-1.5 rounded-full px-2 py-0.5 font-mono text-[11px] font-black",
+        "ml-1.5 rounded-full px-2 py-0.5 font-mono text-xs font-semibold",
         tone === "warning" && "bg-gold-soft text-gold-ink",
       )}
     >
@@ -816,8 +993,12 @@ function CountBadge({ children, tone }: { children: ReactNode; tone: "warning" }
 function LedgerFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-line bg-surface px-4 py-3.5 shadow-card">
-      <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">{label}</p>
-      <p className="mt-1 truncate font-mono text-sm font-black text-ink">{value || "— not set"}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
+        {label}
+      </p>
+      <p className="mt-1 truncate font-mono text-sm font-semibold text-ink">
+        {value || "— not set"}
+      </p>
     </div>
   );
 }
@@ -842,20 +1023,29 @@ function RuleCard({
   return (
     <article className="rounded-2xl border border-line bg-surface p-5 shadow-card">
       <div className="flex items-start justify-between gap-3">
-        <span className="text-accent">{icon}</span>
+        <span className="text-accent-ink">{icon}</span>
         <span
           className={cn(
-            "rounded-full px-3 py-1 text-xs font-black",
-            state === "Active" ? "bg-success-soft text-success" : "bg-surface-strong text-ink-muted",
+            "rounded-full px-3 py-1 text-xs font-semibold",
+            state === "Active"
+              ? "bg-success-soft text-success"
+              : "bg-surface-strong text-ink-muted",
           )}
         >
           {state}
         </span>
       </div>
-      <h3 className="mt-3 text-base font-black text-ink">{title}</h3>
-      <p className="mt-1.5 text-sm font-semibold leading-5 text-ink-secondary">{detail}</p>
+      <h3 className="mt-3 text-base font-semibold text-ink">{title}</h3>
+      <p className="mt-1.5 text-sm font-semibold leading-5 text-ink-secondary">
+        {detail}
+      </p>
       {live && (
-        <p className={cn("mt-3 text-sm font-black", liveTone === "warning" ? "text-gold-ink" : "text-success")}>
+        <p
+          className={cn(
+            "mt-3 text-sm font-semibold",
+            liveTone === "warning" ? "text-gold-ink" : "text-success",
+          )}
+        >
           {live}
         </p>
       )}
@@ -879,7 +1069,7 @@ function MapField({
 }) {
   return (
     <label className="block">
-      <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+      <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
         {label}
       </span>
       <input
@@ -888,7 +1078,7 @@ function MapField({
         onChange={(event) => onChange(event.target.value)}
         className={cn(
           "mt-1 w-full rounded-lg border border-line bg-canvas px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-ink-muted focus:border-accent",
-          strong ? "font-black text-ink" : "font-bold text-ink-secondary",
+          strong ? "font-semibold text-ink" : "font-medium text-ink-secondary",
         )}
       />
     </label>
@@ -914,17 +1104,23 @@ function MapCell({
         onChange={(event) => onChange(event.target.value)}
         className={cn(
           "w-full rounded-lg border border-transparent bg-transparent px-2 py-2 text-sm outline-none transition-colors placeholder:text-ink-muted hover:border-line focus:border-accent focus:bg-canvas",
-          strong ? "font-black text-ink" : "font-bold text-ink-secondary",
+          strong ? "font-semibold text-ink" : "font-medium text-ink-secondary",
         )}
       />
     </td>
   );
 }
 
-function unmappedDescriptions(invoices: Invoice[], profile: ClientProfile | null) {
+function unmappedDescriptions(
+  invoices: Invoice[],
+  profile: ClientProfile | null,
+) {
   if (!profile) return [];
   const mappings = profile.settings.item_mappings ?? [];
-  const results = new Map<string, { description: string; amount: number; currency: string }>();
+  const results = new Map<
+    string,
+    { description: string; amount: number; currency: string }
+  >();
   for (const invoice of invoices) {
     for (const line of invoice.lines) {
       const description = line.description?.trim();
@@ -933,7 +1129,9 @@ function unmappedDescriptions(invoices: Invoice[], profile: ClientProfile | null
       const mapped = mappings.some(
         (mapping) =>
           mapping.source_description_contains &&
-          description.toLowerCase().includes(mapping.source_description_contains.toLowerCase()),
+          description
+            .toLowerCase()
+            .includes(mapping.source_description_contains.toLowerCase()),
       );
       if (mapped || results.has(description)) continue;
       results.set(description, {

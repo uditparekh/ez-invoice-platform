@@ -51,7 +51,9 @@ export function AcceptInvitationForm() {
       router.replace("/app");
       router.refresh();
     } catch {
-      setError("The SiftEntry API is unavailable. Start FastAPI and try again.");
+      setError(
+        "The SiftEntry API is unavailable. Start FastAPI and try again.",
+      );
     } finally {
       setSubmitting(false);
     }

@@ -43,8 +43,7 @@ export default function ApprovalsPage() {
   const queue = useMemo(
     () =>
       invoices.filter(
-        (invoice) =>
-          invoice.status === "validated" && !decided.has(invoice.id),
+        (invoice) => invoice.status === "validated" && !decided.has(invoice.id),
       ),
     [invoices, decided],
   );
@@ -59,13 +58,14 @@ export default function ApprovalsPage() {
   async function post(path: string, body?: unknown): Promise<void> {
     const response = await fetch(path, {
       method: body === undefined ? "POST" : "POST",
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers:
+        body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as
-        | ApiErrorPayload
-        | null;
+      const payload = (await response
+        .json()
+        .catch(() => null)) as ApiErrorPayload | null;
       throw new Error(
         apiErrorMessage(payload ?? {}, "The action could not be completed."),
       );
@@ -100,9 +100,9 @@ export default function ApprovalsPage() {
         body: JSON.stringify({ reason: reason.trim() }),
       }).then(async (response) => {
         if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as
-            | ApiErrorPayload
-            | null;
+          const payload = (await response
+            .json()
+            .catch(() => null)) as ApiErrorPayload | null;
           throw new Error(
             apiErrorMessage(payload ?? {}, "Could not send this invoice back."),
           );
@@ -126,10 +126,12 @@ export default function ApprovalsPage() {
         patch.invoice_number = fixNumber.trim();
       if (fixTotal.trim()) {
         const parsed = Number(fixTotal);
-        if (!Number.isFinite(parsed)) throw new Error("Total must be a number.");
+        if (!Number.isFinite(parsed))
+          throw new Error("Total must be a number.");
         if (parsed !== invoice.total) patch.total = parsed;
       }
-      if (fixDate && fixDate !== invoice.invoice_date) patch.invoice_date = fixDate;
+      if (fixDate && fixDate !== invoice.invoice_date)
+        patch.invoice_date = fixDate;
       if (Object.keys(patch).length) {
         const response = await fetch(`/api/invoices/${invoice.id}`, {
           method: "PATCH",
@@ -137,9 +139,9 @@ export default function ApprovalsPage() {
           body: JSON.stringify(patch),
         });
         if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as
-            | ApiErrorPayload
-            | null;
+          const payload = (await response
+            .json()
+            .catch(() => null)) as ApiErrorPayload | null;
           throw new Error(
             apiErrorMessage(payload ?? {}, "Could not save the fix."),
           );
@@ -172,10 +174,10 @@ export default function ApprovalsPage() {
     <div className="min-h-[calc(100vh-64px)] bg-canvas">
       <div className="mx-auto max-w-[480px] px-4 py-5 pb-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-black text-ink">Approvals</h1>
+          <h1 className="text-2xl font-semibold text-ink">Approvals</h1>
           <span
             className={cn(
-              "inline-flex h-8 items-center rounded-full px-3 text-xs font-black",
+              "inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold",
               queue.length
                 ? "bg-gold-soft text-gold-ink"
                 : "bg-success-soft text-success",
@@ -190,15 +192,15 @@ export default function ApprovalsPage() {
             <LoadingState label="Loading approvals" />
           </div>
         ) : error ? (
-          <p className="mt-5 rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
+          <p className="mt-5 rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
             {error}
           </p>
         ) : !active ? (
           <div className="mt-5">
             {sessionCount ? (
-              <div className="rounded-3xl border border-line bg-surface px-6 py-12 text-center shadow-card">
+              <div className="rounded-2xl border border-line bg-surface px-6 py-12 text-center shadow-card">
                 <PartyPopper className="mx-auto text-cyan-ink" size={36} />
-                <h2 className="mt-4 text-2xl font-black text-ink">
+                <h2 className="mt-4 text-2xl font-semibold text-ink">
                   All approvals done
                 </h2>
                 <p className="mt-2 text-sm font-semibold text-ink-secondary">
@@ -210,7 +212,7 @@ export default function ApprovalsPage() {
                 </p>
                 <Link
                   href="/app/invoices"
-                  className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-5 text-sm font-black text-white"
+                  className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-5 text-sm font-semibold text-white"
                 >
                   Open queue
                   <ArrowUpRight size={15} />
@@ -227,16 +229,16 @@ export default function ApprovalsPage() {
         ) : (
           <>
             {/* the one-job card: invoice summary */}
-            <article className="mt-5 rounded-3xl border border-line bg-surface p-5 shadow-pop">
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-ink-muted">
+            <article className="mt-5 rounded-2xl border border-line bg-surface p-5 shadow-pop">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
                 {active.supplier.name || "Supplier pending"} · #
                 {active.invoice_number || "—"}
               </p>
-              <p className="mt-2 font-mono text-4xl font-black tracking-tight text-ink">
+              <p className="mt-2 font-mono text-4xl font-semibold tracking-tight text-ink">
                 {formatCurrency(active.total, active.currency)}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-soft px-3 py-1 text-xs font-black text-cyan-ink">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-soft px-3 py-1 text-xs font-semibold text-cyan-ink">
                   <ShieldCheck size={12} />
                   {active.confidence != null
                     ? `${Math.round(active.confidence <= 1 ? active.confidence * 100 : active.confidence)}% confidence`
@@ -244,7 +246,7 @@ export default function ApprovalsPage() {
                 </span>
                 <span
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black",
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold",
                     taxVerified(active)
                       ? "bg-success-soft text-success"
                       : "bg-gold-soft text-gold-ink",
@@ -262,7 +264,7 @@ export default function ApprovalsPage() {
               </p>
 
               {actionError && sheet === "none" && (
-                <p className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
+                <p className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
                   {actionError}
                 </p>
               )}
@@ -272,7 +274,7 @@ export default function ApprovalsPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => void approve(active)}
-                  className="inline-flex h-14 items-center justify-center gap-2.5 rounded-2xl bg-success text-base font-black text-white shadow-lg shadow-success/25 transition-transform hover:scale-[1.01] disabled:opacity-60"
+                  className="inline-flex h-14 items-center justify-center gap-2.5 rounded-2xl bg-success text-base font-semibold text-white shadow-lg shadow-success/25 transition-transform hover:scale-[1.01] disabled:opacity-60"
                 >
                   {busy && sheet === "none" ? (
                     <LoaderCircle size={19} className="animate-spin" />
@@ -288,7 +290,7 @@ export default function ApprovalsPage() {
                       setActionError("");
                       setSheet("reject");
                     }}
-                    className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-line-strong bg-surface text-sm font-black text-danger transition-colors hover:border-danger hover:bg-danger-soft"
+                    className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-line-strong bg-surface text-sm font-semibold text-danger transition-colors hover:border-danger hover:bg-danger-soft"
                   >
                     <Undo2 size={14} />
                     Reject
@@ -296,7 +298,7 @@ export default function ApprovalsPage() {
                   <button
                     type="button"
                     onClick={() => openFix(active)}
-                    className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-line-strong bg-surface text-sm font-black text-gold-ink transition-colors hover:border-gold-ink hover:bg-gold-soft"
+                    className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-line-strong bg-surface text-sm font-semibold text-gold-ink transition-colors hover:border-gold-ink hover:bg-gold-soft"
                   >
                     <Wrench size={14} />
                     Fix
@@ -305,20 +307,22 @@ export default function ApprovalsPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setSheet((current) => (current === "pdf" ? "none" : "pdf"))
+                        setSheet((current) =>
+                          current === "pdf" ? "none" : "pdf",
+                        )
                       }
                       className={cn(
-                        "inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl border text-sm font-black transition-colors",
+                        "inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl border text-sm font-semibold transition-colors",
                         sheet === "pdf"
-                          ? "border-accent bg-accent-soft text-accent"
-                          : "border-line-strong bg-surface text-accent hover:border-accent hover:bg-accent-soft",
+                          ? "border-accent bg-accent-soft text-accent-ink"
+                          : "border-line-strong bg-surface text-accent-ink hover:border-accent hover:bg-accent-soft",
                       )}
                     >
                       <FileText size={14} />
                       PDF
                     </button>
                   ) : (
-                    <span className="inline-flex h-12 items-center justify-center rounded-2xl border border-line bg-surface-subtle text-xs font-bold text-ink-muted">
+                    <span className="inline-flex h-12 items-center justify-center rounded-2xl border border-line bg-surface-subtle text-xs font-medium text-ink-muted">
                       No PDF
                     </span>
                   )}
@@ -334,7 +338,7 @@ export default function ApprovalsPage() {
                     className="h-[420px] w-full rounded-2xl border border-line bg-surface-subtle"
                   >
                     <div className="grid h-[200px] place-items-center rounded-2xl border border-dashed border-line-strong bg-surface-subtle px-4 text-center">
-                      <p className="text-xs font-bold text-ink-muted">
+                      <p className="text-xs font-medium text-ink-muted">
                         Inline preview isn&apos;t supported in this browser.
                       </p>
                     </div>
@@ -343,7 +347,7 @@ export default function ApprovalsPage() {
                     href={`/api/invoices/${active.id}/document`}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs font-black text-accent"
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-accent-ink"
                   >
                     Open full screen
                     <ArrowUpRight size={12} />
@@ -355,7 +359,7 @@ export default function ApprovalsPage() {
               {sheet === "reject" && (
                 <div className="mt-4 rounded-2xl border border-danger/30 bg-danger-soft/40 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-black text-ink">
+                    <p className="text-sm font-semibold text-ink">
                       Send back for review
                     </p>
                     <button
@@ -375,7 +379,7 @@ export default function ApprovalsPage() {
                     className="mt-3 w-full rounded-xl border border-line-strong bg-surface px-3 py-2.5 text-sm font-semibold text-ink outline-none focus:border-danger"
                   />
                   {actionError && (
-                    <p className="mt-2 text-xs font-bold text-danger">
+                    <p className="mt-2 text-xs font-medium text-danger">
                       {actionError}
                     </p>
                   )}
@@ -383,7 +387,7 @@ export default function ApprovalsPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => void reject(active)}
-                    className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-danger text-sm font-black text-white disabled:opacity-60"
+                    className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-danger-button text-sm font-semibold text-white disabled:opacity-60"
                   >
                     {busy ? (
                       <LoaderCircle size={16} className="animate-spin" />
@@ -392,7 +396,7 @@ export default function ApprovalsPage() {
                     )}
                     Send back with reason
                   </button>
-                  <p className="mt-2 text-[11px] font-semibold text-ink-muted">
+                  <p className="mt-2 text-xs font-semibold text-ink-muted">
                     The invoice returns to Needs review with your note attached.
                   </p>
                 </div>
@@ -402,7 +406,7 @@ export default function ApprovalsPage() {
               {sheet === "fix" && (
                 <div className="mt-4 rounded-2xl border border-gold-ink/30 bg-gold-soft/40 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-black text-ink">Quick fix</p>
+                    <p className="text-sm font-semibold text-ink">Quick fix</p>
                     <button
                       type="button"
                       aria-label="Close"
@@ -412,36 +416,36 @@ export default function ApprovalsPage() {
                       <X size={16} />
                     </button>
                   </div>
-                  <label className="mt-3 block text-[11px] font-black uppercase tracking-wide text-ink-muted">
+                  <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-ink-muted">
                     Invoice number
                     <input
                       value={fixNumber}
                       onChange={(event) => setFixNumber(event.target.value)}
-                      className="mt-1 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-gold-ink"
+                      className="mt-1 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink outline-none focus:border-gold-ink"
                     />
                   </label>
                   <div className="mt-3 grid grid-cols-2 gap-3">
-                    <label className="block text-[11px] font-black uppercase tracking-wide text-ink-muted">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-ink-muted">
                       Total
                       <input
                         value={fixTotal}
                         onChange={(event) => setFixTotal(event.target.value)}
                         inputMode="decimal"
-                        className="mt-1 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 font-mono text-sm font-bold text-ink outline-none focus:border-gold-ink"
+                        className="mt-1 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 font-mono text-sm font-medium text-ink outline-none focus:border-gold-ink"
                       />
                     </label>
-                    <label className="block text-[11px] font-black uppercase tracking-wide text-ink-muted">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-ink-muted">
                       Date
                       <input
                         type="date"
                         value={fixDate}
                         onChange={(event) => setFixDate(event.target.value)}
-                        className="mt-1 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-gold-ink"
+                        className="mt-1 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink outline-none focus:border-gold-ink"
                       />
                     </label>
                   </div>
                   {actionError && (
-                    <p className="mt-2 text-xs font-bold text-danger">
+                    <p className="mt-2 text-xs font-medium text-danger">
                       {actionError}
                     </p>
                   )}
@@ -449,7 +453,7 @@ export default function ApprovalsPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => void applyFix(active)}
-                    className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gold-ink text-sm font-black text-white disabled:opacity-60"
+                    className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gold-ink text-sm font-semibold text-white disabled:opacity-60"
                   >
                     {busy ? (
                       <LoaderCircle size={16} className="animate-spin" />
@@ -460,7 +464,7 @@ export default function ApprovalsPage() {
                   </button>
                   <Link
                     href={`/app/invoices?invoice=${active.id}&mode=review`}
-                    className="mt-2 block text-center text-[11px] font-black text-accent"
+                    className="mt-2 block text-center text-xs font-semibold text-accent-ink"
                   >
                     Need more? Open the full Review Workspace →
                   </Link>
@@ -477,21 +481,21 @@ export default function ApprovalsPage() {
                     className="flex items-center justify-between rounded-2xl border border-line bg-surface px-4 py-3 opacity-70 shadow-card"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[11px] font-black uppercase tracking-wide text-ink-muted">
+                      <p className="truncate text-xs font-semibold uppercase tracking-wide text-ink-muted">
                         {invoice.supplier.name || "Supplier"} · #
                         {invoice.invoice_number || "—"}
                       </p>
-                      <p className="font-mono text-lg font-black text-ink">
+                      <p className="font-mono text-lg font-semibold text-ink">
                         {formatCurrency(invoice.total, invoice.currency)}
                       </p>
                     </div>
-                    <span className="text-xs font-bold text-ink-muted">
+                    <span className="text-xs font-medium text-ink-muted">
                       waiting
                     </span>
                   </div>
                 ))}
                 {queue.length > 4 && (
-                  <p className="text-center text-xs font-bold text-ink-muted">
+                  <p className="text-center text-xs font-medium text-ink-muted">
                     +{queue.length - 4} more in the queue
                   </p>
                 )}

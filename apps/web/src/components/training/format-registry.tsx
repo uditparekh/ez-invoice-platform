@@ -23,12 +23,12 @@ export function FormatRegistry() {
   return (
     <section className="mt-8">
       {/* Training hero — same visual family as the Sift hero */}
-      <div className="flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-[var(--hero-from)] via-[var(--hero-via)] to-[var(--hero-to)] px-6 py-5 shadow-glow sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl bg-gradient-to-r from-[var(--hero-from)] via-[var(--hero-via)] to-[var(--hero-to)] px-6 py-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-indigo-200/80">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-200/80">
             Training mode
           </p>
-          <p className="mt-1 text-lg font-black leading-snug text-white sm:text-xl">
+          <p className="mt-1 text-lg font-semibold leading-snug text-white sm:text-xl">
             {trusted.length} trusted format{trusted.length === 1 ? "" : "s"} ·{" "}
             {formats.length - trusted.length + untrained.length} in training —
             every clean approval teaches SiftEntry.
@@ -36,7 +36,7 @@ export function FormatRegistry() {
         </div>
         <Link
           href="/app/invoices"
-          className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-white px-5 text-sm font-black text-[var(--hero-via)] shadow-sm sm:self-auto"
+          className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-white px-5 text-sm font-semibold text-[var(--hero-via)] shadow-sm sm:self-auto"
         >
           <GraduationCap size={17} />
           Train formats
@@ -47,7 +47,7 @@ export function FormatRegistry() {
       {/* New formats detected */}
       {untrained.length > 0 && (
         <div className="mt-4 rounded-2xl border border-dashed border-accent/50 bg-accent-soft/60 px-5 py-4">
-          <p className="text-sm font-black text-accent-ink">
+          <p className="text-sm font-semibold text-accent-ink">
             <Sparkles size={15} className="mr-1.5 inline" />
             New format{untrained.length === 1 ? "" : "s"} detected
           </p>
@@ -94,7 +94,7 @@ function FormatRow({
   return (
     <div className="flex flex-col gap-2 border-b border-line px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0">
-        <p className="truncate text-sm font-black text-ink">
+        <p className="truncate text-sm font-semibold text-ink">
           {format.supplier_name}
         </p>
         <p className="text-xs font-semibold text-ink-secondary">
@@ -119,7 +119,7 @@ function FormatRow({
         )}
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black",
+            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
             isTrusted
               ? "bg-success-soft text-success"
               : "bg-gold-soft text-gold-ink",

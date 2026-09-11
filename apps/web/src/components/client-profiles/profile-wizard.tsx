@@ -178,7 +178,11 @@ export function ProfileWizard({
       };
       const profile = await onCreate(payload);
       for (const file of files) {
-        await onUploadSample(profile.id, file, "Uploaded during onboarding wizard");
+        await onUploadSample(
+          profile.id,
+          file,
+          "Uploaded during onboarding wizard",
+        );
       }
       window.localStorage.removeItem(DRAFT_KEY);
       setDraft(emptyDraft);
@@ -201,7 +205,9 @@ export function ProfileWizard({
           <div className="flex items-center gap-3">
             <BrandMark compact />
             <div>
-              <p className="text-sm font-black text-ink">New client profile</p>
+              <p className="text-sm font-semibold text-ink">
+                New client profile
+              </p>
               <p className="text-xs font-semibold text-ink-muted">
                 takes ~4 minutes
               </p>
@@ -210,7 +216,7 @@ export function ProfileWizard({
           <button
             type="button"
             onClick={exit}
-            className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-black text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink"
+            className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink"
           >
             Save draft &amp; exit
             <X size={16} />
@@ -222,11 +228,11 @@ export function ProfileWizard({
             <div key={index} className="flex items-center gap-2">
               <span
                 className={cn(
-                  "grid size-9 place-items-center rounded-full text-sm font-black transition-colors",
+                  "grid size-9 place-items-center rounded-full text-sm font-semibold transition-colors",
                   index < step
                     ? "bg-success text-white"
                     : index === step
-                      ? "bg-accent text-white shadow-glow"
+                      ? "bg-accent text-white shadow-card"
                       : "bg-surface-strong text-ink-muted",
                 )}
               >
@@ -253,7 +259,7 @@ export function ProfileWizard({
             detail="Client name + target system. Everything else adapts to this choice."
           >
             <label className="block">
-              <span className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
                 Client name
               </span>
               <input
@@ -261,7 +267,7 @@ export function ProfileWizard({
                 value={draft.name}
                 onChange={(event) => patch({ name: event.target.value })}
                 placeholder="e.g. Pratham Fasteners"
-                className="mt-2 h-[52px] w-full rounded-xl border border-line-strong bg-surface px-4 text-base font-bold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
+                className="mt-2 h-[52px] w-full rounded-xl border border-line-strong bg-surface px-4 text-base font-medium text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
               />
             </label>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -295,9 +301,9 @@ export function ProfileWizard({
               ))}
             </div>
             {draft.country === "IN" && (
-              <p className="mt-4 rounded-xl bg-accent-soft px-4 py-3 text-sm font-bold text-accent-ink">
-                ✦ India GST selected — SiftEntry will validate GSTIN and reconcile
-                IGST vs CGST+SGST automatically.
+              <p className="mt-4 rounded-xl bg-accent-soft px-4 py-3 text-sm font-medium text-accent-ink">
+                ✦ India GST selected — SiftEntry will validate GSTIN and
+                reconcile IGST vs CGST+SGST automatically.
               </p>
             )}
           </StepShell>
@@ -324,7 +330,9 @@ export function ProfileWizard({
                   active={draft.voucherMode === "voucher_with_inventory"}
                   label="Voucher with stock allocation"
                   detail="Dr/Cr voucher screen, items entered in the allocation sub-screen · stock updates"
-                  onClick={() => patch({ voucherMode: "voucher_with_inventory" })}
+                  onClick={() =>
+                    patch({ voucherMode: "voucher_with_inventory" })
+                  }
                 />
                 <OptionCard
                   active={draft.voucherMode === "accounting_voucher"}
@@ -334,18 +342,20 @@ export function ProfileWizard({
                 />
               </div>
             ) : (
-              <p className="rounded-xl border border-line bg-surface px-4 py-3 text-sm font-bold text-ink-secondary">
+              <p className="rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-ink-secondary">
                 {draft.system === "quickbooks" ? "QuickBooks" : "Zoho Books"}{" "}
                 posts supplier bills — voucher mode isn&apos;t needed.
               </p>
             )}
             <label className="mt-4 block">
-              <span className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
                 Posting expectations · optional
               </span>
               <textarea
                 value={draft.expectations}
-                onChange={(event) => patch({ expectations: event.target.value })}
+                onChange={(event) =>
+                  patch({ expectations: event.target.value })
+                }
                 rows={3}
                 placeholder='e.g. "Round-off to nearest rupee · freight goes to Freight Inward A/C · never auto-post above ₹5L"'
                 className="mt-2 w-full rounded-xl border border-line-strong bg-surface px-4 py-3 text-sm font-semibold text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
@@ -367,7 +377,8 @@ export function ProfileWizard({
               className="hidden"
               onChange={(event) => {
                 const picked = Array.from(event.target.files ?? []);
-                if (picked.length) setFiles((current) => [...current, ...picked]);
+                if (picked.length)
+                  setFiles((current) => [...current, ...picked]);
                 if (fileInput.current) fileInput.current.value = "";
               }}
             />
@@ -376,8 +387,8 @@ export function ProfileWizard({
               onClick={() => fileInput.current?.click()}
               className="grid w-full place-items-center rounded-2xl border-2 border-dashed border-accent/40 bg-accent-soft/40 px-6 py-12 text-center transition-colors hover:border-accent hover:bg-accent-soft"
             >
-              <UploadCloud size={28} className="text-accent" />
-              <span className="mt-3 text-sm font-black text-accent">
+              <UploadCloud size={28} className="text-accent-ink" />
+              <span className="mt-3 text-sm font-semibold text-accent-ink">
                 Drop PDFs here or click to browse
               </span>
               <span className="mt-1 text-xs font-semibold text-ink-muted">
@@ -391,7 +402,7 @@ export function ProfileWizard({
                     key={`${file.name}-${index}`}
                     className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-2.5"
                   >
-                    <p className="min-w-0 truncate text-sm font-bold text-ink">
+                    <p className="min-w-0 truncate text-sm font-medium text-ink">
                       {file.name}
                       <span className="ml-2 text-xs font-semibold text-success">
                         ✓ ready to sift
@@ -400,7 +411,9 @@ export function ProfileWizard({
                     <button
                       type="button"
                       onClick={() =>
-                        setFiles((current) => current.filter((_, i) => i !== index))
+                        setFiles((current) =>
+                          current.filter((_, i) => i !== index),
+                        )
                       }
                       className="rounded-lg p-1.5 text-ink-muted hover:bg-danger-soft hover:text-danger"
                       aria-label={`Remove ${file.name}`}
@@ -421,7 +434,9 @@ export function ProfileWizard({
           >
             <div className="rounded-2xl border border-line bg-surface p-5 text-sm font-semibold leading-8 text-ink-secondary shadow-card">
               <p>
-                <span className="font-black text-ink">{draft.name || "—"}</span>{" "}
+                <span className="font-semibold text-ink">
+                  {draft.name || "—"}
+                </span>{" "}
                 → {systemOptions.find((o) => o.value === draft.system)?.label} ·{" "}
                 {country.label}
                 {isTally &&
@@ -436,12 +451,12 @@ export function ProfileWizard({
                 <p>Notes: {draft.expectations.trim()}</p>
               )}
             </div>
-            <p className="mt-3 rounded-xl border border-gold-soft bg-gold-soft px-4 py-3 text-sm font-bold text-gold-ink">
-              Submits as <b>Ready for review</b> — approve &amp; activate it from
-              the Client profiles page.
+            <p className="mt-3 rounded-xl border border-gold-soft bg-gold-soft px-4 py-3 text-sm font-medium text-gold-ink">
+              Submits as <b>Ready for review</b> — approve &amp; activate it
+              from the Client profiles page.
             </p>
             {error && (
-              <p className="mt-3 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-bold text-danger">
+              <p className="mt-3 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
                 {error}
               </p>
             )}
@@ -454,7 +469,7 @@ export function ProfileWizard({
             type="button"
             onClick={() => patch({ step: Math.max(0, step - 1) })}
             className={cn(
-              "inline-flex h-12 items-center rounded-xl border border-line-strong bg-surface px-5 text-sm font-black text-ink-secondary transition-colors hover:border-accent hover:text-accent",
+              "inline-flex h-12 items-center rounded-xl border border-line-strong bg-surface px-5 text-sm font-semibold text-ink-secondary transition-colors hover:border-accent hover:text-accent-ink",
               step === 0 && "invisible",
             )}
           >
@@ -467,7 +482,7 @@ export function ProfileWizard({
               step < 4 ? patch({ step: step + 1 }) : void submit()
             }
             className={cn(
-              "inline-flex h-12 items-center gap-2 rounded-xl px-6 text-sm font-black text-white transition-colors disabled:opacity-50",
+              "inline-flex h-12 items-center gap-2 rounded-xl px-6 text-sm font-semibold text-white transition-colors disabled:opacity-50",
               step === 4
                 ? "bg-success hover:bg-success/90"
                 : "bg-accent shadow-sm shadow-accent/25 hover:bg-accent-hover",
@@ -497,8 +512,10 @@ function StepShell({
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-black text-ink sm:text-3xl">{title}</h1>
-      <p className="mt-1.5 text-sm font-semibold text-ink-secondary">{detail}</p>
+      <h1 className="text-2xl font-semibold text-ink sm:text-3xl">{title}</h1>
+      <p className="mt-1.5 text-sm font-semibold text-ink-secondary">
+        {detail}
+      </p>
       <div className="mt-6">{children}</div>
     </div>
   );
@@ -526,7 +543,7 @@ function OptionCard({
           : "border-line hover:border-line-strong",
       )}
     >
-      <p className="text-base font-black text-ink">{label}</p>
+      <p className="text-base font-semibold text-ink">{label}</p>
       <p className="mt-1 text-xs font-semibold leading-5 text-ink-muted">
         {detail}
       </p>

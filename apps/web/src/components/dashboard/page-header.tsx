@@ -12,15 +12,15 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <section className="border-b border-line bg-canvas px-4 py-6 sm:px-6 lg:px-8">
+    <section className="border-b border-line bg-canvas px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-[1440px] flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h1 className="flex min-w-0 flex-wrap items-baseline text-3xl font-black leading-tight text-ink">
+          <h1 className="flex min-w-0 flex-wrap items-baseline text-2xl font-semibold leading-tight text-ink">
             <span>{title}</span>
             {section && (
               <>
-                <span className="mx-1.5 text-ink-secondary">/</span>
-                <span className="text-2xl font-extrabold text-ink-secondary">
+                <span className="mx-2 text-base text-ink-muted">/</span>
+                <span className="text-base font-medium text-ink-secondary">
                   {section}
                 </span>
               </>

@@ -22,10 +22,7 @@ import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
-import {
-  CommandCenter,
-  openCommandPalette,
-} from "@/components/command-center";
+import { CommandCenter, openCommandPalette } from "@/components/command-center";
 import { BrandMark } from "@/components/brand-mark";
 import { CreateWorkspaceDialog } from "@/components/create-workspace-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -55,13 +52,8 @@ const navGroups = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const {
-    user,
-    activeOrganizationId,
-    loading,
-    selectOrganization,
-    logout,
-  } = useAuth();
+  const { user, activeOrganizationId, loading, selectOrganization, logout } =
+    useAuth();
   const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -116,7 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               group.label === "Work" && "max-lg:hidden",
             )}
           >
-            <p className="px-3 text-[11px] font-extrabold uppercase tracking-[0.18em] text-ink-muted">
+            <p className="px-3 text-xs font-semibold uppercase tracking-[0.18em] text-ink-muted">
               {group.label}
             </p>
             <nav className="mt-3 space-y-1">
@@ -135,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="border-t border-line p-3">
         <div className="flex flex-col items-stretch gap-2 rounded-xl border border-transparent p-2 transition-colors hover:border-line hover:bg-surface-subtle lg:flex-row lg:items-center lg:gap-3 lg:pr-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-black text-accent-ink">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent-ink">
               {(user?.full_name || user?.email || "SE")
                 .split(/\s|@/)
                 .slice(0, 2)
@@ -143,10 +135,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 .join("")}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-bold text-ink">
+              <span className="block truncate text-xs font-medium text-ink">
                 {loading ? "Loading account" : user?.full_name || user?.email}
               </span>
-              <span className="block truncate text-[11px] capitalize text-ink-muted">
+              <span className="block truncate text-xs capitalize text-ink-muted">
                 {membership?.role ?? "workspace member"}
               </span>
             </span>
@@ -154,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 w-32 shrink-0 self-start justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-extrabold text-ink-secondary transition-colors hover:border-danger/40 hover:bg-danger-soft hover:text-danger lg:w-auto lg:self-auto"
+            className="h-9 w-32 shrink-0 self-start justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-semibold text-ink-secondary transition-colors hover:border-danger/40 hover:bg-danger-soft hover:text-danger lg:w-auto lg:self-auto"
             onClick={() => void logout()}
             title="Sign out"
             aria-label="Sign out"
@@ -168,7 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-canvas">
+    <div className="product-shell min-h-screen overflow-x-hidden bg-canvas">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] flex-col border-r border-line bg-shell lg:flex">
         {nav}
       </aside>
@@ -203,7 +195,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-w-0 lg:pl-[260px]">
         <header className="sticky top-0 z-30 flex h-16 items-center border-b border-line bg-shell/95 px-4 backdrop-blur sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink-secondary">
-            <Building2 size={16} className="shrink-0 text-cyan" />
+            <Building2 size={16} className="shrink-0 text-ink-secondary" />
             {user && user.memberships.length > 1 ? (
               <select
                 value={membership?.organization_id}
@@ -229,13 +221,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="hidden capitalize text-ink-muted sm:inline">
               {membership?.role ?? "member"}
             </span>
-            {user && (
+            {user && user.email.toLowerCase() !== "demo@siftentry.com" && (
               <button
                 type="button"
                 onClick={() => setWorkspaceDialogOpen(true)}
                 title="New workspace"
                 aria-label="Create a new workspace"
-                className="ml-1 grid size-7 shrink-0 place-items-center rounded-lg border border-line text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                className="ml-1 grid size-9 shrink-0 place-items-center rounded-lg border border-line text-ink-muted transition-colors hover:border-accent hover:text-accent-ink"
               >
                 <Plus size={14} />
               </button>
@@ -247,11 +239,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="ml-auto mr-3 hidden h-10 w-[min(34vw,360px)] items-center gap-2 rounded-full border border-line bg-surface-subtle px-3 text-sm font-semibold text-ink-muted transition-colors hover:border-line-strong hover:text-ink-secondary xl:flex"
             aria-label="Open command palette"
           >
-            <span className="size-2 rounded-full bg-cyan" />
+            <Search size={16} />
             <span className="min-w-0 flex-1 truncate text-left">
               Search invoices, vendors, pages…
             </span>
-            <kbd className="rounded-md border border-line-strong bg-surface px-1.5 py-0.5 font-mono text-[10px] font-black text-ink-secondary">
+            <kbd className="rounded-md border border-line-strong bg-surface px-1.5 py-0.5 font-mono text-xs font-semibold text-ink-secondary">
               ⌘K
             </kbd>
           </button>
@@ -267,9 +259,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ThemeToggle />
           </div>
         </header>
-        <main className="min-w-0 overflow-x-hidden pb-24 lg:pb-0">
-          {children}
-        </main>
+        <div className="min-w-0 pb-24 lg:pb-0">{children}</div>
       </div>
       <MobileTabBar
         pathname={pathname}
@@ -296,9 +286,10 @@ function NavLink({
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       onClick={onNavigate}
       className={cn(
-        "flex h-11 items-center gap-3 rounded-xl border-l-[3px] px-3 text-sm font-bold transition-colors",
+        "flex h-11 items-center gap-3 rounded-xl border-l-[3px] px-3 text-sm font-medium transition-colors",
         active
           ? "border-accent bg-accent-soft text-accent-ink"
           : "border-transparent text-ink-secondary hover:bg-surface-subtle hover:text-ink",
@@ -331,7 +322,7 @@ function MobileTabBar({
         <button
           type="button"
           onClick={onOpenMenu}
-          className="flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-ink-muted transition-colors hover:text-ink-secondary"
+          className="flex flex-col items-center justify-center gap-1 text-xs font-medium text-ink-muted transition-colors hover:text-ink-secondary"
         >
           <Menu size={20} strokeWidth={1.8} />
           Menu
@@ -345,7 +336,7 @@ function MobileTabBar({
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-colors",
+                "flex flex-col items-center justify-center gap-1 text-xs font-medium transition-colors",
                 active
                   ? "text-accent-ink"
                   : "text-ink-muted hover:text-ink-secondary",
