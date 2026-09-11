@@ -125,7 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ))}
       </div>
       <div className="border-t border-line p-3">
-        <div className="flex flex-col items-stretch gap-2 rounded-xl border border-transparent p-2 transition-colors hover:border-line hover:bg-surface-subtle lg:flex-row lg:items-center lg:gap-3 lg:pr-1.5">
+        <div className="flex flex-col items-stretch gap-2 rounded-xl border border-transparent p-2 transition-colors hover:border-line hover:bg-surface-subtle">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent-ink">
               {(user?.full_name || user?.email || "SE")
@@ -146,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 w-32 shrink-0 self-start justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-semibold text-ink-secondary transition-colors hover:border-danger/40 hover:bg-danger-soft hover:text-danger lg:w-auto lg:self-auto"
+            className="h-9 w-32 shrink-0 self-start justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-semibold text-ink-secondary transition-colors hover:border-danger/40 hover:bg-danger-soft hover:text-danger"
             onClick={() => void logout()}
             title="Sign out"
             aria-label="Sign out"

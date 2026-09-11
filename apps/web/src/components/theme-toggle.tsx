@@ -69,6 +69,7 @@ function ThemeButton({
   return (
     <button
       type="button"
+      aria-label={label}
       aria-pressed={active}
       onClick={onClick}
       className={cn(

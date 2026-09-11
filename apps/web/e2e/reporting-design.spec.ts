@@ -125,6 +125,7 @@ test("History shows real events and exports the same filtered records", async ({
   await page.getByRole("button", { name: "Explore demo workspace" }).click();
   await page.waitForURL("**/app");
   await page.goto("/app/history");
+  await expect(page.getByText(/\d+ recorded events/)).toBeVisible();
   await page.getByLabel("Event category").selectOption("posting");
   await expect(
     page.getByText("Posting succeeded", { exact: true }).first(),

@@ -108,6 +108,23 @@ export function CreateWorkspaceDialog({
       ref={dialogRef}
       className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-md border-0 bg-transparent p-0 text-ink backdrop:bg-black/40 backdrop:backdrop-blur-sm"
       aria-labelledby="create-workspace-title"
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const targets = Array.from(
+          event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]',
+          ),
+        ).filter((element) => element.getClientRects().length > 0);
+        const first = targets[0];
+        const last = targets[targets.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }}
       onCancel={(event) => {
         event.preventDefault();
         close();
