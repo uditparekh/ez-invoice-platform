@@ -37,6 +37,14 @@ test("workspace dialog contains keyboard focus and restores it on close", async 
       ),
     ).toBe(true);
   }
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Shift+Tab");
+    expect(
+      await page.evaluate(() =>
+        Boolean(document.activeElement?.closest("dialog")),
+      ),
+    ).toBe(true);
+  }
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(opener).toBeFocused();
@@ -60,6 +68,9 @@ for (const theme of ["light", "dark"]) {
         .getByRole("button", { name: "Explore demo workspace" })
         .click();
       await page.waitForURL("**/app");
+      await expect(page.locator("html")).toHaveClass(
+        theme === "dark" ? /dark/ : /^(?!.*\bdark\b).*$/,
+      );
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
       for (const route of [
@@ -86,6 +97,20 @@ for (const theme of ["light", "dark"]) {
           await expect(
             page.getByText("DEMO-QB-1001", { exact: true }).first(),
           ).toBeVisible();
+          const amount = page
+            .getByRole("button")
+            .filter({ hasText: "DEMO-QB-1001" })
+            .getByText("$3,488.00", { exact: true });
+          await expect(amount).toBeVisible();
+          const box = await amount.boundingBox();
+          expect(box).not.toBeNull();
+          expect(box!.x).toBeGreaterThanOrEqual(0);
+          expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+          expect(
+            await amount.evaluate(
+              (element) => element.scrollWidth <= element.clientWidth + 1,
+            ),
+          ).toBe(true);
         }
         await expect(
           page.getByRole("heading", { level: 1 }).first(),
