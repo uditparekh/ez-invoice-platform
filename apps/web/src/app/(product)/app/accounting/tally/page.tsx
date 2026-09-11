@@ -24,7 +24,7 @@ export default function TallyPage() {
           "Use item invoice mode when the client needs Tally stock items, HSN/SAC, GST ledgers, and inventory quantities.",
         ],
         notes: [
-          "Live Tally posting has been proven through the local connector flow.",
+          "Validate the connector against the client's Tally company before the first live post. Only approved invoices are queued.",
           "Client profiles keep company names, voucher types, ledgers, tax ledgers, stock items, HSN/SAC, and units separate for each workspace.",
           "The GST item template is only a starter; users must fill exact Tally ledger and stock item names before posting.",
           "Ledger and stock item names must match Tally exactly to avoid import failures.",

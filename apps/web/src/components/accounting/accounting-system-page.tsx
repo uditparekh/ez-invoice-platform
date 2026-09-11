@@ -57,7 +57,9 @@ const statusLabels: Record<AccountingSystemConfig["status"], string> = {
 
 export function AccountingSystemPage({ config }: { config: AccountingSystemConfig }) {
   const { invoices, loading, error } = useWorkspaceInvoices();
-  const ready = readyInvoices(invoices);
+  const ready = config.system === "tally"
+    ? invoices.filter((invoice) => invoice.status === "approved")
+    : readyInvoices(invoices);
   const blocked = exceptionInvoices(invoices);
   const total = invoiceTotal(ready);
 
@@ -94,7 +96,7 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
               <MetricCard
                 label="Ready invoices"
                 value={ready.length}
-                detail="Validated or approved for posting"
+                detail={config.system === "tally" ? "Approved for Tally posting" : "Validated or approved for posting"}
                 tone="success"
                 icon={<CheckCircle2 size={18} />}
               />
@@ -122,7 +124,7 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
           <SystemSetupCard config={config} />
           <ContentCard
             title={`${config.name} posting workflow`}
-            subtitle="The same operational steps from the working SiftEntry pilot, organized for a multi-client SaaS workspace."
+            subtitle="Review the client setup and confirm each step before enabling live posting."
             action={<Link2 size={18} className="text-cyan" />}
           >
             <div className="space-y-4">
@@ -137,8 +139,8 @@ export function AccountingSystemPage({ config }: { config: AccountingSystemConfi
                   <div>
                     <p className="text-sm font-black text-ink">{item}</p>
                     <p className="mt-1 text-sm leading-6 text-ink-secondary">
-                      Designed to match the proven SiftEntry pilot steps before
-                      enabling production posting from this console.
+                      Verify this step against the client&apos;s accounting setup
+                      before approving a live invoice.
                     </p>
                   </div>
                 </div>
