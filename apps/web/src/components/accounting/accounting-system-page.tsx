@@ -716,7 +716,7 @@ function SetupStepper({ config }: { config: AccountingSystemConfig }) {
             <span
               className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors ${
                 done[index]
-                  ? "bg-success text-white"
+                  ? "bg-success-button text-white"
                   : index === done.findIndex((value) => !value)
                     ? "bg-accent text-white"
                     : "bg-surface-strong text-ink-muted"

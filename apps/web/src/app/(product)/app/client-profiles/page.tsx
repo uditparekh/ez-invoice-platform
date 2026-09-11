@@ -159,7 +159,7 @@ export default function ClientProfilesPage() {
                     type="button"
                     disabled={activating === profile.id || saving}
                     onClick={() => void approveAndActivate(profile)}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-success px-4 text-sm font-semibold text-white transition-colors hover:bg-success/90 disabled:opacity-60"
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-success-button px-4 text-sm font-semibold text-white transition-colors hover:bg-success-button/90 disabled:opacity-60"
                   >
                     {activating === profile.id ? (
                       <LoaderCircle size={15} className="animate-spin" />

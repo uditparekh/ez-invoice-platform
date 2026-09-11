@@ -33,8 +33,10 @@
   --cyan-ink: #0e627a;
   /* semantic */
   --success: #16723d;
+  --success-button: #16723d;
   --success-soft: #dcfce7;
   --gold: #995109;
+  --gold-button: #995109;
   --gold-ink: #b45309;
   --gold-soft: #fef3c7;
   --danger: #b91c1c;
@@ -110,8 +112,10 @@
   --color-cyan-soft: var(--cyan-soft);
   --color-cyan-ink: var(--cyan-ink);
   --color-success: var(--success);
+  --color-success-button: var(--success-button);
   --color-success-soft: var(--success-soft);
   --color-gold: var(--gold);
+  --color-gold-button: var(--gold-button);
   --color-gold-ink: var(--gold-ink);
   --color-gold-soft: var(--gold-soft);
   --color-danger: var(--danger);

@@ -230,7 +230,7 @@ export function ProfileWizard({
                 className={cn(
                   "grid size-9 place-items-center rounded-full text-sm font-semibold transition-colors",
                   index < step
-                    ? "bg-success text-white"
+                    ? "bg-success-button text-white"
                     : index === step
                       ? "bg-accent text-white shadow-card"
                       : "bg-surface-strong text-ink-muted",
@@ -484,7 +484,7 @@ export function ProfileWizard({
             className={cn(
               "inline-flex h-12 items-center gap-2 rounded-xl px-6 text-sm font-semibold text-white transition-colors disabled:opacity-50",
               step === 4
-                ? "bg-success hover:bg-success/90"
+                ? "bg-success hover:bg-success-button/90"
                 : "bg-accent shadow-sm shadow-accent/25 hover:bg-accent-hover",
             )}
           >

@@ -274,7 +274,7 @@ export default function ApprovalsPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => void approve(active)}
-                  className="inline-flex h-14 items-center justify-center gap-2.5 rounded-2xl bg-success text-base font-semibold text-white shadow-lg shadow-success/25 transition-transform hover:scale-[1.01] disabled:opacity-60"
+                  className="inline-flex h-14 items-center justify-center gap-2.5 rounded-2xl bg-success-button text-base font-semibold text-white shadow-lg shadow-success/25 transition-transform hover:scale-[1.01] disabled:opacity-60"
                 >
                   {busy && sheet === "none" ? (
                     <LoaderCircle size={19} className="animate-spin" />
@@ -453,7 +453,7 @@ export default function ApprovalsPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => void applyFix(active)}
-                    className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gold-ink text-sm font-semibold text-white disabled:opacity-60"
+                    className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gold-button text-sm font-semibold text-white disabled:opacity-60"
                   >
                     {busy ? (
                       <LoaderCircle size={16} className="animate-spin" />

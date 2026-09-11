@@ -72,6 +72,33 @@ for (const theme of ["light", "dark"]) {
         theme === "dark" ? /dark/ : /^(?!.*\bdark\b).*$/,
       );
       const errors: string[] = [];
+      const filledColors = await page.evaluate(() => {
+        const style = getComputedStyle(document.documentElement);
+        return [
+          "--accent",
+          "--success-button",
+          "--gold-button",
+          "--danger-button",
+        ].map((token) => ({
+          token,
+          color: style.getPropertyValue(token).trim(),
+        }));
+      });
+      for (const { token, color } of filledColors) {
+        const channels = color
+          .replace("#", "")
+          .match(/.{2}/g)!
+          .map((value) => parseInt(value, 16) / 255)
+          .map((value) =>
+            value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
+          );
+        const luminance =
+          channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+        expect(
+          1.05 / (luminance + 0.05),
+          `${theme} ${token} white-label contrast`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
       page.on("pageerror", (error) => errors.push(error.message));
       for (const route of [
         "/app",
