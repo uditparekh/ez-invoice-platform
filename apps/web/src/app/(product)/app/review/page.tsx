@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, FileSearch, ListChecks } from "lucide-react";
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { LoadingState } from "@/components/dashboard/loading-state";
 import { InvoiceDetailPanel } from "@/components/invoices/invoice-detail";
 import { useWorkspaceInvoices } from "@/hooks/use-workspace-invoices";
+import { useAuth } from "@/components/auth-provider";
+import type { Invoice } from "@/lib/types";
 
 export default function ReviewPage() {
   return (
@@ -27,6 +29,7 @@ export default function ReviewPage() {
 
 function ReviewPageContent() {
   const searchParams = useSearchParams();
+  const { activeOrganizationId } = useAuth();
   const { invoices, loading, error, reload } = useWorkspaceInvoices({
     limit: 100,
   });
@@ -34,15 +37,57 @@ function ReviewPageContent() {
   const queryInvoiceId = searchParams.get("invoice");
   const targetSystem = searchParams.get("target") || "QuickBooks";
 
-  const selectedInvoice = useMemo(() => {
-    if (!invoices.length) return null;
-    if (!queryInvoiceId) return invoices[0] ?? null;
-    return (
-      invoices.find((invoice) => invoice.id === queryInvoiceId) ??
-      invoices[0] ??
-      null
-    );
-  }, [invoices, queryInvoiceId]);
+  const [revision, setRevision] = useState(0);
+  const requestedKey = `${activeOrganizationId}/${queryInvoiceId}/${revision}`;
+  const [requested, setRequested] = useState<{
+    key: string;
+    invoice?: Invoice;
+    error?: string;
+  }>({ key: "" });
+  const listedInvoice = invoices.find(
+    (invoice) => invoice.id === queryInvoiceId,
+  );
+  useEffect(() => {
+    if (!queryInvoiceId || !activeOrganizationId || loading || listedInvoice)
+      return;
+    const controller = new AbortController();
+    void fetch(`/api/invoices/${encodeURIComponent(queryInvoiceId)}`, {
+      signal: controller.signal,
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error("This invoice is unavailable or has been removed.");
+        const invoice = (await response.json()) as Invoice;
+        if (invoice.organization_id !== activeOrganizationId)
+          throw new Error("Switch to this invoice’s workspace to review it.");
+        if (!controller.signal.aborted)
+          setRequested({ key: requestedKey, invoice });
+      })
+      .catch((error: Error) => {
+        if (!controller.signal.aborted)
+          setRequested({ key: requestedKey, error: error.message });
+      });
+    return () => controller.abort();
+  }, [
+    queryInvoiceId,
+    activeOrganizationId,
+    loading,
+    listedInvoice,
+    requestedKey,
+  ]);
+  const matchingRequest = requested.key === requestedKey;
+  const selectedInvoice = queryInvoiceId
+    ? (listedInvoice ?? (matchingRequest ? requested.invoice : null))
+    : invoices[0];
+  const requestedLoading = Boolean(
+    queryInvoiceId && !listedInvoice && !matchingRequest,
+  );
+  const reviewError = error || (matchingRequest ? requested.error : "");
+  function refreshInvoice() {
+    void reload();
+    setRevision((value) => value + 1);
+  }
 
   return (
     <div className="min-h-[calc(100vh-68px)] bg-canvas">
@@ -87,14 +132,14 @@ function ReviewPageContent() {
         </div>
       </section>
 
-      {loading ? (
+      {loading || requestedLoading ? (
         <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
           <LoadingState label="Loading review workspace" />
         </main>
-      ) : error ? (
+      ) : reviewError ? (
         <main className="mx-auto max-w-[980px] px-4 py-6 sm:px-6 lg:px-8">
           <div className="rounded-[24px] border border-danger/25 bg-danger-soft p-6 text-sm font-medium text-danger">
-            {error}
+            {reviewError}
           </div>
         </main>
       ) : selectedInvoice ? (
@@ -103,11 +148,11 @@ function ReviewPageContent() {
           mode="review"
           targetSystem={targetSystem}
           onCloseReview={() => {
-            window.location.href = `/app/invoices?invoice=${selectedInvoice.id}`;
+            window.location.href = `/app/invoices/${encodeURIComponent(selectedInvoice.id)}`;
           }}
-          onPostingComplete={() => void reload()}
-          onInvoiceUpdate={() => void reload()}
-          onInvoicePatch={() => void reload()}
+          onPostingComplete={refreshInvoice}
+          onInvoiceUpdate={refreshInvoice}
+          onInvoicePatch={refreshInvoice}
         />
       ) : (
         <main className="mx-auto max-w-[980px] px-4 py-6 sm:px-6 lg:px-8">

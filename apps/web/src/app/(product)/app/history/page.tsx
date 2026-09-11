@@ -132,7 +132,7 @@ function HistoryWorkspace() {
             </select>
           </label>
           <form
-            className="flex min-w-0 flex-1 gap-2 sm:max-w-sm"
+            className="flex w-full min-w-0 gap-2 sm:w-auto sm:flex-1 sm:max-w-sm"
             onSubmit={(e) => {
               e.preventDefault();
               setSearch(draftSearch.trim());

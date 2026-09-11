@@ -83,6 +83,9 @@ for (const theme of ["light", "dark"]) {
         "/app/client-profiles",
         "/app/rules",
         "/app/settings",
+        "/app/review",
+        "/app/approvals",
+        "/app/sift",
       ]) {
         await page.goto(route);
         if (route === "/app" || route === "/app/analytics") {
@@ -92,6 +95,30 @@ for (const theme of ["light", "dark"]) {
         }
         if (route === "/app/history") {
           await expect(page.getByText(/\d+ recorded events/)).toBeVisible();
+          for (const control of [
+            page.getByLabel("Search history"),
+            page.getByRole("button", { name: "Search", exact: true }),
+          ]) {
+            const box = await control.boundingBox();
+            expect(box).not.toBeNull();
+            expect(box!.width).toBeGreaterThanOrEqual(60);
+            expect(box!.x).toBeGreaterThanOrEqual(0);
+            expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+          }
+        }
+        if (route === "/app/analytics" && width < 768) {
+          const values = page.locator("[data-mobile-report] dd");
+          expect(await values.count()).toBeGreaterThan(0);
+          for (const value of await values.all()) {
+            await expect(value).toBeVisible();
+            const box = await value.boundingBox();
+            expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+            expect(
+              await value.evaluate(
+                (element) => element.scrollWidth <= element.clientWidth + 1,
+              ),
+            ).toBe(true);
+          }
         }
         if (route === "/app/invoices") {
           await expect(
@@ -112,6 +139,11 @@ for (const theme of ["light", "dark"]) {
             ),
           ).toBe(true);
         }
+        if (route === "/app/review") {
+          await expect(
+            page.getByText("DEMO-ZOHO-1002", { exact: true }).first(),
+          ).toBeVisible();
+        }
         await expect(
           page.getByRole("heading", { level: 1 }).first(),
         ).toBeVisible();
@@ -128,9 +160,13 @@ for (const theme of ["light", "dark"]) {
           sizes.width + 1,
         );
         if (
-          ["/app", "/app/analytics", "/app/history", "/app/invoices"].includes(
-            route,
-          )
+          [
+            "/app",
+            "/app/analytics",
+            "/app/history",
+            "/app/invoices",
+            "/app/review",
+          ].includes(route)
         ) {
           await page.screenshot({
             path: test.info().outputPath(`${route.replaceAll("/", "-")}.png`),
@@ -172,6 +208,13 @@ test("History shows real events and exports the same filtered records", async ({
   ).toBeVisible();
   await expect(page.getByText("This page could not be found.")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Retry posting" })).toHaveCount(
+    0,
+  );
+  await page.goto("/app/review?invoice=missing-invoice-qa");
+  await expect(
+    page.getByText("This invoice is unavailable or has been removed."),
+  ).toBeVisible();
+  await expect(page.getByText("DEMO-ZOHO-1002", { exact: true })).toHaveCount(
     0,
   );
 });

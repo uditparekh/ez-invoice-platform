@@ -162,44 +162,80 @@ export default function InsightsPage() {
                 </div>
               </div>
               {data.currencies.length ? (
-                <div
-                  className="report-table-scroll"
-                  tabIndex={0}
-                  role="region"
-                  aria-label="Invoice value by currency"
-                  data-scroll-region="true"
-                >
-                  <table className="report-table">
-                    <thead>
-                      <tr>
-                        <th>Currency</th>
-                        <th className="text-right">Invoices</th>
-                        <th className="text-right">Invoice value</th>
-                        <th className="text-right">Tax recorded</th>
-                        <th className="text-right">Currently posted value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.currencies.map((row) => (
-                        <tr key={row.currency}>
-                          <th scope="row">{row.currency}</th>
-                          <td className="text-right tabular-nums">
-                            {row.count}
-                          </td>
-                          <td className="text-right tabular-nums">
-                            {reportMoney(row.total, row.currency)}
-                          </td>
-                          <td className="text-right tabular-nums">
-                            {reportMoney(row.tax, row.currency)}
-                          </td>
-                          <td className="text-right tabular-nums">
-                            {reportMoney(row.posted_total, row.currency)}
-                          </td>
+                <>
+                  <div
+                    className="divide-y divide-line md:hidden"
+                    data-mobile-report="currencies"
+                  >
+                    {data.currencies.map((row) => (
+                      <div
+                        key={row.currency}
+                        className="py-4 first:pt-0 last:pb-0"
+                      >
+                        <div className="mb-3 flex justify-between gap-3 text-sm">
+                          <h3 className="font-semibold">{row.currency}</h3>
+                          <span className="text-ink-secondary">
+                            {row.count} invoice{row.count === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <dl className="space-y-3 text-sm">
+                          {[
+                            ["Invoice value", row.total],
+                            ["Tax recorded", row.tax],
+                            ["Currently posted value", row.posted_total],
+                          ].map(([label, value]) => (
+                            <div key={label}>
+                              <dt className="text-xs text-ink-secondary">
+                                {label}
+                              </dt>
+                              <dd className="mt-1 break-words font-medium tabular-nums">
+                                {reportMoney(value, row.currency)}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    className="report-table-scroll hidden md:block"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Invoice value by currency"
+                    data-scroll-region="true"
+                  >
+                    <table className="report-table">
+                      <thead>
+                        <tr>
+                          <th>Currency</th>
+                          <th className="text-right">Invoices</th>
+                          <th className="text-right">Invoice value</th>
+                          <th className="text-right">Tax recorded</th>
+                          <th className="text-right">Currently posted value</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {data.currencies.map((row) => (
+                          <tr key={row.currency}>
+                            <th scope="row">{row.currency}</th>
+                            <td className="text-right tabular-nums">
+                              {row.count}
+                            </td>
+                            <td className="text-right tabular-nums">
+                              {reportMoney(row.total, row.currency)}
+                            </td>
+                            <td className="text-right tabular-nums">
+                              {reportMoney(row.tax, row.currency)}
+                            </td>
+                            <td className="text-right tabular-nums">
+                              {reportMoney(row.posted_total, row.currency)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               ) : (
                 <p className="py-6 text-sm text-ink-secondary">
                   No invoice values in this period.
@@ -267,10 +303,30 @@ function SupplierTable({ data }: { data: WorkspaceAnalytics }) {
   const [page, setPage] = useState(0);
   const pages = Math.ceil(data.suppliers.length / 10);
   const current = Math.min(page, pages - 1);
+  const rows = data.suppliers.slice(current * 10, (current + 1) * 10);
   return (
     <>
+      <dl
+        className="divide-y divide-line md:hidden"
+        data-mobile-report="suppliers"
+      >
+        {rows.map((row) => (
+          <div
+            key={`${row.supplier}-${row.currency}`}
+            className="py-4 first:pt-0 last:pb-0"
+          >
+            <dt className="break-words text-sm font-medium">{row.supplier}</dt>
+            <dd className="mt-1 text-xs text-ink-secondary">
+              {row.count} invoice{row.count === 1 ? "" : "s"} · {row.currency}
+            </dd>
+            <dd className="mt-2 break-words text-sm font-semibold tabular-nums">
+              {reportMoney(row.total, row.currency)}
+            </dd>
+          </div>
+        ))}
+      </dl>
       <div
-        className="report-table-scroll"
+        className="report-table-scroll hidden md:block"
         tabIndex={0}
         role="region"
         aria-label="Suppliers"
@@ -286,20 +342,18 @@ function SupplierTable({ data }: { data: WorkspaceAnalytics }) {
             </tr>
           </thead>
           <tbody>
-            {data.suppliers
-              .slice(current * 10, (current + 1) * 10)
-              .map((row) => (
-                <tr key={`${row.supplier}-${row.currency}`}>
-                  <th scope="row" className="max-w-80 whitespace-normal!">
-                    {row.supplier}
-                  </th>
-                  <td>{row.currency}</td>
-                  <td className="text-right tabular-nums">{row.count}</td>
-                  <td className="text-right tabular-nums">
-                    {reportMoney(row.total, row.currency)}
-                  </td>
-                </tr>
-              ))}
+            {rows.map((row) => (
+              <tr key={`${row.supplier}-${row.currency}`}>
+                <th scope="row" className="max-w-80 whitespace-normal!">
+                  {row.supplier}
+                </th>
+                <td>{row.currency}</td>
+                <td className="text-right tabular-nums">{row.count}</td>
+                <td className="text-right tabular-nums">
+                  {reportMoney(row.total, row.currency)}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

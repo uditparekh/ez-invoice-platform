@@ -51,7 +51,7 @@ compliance retention, a separate retention/deletion policy and migration need ap
 
 Local gates: backend pytest, pnpm typecheck, pnpm lint, pnpm build. GitHub CI runs the
 backend on SQLite and PostgreSQL and the browser regression suite on an isolated
-local API/database, never production. Browser coverage includes nine core routes at
+local API/database, never production. Browser coverage includes twelve core routes at
 1440, 390 and 320 pixels in light/dark mode, History filtering/export/detail links,
 and workspace-dialog keyboard focus. Screenshots are retained as CI artifacts.
 
