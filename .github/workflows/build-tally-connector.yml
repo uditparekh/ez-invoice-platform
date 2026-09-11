@@ -2,6 +2,15 @@ name: Build Tally connector installer
 
 on:
   workflow_dispatch:
+  push:
+    branches: ['codex/pkg34-complete']
+    paths:
+      - 'siftentry_app/tally_connector_*.py'
+      - 'packaging/**'
+      - '.github/workflows/build-tally-connector.yml'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -11,15 +20,18 @@ jobs:
         shell: pwsh
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install build requirements
-        run: python -m pip install --upgrade -r packaging/windows/tally-connector/requirements.txt
+        run: python -m pip install --upgrade -r packaging/windows/tally-connector/requirements.txt pytest
+
+      - name: Verify connector runtime on Windows
+        run: python -m pytest -q tests/test_connector_outbox.py tests/test_tally_connector_runtime.py
 
       - name: Build app with PyInstaller
         run: >
@@ -39,13 +51,42 @@ jobs:
           & $iscc SiftEntryTallyConnector.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: List installer output
-        run: Get-ChildItem packaging/windows/tally-connector/output
+      - name: Install and smoke-test the packaged application
+        run: |
+          $installer = (Get-ChildItem packaging/windows/tally-connector/output/*-0.4.0.exe).FullName
+          $installDir = Join-Path $env:RUNNER_TEMP 'SiftEntry Smoke Test'
+          $process = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/TASKS=autostart', "/DIR=`"$installDir`"") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          $startup = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run').'SiftEntry Tally Connector'
+          if ($startup -notmatch '--autostart') { throw 'Autostart registry command is missing' }
+          $process = Start-Process (Join-Path $installDir 'SiftEntry Tally Connector.exe') -ArgumentList '--self-test' -PassThru
+          if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'Packaged self-test timed out' }
+          if ($process.ExitCode -ne 0) { throw "Packaged self-test failed: $($process.ExitCode)" }
+
+      - name: Record installer provenance
+        run: |
+          $installer = Get-ChildItem packaging/windows/tally-connector/output/*-0.4.0.exe
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($installer.Name)" | Set-Content packaging/windows/tally-connector/output/SHA256SUMS.txt
+          @{version='0.4.0'; source_commit=$env:GITHUB_SHA; sha256=$hash; file=$installer.Name; signed=$false} | ConvertTo-Json | Set-Content packaging/windows/tally-connector/output/connector-release.json
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SiftEntry-Tally-Connector-Setup
-          path: packaging/windows/tally-connector/output/SiftEntry-Tally-Connector-Setup-*.exe
+          path: packaging/windows/tally-connector/output/*
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish verified downloads to the release branch
+        if: github.ref == 'refs/heads/codex/pkg34-complete'
+        run: |
+          Copy-Item packaging/windows/tally-connector/output/* apps/web/public/downloads/
+          git rm --ignore-unmatch apps/web/public/downloads/SiftEntry-Tally-Connector-Setup-0.3.0.exe
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/web/public/downloads
+          git commit -m 'Publish connector installer 0.4.0'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not commit verified installer' }
+          git push origin HEAD:codex/pkg34-complete
+          if ($LASTEXITCODE -ne 0) { throw 'Release branch changed; refusing to overwrite it' }

@@ -26,7 +26,7 @@ You need:
 
 ## Step 2: Install the Connector
 
-1. Run `SiftEntry-Tally-Connector-Setup-0.3.0.exe`.
+1. Run `SiftEntry-Tally-Connector-Setup-0.4.0.exe`.
 2. Keep `Start connector when I sign in` selected.
 3. Click `Install`.
 4. Launch `SiftEntry Tally Connector` when setup finishes.

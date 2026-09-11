@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,7 @@ except ImportError:  # pragma: no cover
     requests = None
 
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class ConnectorConfig:
     poll_interval: int = 15
     claim_limit: int = 5
     dry_run: bool = False
+    config_path: str = ""
 
 
 def default_config_path() -> Path:
@@ -41,6 +43,100 @@ def default_config_path() -> Path:
     if appdata:
         return Path(appdata) / "SiftEntry" / "TallyConnector" / "connector_config.json"
     return Path.home() / ".siftentry" / "tally_connector_config.json"
+
+
+# ---------------------------------------------------------------------------
+# Durable acknowledgement outbox
+#
+# A Tally posting can succeed while the acknowledgement to SiftEntry fails
+# (network blip, laptop lid closed). If that result only lived in memory it
+# would be lost, SiftEntry would keep the invoice as "posting", and nobody
+# could safely tell whether the voucher exists. So every result is written to
+# disk BEFORE the first acknowledgement attempt, and every poll drains the
+# outbox first. A voucher is never re-posted because the cloud did not hear
+# about it; only the acknowledgement is retried.
+# ---------------------------------------------------------------------------
+
+def default_outbox_path(config_path: str = "") -> Path:
+    base = Path(config_path) if config_path else default_config_path()
+    if base.name in {"connector_config.json", "tally_connector_config.json"}:
+        return base.with_name("results_outbox.json")
+    return base.with_suffix(".results-outbox.json")
+
+
+class OutboxUnreadable(RuntimeError):
+    """The on-disk outbox exists but cannot be parsed. Never treat as empty."""
+
+
+def read_outbox(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    try:
+        text = path.read_text(encoding="utf-8")
+        data = json.loads(text)
+    except (OSError, ValueError) as exc:
+        raise OutboxUnreadable(f"{path} is unreadable: {exc}") from exc
+    if not isinstance(data, list):
+        raise OutboxUnreadable(f"{path} has unexpected content")
+    seen = set()
+    for item in data:
+        if (not isinstance(item, dict) or not isinstance(item.get("posting_id"), str)
+                or not item["posting_id"].strip() or not isinstance(item.get("success"), bool)
+                or item["posting_id"] in seen):
+            raise OutboxUnreadable(f"{path} contains an invalid or duplicate result")
+        seen.add(item["posting_id"])
+    return data
+
+
+def write_outbox(path: Path, items: List[Dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as output:
+        json.dump(items, output, indent=2)
+        output.flush()
+        os.fsync(output.fileno())
+    tmp.replace(path)
+    if os.name != "nt":
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+
+def append_outbox(path: Path, results: List[Dict[str, Any]]) -> None:
+    if not results:
+        return
+    items = read_outbox(path)
+    known = {str(item.get("posting_id") or "") for item in items}
+    for result in results:
+        if str(result.get("posting_id") or "") not in known:
+            items.append(dict(result, queued_at=datetime.now().isoformat(timespec="seconds")))
+            known.add(str(result.get("posting_id") or ""))
+    write_outbox(path, items)
+
+
+def drain_outbox(config: "ConnectorConfig", path: Path) -> Dict[str, Any]:
+    """Retry acknowledgement for everything still on disk. Never re-posts."""
+    pending = read_outbox(path)
+    if not pending:
+        return {"success": True, "accepted": 0, "pending": 0}
+    for item in pending:
+        if (item.get("connector_workspace_id", config.workspace_id) != config.workspace_id
+                or item.get("connector_cloud_url", config.cloud_url.rstrip("/")) != config.cloud_url.rstrip("/")):
+            raise OutboxUnreadable(f"{path} belongs to different connector settings; restore the original workspace")
+    submitted = submit_cloud_results(config, pending)
+    if (submitted.get("success") and submitted.get("accepted") == len(pending)
+            and not submitted.get("rejected")):
+        write_outbox(path, [])
+        return {"success": True, "accepted": len(pending), "pending": 0}
+    return {
+        "success": False,
+        "accepted": 0,
+        "pending": len(pending),
+        "message": str(submitted.get("message") or "Acknowledgement failed; will retry."),
+    }
+
 
 
 def default_status_path() -> Path:
@@ -68,6 +164,7 @@ def load_config(path: Optional[Path] = None) -> ConnectorConfig:
         poll_interval=max(5, int(raw.get("poll_interval") or os.environ.get("EZ_TALLY_POLL_INTERVAL", "15"))),
         claim_limit=max(1, min(25, int(raw.get("claim_limit") or os.environ.get("EZ_TALLY_CLAIM_LIMIT", "5")))),
         dry_run=bool(raw.get("dry_run", False)),
+        config_path=str(config_path),
     )
 
 
@@ -282,7 +379,46 @@ def submit_cloud_results(config: ConnectorConfig, results: List[Dict[str, Any]])
     return data
 
 
+@contextmanager
+def _poll_file_lock(path: Path):
+    """Serialize processes as well as threads; a second instance never drains our outbox."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_suffix(".lock").open("a+b") as handle:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def poll_once(config: ConnectorConfig) -> Dict[str, Any]:
+    try:
+        with _poll_file_lock(default_outbox_path(config.config_path)):
+            return _poll_once_locked(config)
+    except (OSError, OutboxUnreadable) as exc:
+        return {
+            "success": False, "connected_to_siftentry": False, "tally_detected": False,
+            "claimed": 0, "submitted": 0, "failed_jobs": 0, "awaiting_ack": -1,
+            "message": ("Connector paused: another instance is polling, or local recovery storage "
+                        f"cannot be used. Do not re-enter vouchers. Contact support: {exc}"),
+        }
+
+
+def _poll_once_locked(config: ConnectorConfig) -> Dict[str, Any]:
     if not config.cloud_url.strip():
         return {
             "success": False,
@@ -304,6 +440,43 @@ def poll_once(config: ConnectorConfig) -> Dict[str, Any]:
             "failed_jobs": 0,
         }
 
+    # Acknowledge what already happened in Tally before anything else. This
+    # must not depend on Tally being open now, or on the network having been
+    # up at the moment the voucher was created.
+    outbox_path = default_outbox_path(config.config_path)
+    try:
+        drained = drain_outbox(config, outbox_path)
+    except OutboxUnreadable as exc:
+        return {
+            "success": False,
+            "connected_to_siftentry": False,
+            "tally_detected": False,
+            "message": (
+                "The local results file is unreadable — not claiming new work until it is "
+                f"recovered. Contact SiftEntry support with this file: {exc}"
+            ),
+            "claimed": 0,
+            "submitted": 0,
+            "failed_jobs": 0,
+            "awaiting_ack": -1,
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+        }
+    if not drained.get("success"):
+        heartbeat = send_cloud_heartbeat(config, tally_detected=None)
+        return {
+            "success": False,
+            "connected_to_siftentry": bool(heartbeat.get("success")),
+            "tally_detected": False,
+            "message": (
+                f"{drained.get('pending', 0)} posting result(s) posted to Tally but not yet "
+                "confirmed to SiftEntry — retrying. Do not re-enter these vouchers."
+            ),
+            "claimed": 0,
+            "submitted": 0,
+            "failed_jobs": 0,
+            "awaiting_ack": int(drained.get("pending", 0) or 0),
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+        }
     tally_result = {"success": True, "message": "Dry run does not require Tally."}
     if not config.dry_run:
         tally_result = test_tally_connection(config.tally_url)
@@ -324,6 +497,8 @@ def poll_once(config: ConnectorConfig) -> Dict[str, Any]:
                 "updated_at": datetime.now().isoformat(timespec="seconds"),
             }
 
+    # Verify durable storage before asking the server to reserve new invoices.
+    write_outbox(outbox_path, [])
     claimed = claim_cloud_jobs(config)
     jobs = claimed.get("jobs") or []
     results: List[Dict[str, Any]] = []
@@ -337,18 +512,37 @@ def poll_once(config: ConnectorConfig) -> Dict[str, Any]:
             dry_run=bool(job.get("dry_run")),
         )
         result["posting_id"] = str(job.get("posting_id") or "")
+        result["connector_workspace_id"] = config.workspace_id
+        result["connector_cloud_url"] = config.cloud_url.rstrip("/")
+        # Persist THIS result before touching the next job. An interruption
+        # during job N must not lose the outcome of job N-1.
+        append_outbox(outbox_path, [result])
         results.append(result)
         last_invoice = str(job.get("invoice_number") or job.get("invoice_id") or last_invoice)
 
     submitted: Dict[str, Any] = {"success": True, "accepted": 0}
+    awaiting_ack = 0
     if results:
+        # Every result is already on disk. If the acknowledgement fails, the
+        # next poll retries it before doing anything else.
         submitted = submit_cloud_results(config, results)
+        if (submitted.get("success") and submitted.get("accepted") == len(results)
+                and not submitted.get("rejected")):
+            write_outbox(outbox_path, [])
+        else:
+            submitted["success"] = False
+            awaiting_ack = len(results)
 
     failed_jobs = len([result for result in results if not result.get("success")])
     success = bool(claimed.get("success")) and bool(submitted.get("success"))
     message = "Idle. No approved Tally jobs."
     if not claimed.get("success"):
         message = str(claimed.get("message") or "Could not reach SiftEntry.")
+    elif awaiting_ack:
+        message = (
+            f"Posted {awaiting_ack} voucher(s) to Tally; SiftEntry has not confirmed yet — "
+            "retrying automatically. Do not re-enter these vouchers."
+        )
     elif results:
         message = str(submitted.get("message") or f"Submitted {submitted.get('accepted', len(results))} result(s).")
     return {
@@ -357,7 +551,8 @@ def poll_once(config: ConnectorConfig) -> Dict[str, Any]:
         "tally_detected": True,
         "message": message,
         "claimed": len(jobs),
-        "submitted": int(submitted.get("accepted", len(results)) or 0),
+        "submitted": 0 if awaiting_ack else int(submitted.get("accepted", len(results)) or 0),
+        "awaiting_ack": awaiting_ack,
         "failed_jobs": failed_jobs,
         "last_posted_invoice": last_invoice,
         "claim": claimed,

@@ -4,6 +4,66 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### pkg34 shipping hardening
+
+- Commit claim/attempt creation and terminal posting/invoice/audit transitions
+  atomically; serialize conflicting-result evidence; enforce approval for live
+  Tally API posting as well as connector claims.
+- Redact training/recommendation/activation responses and restrict connector
+  credential changes to owners/admins.
+- Strict, disk-flushed, cross-process-locked outbox recovery; preserve incomplete
+  acknowledgements, isolate named configurations and reject workspace mismatches.
+- Regenerate the fallback kit, add SQLite/PostgreSQL/web CI and Windows installer
+  install/UI/autostart-command smoke checks. Publish source/hash provenance.
+- See docs/PKG34-RELEASE.md for deployment and reconciliation limitations.
+
+### Security
+
+- Connector token is write-only (pkg34): every client-profile read (list,
+  detail, create/update responses, default, review) now redacts
+  connection_settings.connector_token and sets connector_token_set. A
+  Viewer listing profiles could previously obtain the token and
+  authenticate as the connector. Saving a redacted profile keeps the
+  stored token. Owners/admins reveal it via a new
+  GET …/client-profiles/{id}/connector-credentials endpoint, surfaced as
+  a "Reveal connector token" control on Integrations (3 new tests)
+
+### Fixed — posting correctness (pkg34, from the 10 Sep QA review)
+
+- Approved-only posting: the connector claim query no longer offers
+  validated invoices; validation says ready, approval authorizes sending
+- Atomic claims: each invoice is claimed with a single conditional UPDATE
+  (approved → posting) and a partial unique index allows only one live
+  posting attempt per invoice/profile/target. Overlapping polls — a
+  background poll and "Poll once" on one machine, or two machines —
+  yield exactly one owner (tested with two synchronized threads)
+- Idempotent, atomic terminal results: the started→terminal transition
+  is a conditional UPDATE (WHERE status='started') and only the request
+  whose write wins moves the invoice. Replays are no-ops; conflicting
+  results — late or simultaneous — are recorded on the posting as
+  raw.late_result_conflicts and never applied. Tested with two
+  synchronized success/failure requests
+- Durable acknowledgement outbox (connector 0.4.0): each result is
+  written to results_outbox.json beside the config immediately after
+  its Tally post and before the next job; every poll drains the outbox
+  BEFORE checking Tally, so acknowledgements do not depend on Tally
+  being open, and does not claim new work while any result is
+  unacknowledged. A corrupt outbox blocks new claims with a visible
+  message instead of being treated as empty. A restart
+  after Tally succeeded retries only the acknowledgement and never
+  re-posts the voucher. Status reads "Posted … not yet confirmed —
+  retrying. Do not re-enter these vouchers."
+- Real autostart (connector 0.4.0): the installer's sign-in entry now
+  passes --autostart; the app begins polling by itself when saved
+  settings are complete. "Poll once" is refused while the connector is
+  running and shares a lock with the background loop
+- Session: the initial/navigation auth effect no longer signs out on a
+  transient failure (completes the pkg33-c fix)
+- History no longer claims "append-only · audit-grade"; copy now
+  describes what the screen actually shows
+- GitHub Actions: checkout/setup-python/upload-artifact bumped to
+  current majors (Node 20 deprecation warning)
+
 ### Added
 
 - Create workspace from the app (pkg33-b): a "+" button beside the

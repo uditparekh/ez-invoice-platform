@@ -429,6 +429,12 @@ class InvoiceRepository:
                     """
                 )
             self._migrate_posting_attempts(connection)
+            # Columns must exist before creating this index on older databases.
+            connection.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_posting_attempts_active_claim
+                ON posting_attempts(invoice_id, COALESCE(client_profile_id, ''), target)
+                WHERE status = 'started' AND dry_run = 0
+            """)
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_posting_attempts_org_created
@@ -1381,9 +1387,11 @@ class InvoiceRepository:
         target: PostingTarget,
         limit: int = 5,
     ) -> List[Invoice]:
+        # Validation says an invoice is ready; approval authorizes sending it.
+        # Only approved invoices are ever offered to a connector.
         ready_statuses = (
             InvoiceStatus.APPROVED.value,
-            InvoiceStatus.VALIDATED.value,
+            InvoiceStatus.APPROVED.value,
         )
         with self._connect() as connection:
             rows = connection.execute(
@@ -2053,7 +2061,8 @@ class InvoiceRepository:
         actor_id: str,
         client_profile_id: Optional[str] = None,
         request_payload: Optional[Dict[str, Any]] = None,
-    ) -> PostingResult:
+        require_approval: bool = False,
+    ) -> Optional[PostingResult]:
         current = self.get_invoice(invoice_id)
         if not current:
             raise ValueError("Invoice does not exist.")
@@ -2082,6 +2091,19 @@ class InvoiceRepository:
             updated_at=now,
         )
         with self._connect() as connection:
+            if require_approval and not dry_run:
+                cursor = connection.execute(
+                    """UPDATE invoices SET status = ?, updated_at = ?
+                    WHERE id = ? AND status = ? AND NOT EXISTS (
+                        SELECT 1 FROM posting_attempts
+                        WHERE invoice_id = ? AND dry_run = 0
+                          AND (status = 'started' OR (status = 'succeeded' AND target = ?))
+                    )""",
+                    (InvoiceStatus.POSTING.value, now.isoformat(), invoice_id,
+                     InvoiceStatus.APPROVED.value, invoice_id, _enum_value(target)),
+                )
+                if cursor.rowcount != 1:
+                    return None
             connection.execute(
                 """
                 INSERT INTO posting_attempts (
@@ -2126,7 +2148,33 @@ class InvoiceRepository:
             )
         return posting
 
-    def complete_posting(
+    def complete_posting(self, posting_id: str, **kwargs) -> Optional[PostingResult]:
+        """Compatibility wrapper: same idempotent semantics, returns the posting only."""
+        posting, _won = self.complete_posting_atomic(posting_id, **kwargs)
+        return posting
+
+    def record_posting_conflict(self, posting_id: str, conflict: Dict[str, Any]) -> None:
+        with self._connect() as connection:
+            # Acquire a write lock before the read/merge on both supported engines.
+            connection.execute("UPDATE posting_attempts SET id = id WHERE id = ?", (posting_id,))
+            row = connection.execute(
+                "SELECT raw_json FROM posting_attempts WHERE id = ?", (posting_id,)
+            ).fetchone()
+            raw: Dict[str, Any] = {}
+            if row and row["raw_json"]:
+                try:
+                    raw = json.loads(row["raw_json"]) or {}
+                except (TypeError, ValueError):
+                    raw = {}
+            conflicts = list(raw.get("late_result_conflicts") or [])
+            conflicts.append(conflict)
+            raw["late_result_conflicts"] = conflicts
+            connection.execute(
+                "UPDATE posting_attempts SET raw_json = ? WHERE id = ?",
+                (json.dumps(raw), posting_id),
+            )
+
+    def _complete_posting_unchecked(
         self,
         posting_id: str,
         success: bool,
@@ -2135,20 +2183,20 @@ class InvoiceRepository:
         issues: Optional[List[Dict[str, Any]]] = None,
         raw: Optional[Dict[str, Any]] = None,
         response_payload: Optional[Dict[str, Any]] = None,
-    ) -> PostingResult:
+    ) -> tuple[Optional[PostingResult], bool]:
         current = self.get_posting(posting_id)
         if not current:
             raise ValueError("Posting attempt does not exist.")
         status = PostingStatus.SUCCEEDED if success else PostingStatus.FAILED
         now = utc_now()
         with self._connect() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE posting_attempts
                 SET status = ?, success = ?, message = ?, external_id = ?,
                     issues_json = ?, response_json = ?, raw_json = ?,
                     updated_at = ?
-                WHERE id = ?
+                WHERE id = ? AND status = ?
                 """,
                 (
                     _enum_value(status),
@@ -2160,8 +2208,19 @@ class InvoiceRepository:
                     _json(raw or {}),
                     now.isoformat(),
                     posting_id,
+                    PostingStatus.STARTED.value,
                 ),
             )
+            if int(getattr(cursor, "rowcount", 0) or 0) != 1:
+                return self.get_posting(posting_id), False
+            if not current.dry_run:
+                final_status = InvoiceStatus.POSTED if success else InvoiceStatus.FAILED
+                connection.execute(
+                    "UPDATE invoices SET status = ?, updated_at = ? WHERE id = ?",
+                    (final_status.value, now.isoformat(), current.invoice_id),
+                )
+                self._insert_audit(connection, current.organization_id, current.invoice_id,
+                                   f"invoice.{final_status.value}", {"status": final_status.value})
             self._insert_audit(
                 connection,
                 current.organization_id,
@@ -2178,7 +2237,37 @@ class InvoiceRepository:
         updated = self.get_posting(posting_id)
         if not updated:
             raise RuntimeError("Posting completion failed.")
-        return updated
+        return updated, True
+
+    def complete_posting_atomic(self, posting_id: str, **kwargs):
+        """Terminal transition decided by the database, not by a prior read.
+
+        Returns (posting, won). `won` is True only for the single request whose
+        conditional UPDATE (WHERE status='started') moved the row to terminal.
+        Concurrent or late callers get the stored row and won=False; a
+        conflicting outcome is recorded as evidence and never applied.
+        """
+        current = self.get_posting(posting_id)
+        if not current:
+            return None, False
+        if current.status == PostingStatus.STARTED:
+            posting, won = self._complete_posting_unchecked(posting_id, **kwargs)
+            if won:
+                return posting, True
+            current = posting or self.get_posting(posting_id)
+        if bool(current.success) != bool(kwargs.get("success")):
+            self.record_posting_conflict(
+                posting_id,
+                {
+                    "recorded_status": _enum_value(current.status),
+                    "late_success": bool(kwargs.get("success")),
+                    "late_message": kwargs.get("message"),
+                    "late_external_id": kwargs.get("external_id"),
+                    "received_at": utc_now().isoformat(),
+                },
+            )
+            current = self.get_posting(posting_id) or current
+        return current, False
 
     def get_posting(self, posting_id: str) -> Optional[PostingResult]:
         with self._connect() as connection:

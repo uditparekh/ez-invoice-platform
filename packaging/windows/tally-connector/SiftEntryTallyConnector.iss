@@ -1,5 +1,5 @@
 #define AppName "SiftEntry Tally Connector"
-#define AppVersion "0.3.0"
+#define AppVersion "0.4.0"
 #define AppPublisher "SiftEntry"
 #define AppExeName "SiftEntry Tally Connector.exe"
 #define BuildRoot "."
@@ -39,7 +39,7 @@ Name: "{group}\Uninstall SiftEntry Tally Connector"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\SiftEntry Tally Connector"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SiftEntry Tally Connector"; ValueData: """{app}\{#AppExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: autostart
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SiftEntry Tally Connector"; ValueData: """{app}\{#AppExeName}"" --minimized --autostart"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch SiftEntry Tally Connector"; Flags: nowait postinstall skipifsilent

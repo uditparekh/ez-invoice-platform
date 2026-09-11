@@ -2206,7 +2206,16 @@ function renderConnectionFields(
             label="Connector token"
             value={connectionText(settings, "connector_token")}
             onChange={(value) => onChange("connector_token", value)}
-            placeholder="Local test token"
+            placeholder={
+              connectionBool(settings, "connector_token_set", false)
+                ? "Saved — leave blank to keep it"
+                : "Paste or type a token"
+            }
+            hint={
+              connectionBool(settings, "connector_token_set", false)
+                ? "A token is saved. It is not shown here; owners and admins can reveal it from the Integrations page when installing the connector. Type a new one to replace it."
+                : "Used by the connector on the Tally computer to identify this workspace."
+            }
           />
           <TextField
             label="Tally URL"

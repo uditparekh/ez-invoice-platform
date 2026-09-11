@@ -50,7 +50,13 @@ class TallyConnectorWindow:
     DANGER = "#EF4444"
     FONT = "Segoe UI"
 
-    def __init__(self, root: tk.Tk, config_path: Optional[Path] = None, start_minimized: bool = False) -> None:
+    def __init__(
+        self,
+        root: tk.Tk,
+        config_path: Optional[Path] = None,
+        start_minimized: bool = False,
+        autostart: bool = False,
+    ) -> None:
         self.root = root
         self.config_path = config_path or default_config_path()
         self.status_path = default_status_path()
@@ -75,10 +81,21 @@ class TallyConnectorWindow:
         self.last_message = tk.StringVar(value="Ready.")
         self.running_badge: Optional[tk.Label] = None
 
+        self.poll_lock = threading.Lock()
         self._build_window()
         self.root.after(250, self._drain_events)
         if start_minimized:
             self.root.iconify()
+        if autostart:
+            # Launched at Windows sign-in: begin polling by itself when the
+            # saved settings are complete, so a rebooted PC resumes posting
+            # without anyone clicking Start.
+            config = self.current_config()
+            if config.cloud_url.strip() and config.token.strip():
+                self.root.after(1500, self.start)
+                self._append_log("Auto-starting connector (launched at sign-in).")
+            else:
+                self._append_log("Not auto-starting: settings are incomplete.")
 
     def _build_window(self) -> None:
         self.root.title("SiftEntry Tally Connector")
@@ -367,6 +384,7 @@ class TallyConnectorWindow:
             poll_interval=max(5, int(self.poll_interval.get())),
             claim_limit=max(1, min(25, int(self.claim_limit.get()))),
             dry_run=bool(self.dry_run.get()),
+            config_path=str(self.config_path),
         )
 
     def save_settings(self, notify: bool = False) -> None:
@@ -386,12 +404,22 @@ class TallyConnectorWindow:
         self.events.put({"type": "tally_test", "result": result})
 
     def poll_once_now(self) -> None:
+        if self.worker and self.worker.is_alive():
+            self._append_log("Connector is already running; background polling covers this.")
+            return
+        if not self.poll_lock.acquire(blocking=False):
+            self._append_log("A poll is already in progress.")
+            return
+        self.poll_lock.release()
         self.save_settings()
         self._append_log("Polling SiftEntry once.")
         threading.Thread(target=self._poll_once_worker, daemon=True).start()
 
     def _poll_once_worker(self) -> None:
-        status = poll_once(self.current_config())
+        # Mutual exclusion with the background loop: a manual poll can never
+        # overlap a scheduled one, so one machine cannot race itself.
+        with self.poll_lock:
+            status = poll_once(self.current_config())
         write_status(status, self.status_path)
         self.events.put({"type": "poll", "status": status})
 
@@ -412,7 +440,8 @@ class TallyConnectorWindow:
 
     def _poll_loop(self) -> None:
         while not self.stop_event.is_set():
-            status = poll_once(self.current_config())
+            with self.poll_lock:
+                status = poll_once(self.current_config())
             write_status(status, self.status_path)
             self.events.put({"type": "poll", "status": status})
             for _ in range(max(1, self.current_config().poll_interval)):
@@ -469,14 +498,46 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Open the SiftEntry Tally Connector status window.")
     parser.add_argument("--config", default="", help="Optional connector config JSON path.")
     parser.add_argument("--minimized", action="store_true", help="Start minimized.")
+    parser.add_argument("--autostart", action="store_true", help="Begin polling automatically if settings are complete.")
+    parser.add_argument("--self-test", action="store_true", help="Run isolated packaging/UI checks without connecting to a workspace.")
     return parser
 
 
 def main() -> None:
     args = build_arg_parser().parse_args()
+    if args.self_test:
+        import tempfile
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory(prefix="siftentry-self-test-") as directory:
+            config_path = Path(directory) / "connector_config.json"
+            save_config(ConnectorConfig(cloud_url="https://example.invalid", workspace_id="self-test", token="synthetic"), config_path)
+            root = tk.Tk()
+            root.withdraw()
+            scheduled = []
+            original_after = root.after
+            def record_after(delay, callback=None, *arguments):
+                scheduled.append(delay)
+                return original_after(delay, callback, *arguments)
+            root.after = record_after
+            window = TallyConnectorWindow(root, config_path=config_path, autostart=True)
+            assert 1500 in scheduled, "Autostart callback was not scheduled"
+            assert window.current_config().config_path == str(config_path)
+            messages = []
+            window._append_log = messages.append
+            window.worker = SimpleNamespace(is_alive=lambda: True)
+            window.poll_once_now()
+            assert any("background polling" in message for message in messages)
+            root.update_idletasks()
+            root.destroy()
+        return
     root = tk.Tk()
     config_path = Path(args.config) if args.config else None
-    TallyConnectorWindow(root, config_path=config_path, start_minimized=args.minimized)
+    TallyConnectorWindow(
+        root,
+        config_path=config_path,
+        start_minimized=args.minimized,
+        autostart=args.autostart or args.minimized,
+    )
     root.mainloop()
 
 

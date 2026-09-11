@@ -75,6 +75,7 @@ from .models import (
     SendBackRequest,
     PostingRetryRequest,
     PostingResult,
+    PostingStatus,
     PostingResultCreate,
     PostingTarget,
     ProfileRecommendationResult,
@@ -132,6 +133,58 @@ INVENTORY_POSTING_MODES = {
     ProfilePostingMode.ITEM_INVOICE.value,
     ProfilePostingMode.VOUCHER_WITH_INVENTORY.value,
 }
+
+
+def _redact_profile_secrets(profile: ClientProfile) -> ClientProfile:
+    """Strip the connector token from a profile before it leaves the API.
+
+    The token authenticates as the connector itself, so it must never ride
+    along on ordinary reads (a Viewer could list profiles and obtain it). It is
+    write-only: set via profile settings, read back only through the
+    owner/admin-gated connector-credentials endpoint.
+    """
+    connection_settings = dict(profile.settings.connection_settings or {})
+    token = str(connection_settings.get("connector_token") or "")
+    if not token:
+        return profile
+    connection_settings["connector_token"] = ""
+    connection_settings["connector_token_set"] = True
+    return profile.model_copy(
+        update={
+            "settings": profile.settings.model_copy(
+                update={"connection_settings": connection_settings}
+            )
+        }
+    )
+
+
+def _preserve_connector_token(
+    request: Request,
+    organization_id: str,
+    profile_id: str,
+    incoming_settings: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Redacted reads come back on writes with an empty token; keep the stored one."""
+    if incoming_settings is None:
+        return None
+    merged = dict(incoming_settings)
+    merged.pop("connector_token_set", None)
+    if str(merged.get("connector_token") or "").strip():
+        return merged
+    existing = _repo(request).get_client_profile(profile_id)
+    if existing and existing.organization_id == organization_id:
+        stored = str((existing.settings.connection_settings or {}).get("connector_token") or "")
+        if stored:
+            merged["connector_token"] = stored
+    return merged
+
+
+def _guard_connector_credential_changes(request, current_user, organization_id, incoming, existing=None):
+    """Profile editing must not grant the ability to impersonate a connector."""
+    incoming, existing = incoming or {}, existing or {}
+    protected = ("connector_token", "workspace_id", "connector_enabled")
+    if any(key in incoming and incoming[key] != existing.get(key) for key in protected):
+        _require_membership(request, current_user, organization_id, MANAGE_ROLES)
 
 
 def _connector_is_enabled(profile: ClientProfile) -> bool:
@@ -754,10 +807,13 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         accounting_system: Optional[AccountingSystem] = Query(default=None),
     ) -> List[ClientProfile]:
         _require_membership(request, current_user, organization_id, READ_ROLES)
-        return _repo(request).list_client_profiles(
-            organization_id,
-            accounting_system.value if accounting_system else None,
-        )
+        return [
+            _redact_profile_secrets(profile)
+            for profile in _repo(request).list_client_profiles(
+                organization_id,
+                accounting_system.value if accounting_system else None,
+            )
+        ]
 
     @app.post(
         "/api/v1/organizations/{organization_id}/client-profiles",
@@ -773,6 +829,10 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> ClientProfile:
         _require_membership(request, current_user, organization_id, EDIT_ROLES)
         _get_organization(request, organization_id)
+        _guard_connector_credential_changes(
+            request, current_user, organization_id,
+            body.settings.connection_settings if body.settings else None,
+        )
         _guard_single_connector_profile(
             request,
             organization_id,
@@ -780,10 +840,12 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             body.settings.connection_settings if body.settings else None,
         )
         try:
-            return _repo(request).create_client_profile(
-                organization_id,
-                body,
-                actor_id=current_user.id,
+            return _redact_profile_secrets(
+                _repo(request).create_client_profile(
+                    organization_id,
+                    body,
+                    actor_id=current_user.id,
+                )
             )
         except sqlite3.IntegrityError as exc:
             raise HTTPException(
@@ -804,13 +866,35 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         profile_id: str,
         current_user: CurrentUser,
     ) -> ClientProfile:
-        return _require_client_profile(
-            request,
-            organization_id,
-            profile_id,
-            current_user,
-            READ_ROLES,
+        return _redact_profile_secrets(
+            _require_client_profile(
+                request,
+                organization_id,
+                profile_id,
+                current_user,
+                READ_ROLES,
+            )
         )
+
+    @app.get(
+        "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/connector-credentials",
+        tags=["client-profiles"],
+    )
+    def get_client_profile_connector_credentials(
+        request: Request,
+        organization_id: str,
+        profile_id: str,
+        current_user: CurrentUser,
+    ) -> Dict[str, Any]:
+        """Owner/admin-only reveal of the connector token, for installing the connector."""
+        profile = _require_client_profile(
+            request, organization_id, profile_id, current_user, MANAGE_ROLES
+        )
+        connection_settings = profile.settings.connection_settings or {}
+        return {
+            "workspace_id": str(connection_settings.get("workspace_id") or ""),
+            "connector_token": str(connection_settings.get("connector_token") or ""),
+        }
 
     @app.patch(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
@@ -832,6 +916,16 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             EDIT_ROLES,
         )
         if body.settings is not None:
+            body.settings.connection_settings = _preserve_connector_token(
+                request,
+                organization_id,
+                profile_id,
+                body.settings.connection_settings,
+            )
+            _guard_connector_credential_changes(
+                request, current_user, organization_id, body.settings.connection_settings,
+                existing_profile.settings.connection_settings,
+            )
             _guard_single_connector_profile(
                 request,
                 organization_id,
@@ -852,7 +946,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             ) from exc
         if not profile:
             raise HTTPException(status_code=404, detail="Client profile not found.")
-        return profile
+        return _redact_profile_secrets(profile)
 
     @app.post(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/training-samples",
@@ -921,7 +1015,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         if not updated:
             _storage(request).delete(stored_document)
             raise HTTPException(status_code=404, detail="Client profile not found.")
-        return updated
+        return _redact_profile_secrets(updated)
 
     @app.post(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/set-default",
@@ -947,7 +1041,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         )
         if not profile:
             raise HTTPException(status_code=404, detail="Client profile not found.")
-        return profile
+        return _redact_profile_secrets(profile)
 
     @app.post(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/submit-review",
@@ -983,7 +1077,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Client profile not found.")
-        return updated
+        return _redact_profile_secrets(updated)
 
     @app.post(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/recommend-settings",
@@ -1011,7 +1105,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Client profile not found.")
-        return updated
+        return _redact_profile_secrets(updated)
 
     @app.post(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/activate",
@@ -1057,7 +1151,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Client profile not found.")
-        return updated
+        return _redact_profile_secrets(updated)
 
     @app.delete(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
@@ -1930,6 +2024,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         )
         jobs: List[TallyConnectorJob] = []
         for invoice in invoices:
+            # Atomic ownership: of two overlapping polls (background + "Poll
+            # once", or two machines) exactly one wins this compare-and-set.
             request_payload = _posting_request_payload(
                 invoice=invoice,
                 target=PostingTarget.TALLY,
@@ -1944,9 +2040,10 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 actor_id=f"tally-connector:{body.workspace_id}",
                 client_profile_id=profile.id,
                 request_payload=request_payload,
+                require_approval=True,
             )
-            if not body.dry_run:
-                _repo(request).set_status(invoice.id, InvoiceStatus.POSTING)
+            if posting is None:
+                continue
             jobs.append(
                 _tally_connector_job(
                     invoice=invoice,
@@ -2001,8 +2098,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 "posting_plan": posting.request_payload.get("posting_plan", {}),
                 "workspace_id": body.workspace_id,
             }
-            completed = _repo(request).complete_posting(
-                posting_id=posting.id,
+            completed, _won = _repo(request).complete_posting_atomic(
+                posting.id,
                 success=item.success,
                 message=item.message or ("Posted to Tally" if item.success else "Tally posting failed."),
                 external_id=item.external_id,
@@ -2010,11 +2107,10 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 raw=item.raw,
                 response_payload=response_payload,
             )
-            if not posting.dry_run:
-                _repo(request).set_status(
-                    posting.invoice_id,
-                    InvoiceStatus.POSTED if item.success else InvoiceStatus.FAILED,
-                )
+            if completed is None:
+                errors.append(f"Posting {item.posting_id} was not found.")
+                continue
+            # The repository commits invoice + posting + audit together.
             postings.append(completed)
         return TallyConnectorResultResponse(
             success=not errors,
@@ -2473,6 +2569,8 @@ def _execute_posting(
     adapter = request.app.state.adapters.get(resolved_target)
     if adapter is None:
         raise HTTPException(status_code=400, detail="Unsupported accounting target.")
+    if resolved_target == PostingTarget.TALLY and not dry_run and current_status != InvoiceStatus.APPROVED:
+        raise HTTPException(status_code=409, detail="Approve the invoice before live Tally posting or retrying.")
 
     request_payload = _posting_request_payload(
         invoice=invoice,
@@ -2488,7 +2586,10 @@ def _execute_posting(
         actor_id=current_user.id,
         client_profile_id=client_profile.id if client_profile else None,
         request_payload=request_payload,
+        require_approval=resolved_target == PostingTarget.TALLY and not dry_run,
     )
+    if posting is None:
+        raise HTTPException(status_code=409, detail="Invoice is no longer approved or is already being posted.")
     if not dry_run:
         _repo(request).set_status(invoice.id, InvoiceStatus.POSTING)
     try:
@@ -2511,8 +2612,6 @@ def _execute_posting(
                 "posting_plan": request_payload.get("posting_plan", {}),
             },
         )
-        if not dry_run:
-            _repo(request).set_status(invoice.id, InvoiceStatus.FAILED)
         return completed
 
     response_payload = {
@@ -2533,13 +2632,6 @@ def _execute_posting(
         raw=connector_result.raw,
         response_payload=response_payload,
     )
-    if not dry_run:
-        final_status = (
-            InvoiceStatus.POSTED
-            if connector_result.success
-            else InvoiceStatus.FAILED
-        )
-        _repo(request).set_status(invoice.id, final_status)
     return completed
 
 

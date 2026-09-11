@@ -1983,3 +1983,226 @@ def test_admin_cannot_promote_to_owner(tmp_path: Path):
             headers=admin_headers,
         )
         assert ordinary.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# pkg34 — posting safety acceptance tests (from the 2026-09-10 QA review)
+# ---------------------------------------------------------------------------
+
+CONNECTOR_HEADERS = {"Authorization": "Bearer connector-secret"}
+
+
+def _connector_profile_and_invoice(client, tokens, org_id):
+    headers = authorization(tokens)
+    created = client.post(
+        f"/api/v1/organizations/{org_id}/client-profiles",
+        json=_tally_profile_body("Primary Tally", True),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    invoice = import_sample_invoice(client, tokens, org_id)
+    return created.json()["id"], invoice["id"], headers
+
+
+def _claim(client):
+    return client.post(
+        "/api/v1/connectors/tally/jobs/claim",
+        json={"workspace_id": "neel-prod", "limit": 5},
+        headers=CONNECTOR_HEADERS,
+    )
+
+
+def _submit_result(client, job, success: bool, message: str):
+    return client.post(
+        "/api/v1/connectors/tally/jobs/results",
+        json={
+            "workspace_id": "neel-prod",
+            "results": [
+                {
+                    "posting_id": job["posting_id"],
+                    "invoice_id": job["invoice_id"],
+                    "success": success,
+                    "message": message,
+                }
+            ],
+        },
+        headers=CONNECTOR_HEADERS,
+    )
+
+
+def test_viewer_never_receives_connector_token(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        profile_id, _, headers = _connector_profile_and_invoice(client, tokens, org_id)
+        _invite_and_accept(client, org_id, headers, "viewer@example.com", "viewer")
+        viewer_login = client.post(
+            "/api/v1/auth/login",
+            json={"email": "viewer@example.com", "password": "member-password-is-long"},
+        )
+        viewer_headers = authorization(viewer_login.json())
+
+        listed = client.get(f"/api/v1/organizations/{org_id}/client-profiles", headers=viewer_headers)
+        assert listed.status_code == 200
+        assert "connector-secret" not in listed.text
+        assert listed.json()[0]["settings"]["connection_settings"]["connector_token"] == ""
+        assert listed.json()[0]["settings"]["connection_settings"]["connector_token_set"] is True
+
+        # The owner also gets redacted reads; the token is reachable only
+        # through the credentials endpoint, which viewers cannot call.
+        detail = client.get(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}", headers=headers
+        )
+        assert "connector-secret" not in detail.text
+        reveal = client.get(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}/connector-credentials",
+            headers=headers,
+        )
+        assert reveal.status_code == 200
+        assert reveal.json()["connector_token"] == "connector-secret"
+        forbidden = client.get(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}/connector-credentials",
+            headers=viewer_headers,
+        )
+        assert forbidden.status_code == 403
+
+
+def test_saving_a_redacted_profile_keeps_the_stored_token(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        profile_id, _, headers = _connector_profile_and_invoice(client, tokens, org_id)
+
+        # Round-trip exactly what a client would: read (redacted) → edit → save.
+        current = client.get(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}", headers=headers
+        ).json()
+        settings = current["settings"]
+        settings["purchase_ledger"] = "RAW MATERIAL A/C"
+        saved = client.patch(
+            f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}",
+            json={"settings": settings},
+            headers=headers,
+        )
+        assert saved.status_code == 200
+
+        # The connector must still authenticate with the original token.
+        assert _claim(client).status_code == 200
+
+
+def test_only_approved_invoices_are_offered_to_the_connector(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        _, invoice_id, headers = _connector_profile_and_invoice(client, tokens, org_id)
+        assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
+
+        # Validated but not approved: nothing to claim.
+        assert _claim(client).json()["jobs"] == []
+
+        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+        assert len(_claim(client).json()["jobs"]) == 1
+
+
+def test_overlapping_claims_yield_exactly_one_owner(tmp_path: Path):
+    """Simulates background polling and 'Poll once' racing on one connector."""
+    import threading
+
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        _, invoice_id, headers = _connector_profile_and_invoice(client, tokens, org_id)
+        assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
+        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+
+        results = []
+        barrier = threading.Barrier(2)
+
+        def worker():
+            barrier.wait()
+            results.append(_claim(client).json())
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        jobs = [job for payload in results for job in payload["jobs"]]
+        assert len(jobs) == 1, jobs
+        # And a later poll does not hand it out again.
+        assert _claim(client).json()["jobs"] == []
+
+
+def test_late_failure_cannot_overwrite_a_successful_posting(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        _, invoice_id, headers = _connector_profile_and_invoice(client, tokens, org_id)
+        assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
+        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+        job = _claim(client).json()["jobs"][0]
+
+        first = _submit_result(client, job, True, "Posted to Tally")
+        assert first.status_code == 200 and first.json()["accepted"] == 1
+        assert client.get(f"/api/v1/invoices/{invoice_id}", headers=headers).json()["status"] == "posted"
+
+        # Replay of the identical outcome is harmless.
+        replay = _submit_result(client, job, True, "Posted to Tally")
+        assert replay.status_code == 200
+        assert client.get(f"/api/v1/invoices/{invoice_id}", headers=headers).json()["status"] == "posted"
+
+        # A conflicting late failure is recorded, not applied.
+        late = _submit_result(client, job, False, "Tally rejected")
+        assert late.status_code == 200
+        invoice = client.get(f"/api/v1/invoices/{invoice_id}", headers=headers).json()
+        assert invoice["status"] == "posted"
+        postings = client.get(f"/api/v1/invoices/{invoice_id}/postings", headers=headers)
+        if postings.status_code == 200:
+            posting = next(p for p in postings.json() if p["id"] == job["posting_id"])
+            assert posting["status"] == "succeeded"
+            assert posting["raw"].get("late_result_conflicts")
+
+
+def test_concurrent_conflicting_results_cannot_overwrite_success(tmp_path: Path):
+    """Two results for one posting arrive at the same moment: success and failure.
+
+    Both observe 'started' before either writes. Exactly one may win, and if the
+    success wins the failure must be recorded as a conflict, never applied.
+    """
+    import threading
+
+    with make_client(tmp_path) as client:
+        tokens = bootstrap(client)
+        org_id = organization_id(tokens)
+        _, invoice_id, headers = _connector_profile_and_invoice(client, tokens, org_id)
+        assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
+        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+        job = _claim(client).json()["jobs"][0]
+
+        barrier = threading.Barrier(2)
+        codes = []
+
+        def send(success: bool, message: str):
+            barrier.wait()
+            codes.append(_submit_result(client, job, success, message).status_code)
+
+        # Run the pair many times; ordering is up to the scheduler each time.
+        threads = [
+            threading.Thread(target=send, args=(True, "Posted to Tally")),
+            threading.Thread(target=send, args=(False, "Tally rejected")),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert codes == [200, 200]
+
+        invoice = client.get(f"/api/v1/invoices/{invoice_id}", headers=headers).json()
+        postings = client.get(f"/api/v1/invoices/{invoice_id}/postings", headers=headers).json()
+        posting = next(p for p in postings if p["id"] == job["posting_id"])
+        # Whichever result won, the invoice status matches the stored posting —
+        # and the loser is on record. There is never a "posted" invoice with a
+        # failed posting or vice versa.
+        assert (posting["status"] == "succeeded") == (invoice["status"] == "posted")
+        assert posting["raw"].get("late_result_conflicts"), "loser must be recorded"

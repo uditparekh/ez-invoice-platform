@@ -4,6 +4,70 @@ Tracks every file changed per delivered package, against the repo state each
 package was built on. Started at pkg32; earlier packages are recorded in
 CHANGELOG.md and their README-INTEGRATION files.
 
+## pkg34 r2 — posting safety (Batch A), built against main @ ee310f2
+
+Revision 2 after the 10 Sep shipping verification found three failures in r1:
+(1) results persisted per batch, not per job; (2) acknowledgements skipped
+when Tally was closed; (3) terminal results decided by a read-then-write.
+All three fixed and covered by regression tests. Also: website download link
+→ 0.4.0, desktop passes config_path to the runtime, unreadable outbox fails
+visibly and blocks new claims.
+
+Changes vs r1:
+- tally_connector_runtime.py — drain outbox BEFORE the Tally check;
+  append_outbox after EACH job; OutboxUnreadable raised on corrupt file and
+  surfaced as a blocking status
+- repository.py — _complete_posting_unchecked is a conditional UPDATE
+  (WHERE status='started') returning (posting, won); complete_posting_atomic
+  decides by rowcount; conflicts recorded for losers
+- main.py — results handler uses complete_posting_atomic and moves the
+  invoice only when won
+- tally_connector_desktop.py — current_config passes config_path
+- accounting-system-page.tsx — download link 0.4.0
+- tests: +3 outbox regressions, +1 concurrent conflicting-results test
+
+Backend tests: 89 → 100. Web: typecheck/lint/build clean.
+
+
+Backend (3 changed):
+- siftentry_app/backend/repository.py — partial unique active-claim index,
+  approved-only ready query, claim_invoice_for_posting / release_invoice_claim
+  (atomic CAS), idempotent complete_posting wrapper + record_posting_conflict
+- siftentry_app/backend/main.py — PostingStatus import, CAS in claim handler,
+  results only move invoice when the posting was open, _redact_profile_secrets
+  on all profile reads, _preserve_connector_token on update,
+  connector-credentials endpoint (MANAGE_ROLES)
+- siftentry_app/backend/models.py — (unchanged this package)
+
+Connector (3 changed):
+- siftentry_app/tally_connector_runtime.py — 0.4.0, config_path on
+  ConnectorConfig, durable results outbox (read/write/append/drain), poll_once
+  drains first and persists before ack
+- siftentry_app/tally_connector_desktop.py — poll_lock, Poll once refused while
+  running, --autostart flag, autostart on launch when settings complete
+- packaging/windows/tally-connector/SiftEntryTallyConnector.iss — 0.4.0,
+  --autostart on the sign-in Run entry
+- packaging/windows/tally-connector/CLIENT_INSTALL_GUIDE.md — 0.4.0 filename
+- .github/workflows/build-tally-connector.yml — action version bumps
+
+Tests (2: 1 changed, 1 new):
+- tests/test_api.py — 5 acceptance tests (viewer secrets, token preserved on
+  save, approved-only, overlapping claims, late failure)
+- tests/test_connector_outbox.py — NEW, restart-after-success retry + dedupe
+
+Web (5: 4 changed, 1 new):
+- apps/web/src/components/auth-provider.tsx — navigation effect keeps session
+- apps/web/src/components/client-profiles-panel.tsx — token field write-only copy
+- apps/web/src/components/accounting/accounting-system-page.tsx —
+  ConnectorCredentialsReveal on Integrations
+- apps/web/src/app/(product)/app/history/page.tsx — audit-grade claims removed
+- apps/web/src/app/api/organizations/[organizationId]/client-profiles/[profileId]/connector-credentials/route.ts — NEW
+
+Docs (3 changed): CHANGELOG.md, README-INTEGRATION.md, SIFTENTRY_CHANGELOG.md
+
+Backend tests: 89 → 96. Web: typecheck/lint/build clean, 41 pages.
+A NEW INSTALLER BUILD (0.4.0) IS REQUIRED after pushing.
+
 ## pkg33-c — hotfix, built on pkg33-b
 
 Creating a workspace logged the user out.

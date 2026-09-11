@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   FileClock,
   FileDown,
-  Lock,
   LoaderCircle,
   RotateCcw,
   ShieldCheck,
@@ -73,13 +72,9 @@ export default function HistoryPage() {
       <PageHeader
         title="History"
         section="Audit trail"
-        description="Every extraction, approval, posting attempt, and correction — recorded, never overwritten."
+        description="Current status of every invoice, with export. A full event-by-event trail is coming."
         action={
           <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
-            <span className="inline-flex h-8 items-center gap-1.5 self-start rounded-full bg-success-soft px-3 text-[11px] font-black text-success sm:h-9 sm:px-3.5 sm:text-xs">
-              <Lock size={13} />
-              APPEND-ONLY · AUDIT-GRADE
-            </span>
             <button
               type="button"
               onClick={exportAudit}
@@ -119,7 +114,7 @@ export default function HistoryPage() {
           <EmptyState
             icon={FileClock}
             title="Every action will be recorded here"
-            description="Uploads, extractions, corrections, approvals, and posting attempts — audit-grade, append-only."
+            description="Uploads, extractions, corrections, approvals, and posting attempts will be listed here."
           />
         ) : tab === "activity" ? (
           <>

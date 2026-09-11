@@ -345,6 +345,14 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
                   label="Workspace ID"
                   value={status.workspace_id || "Not configured"}
                 />
+                {activeOrganizationId && (
+                  <div className="sm:col-span-2">
+                    <ConnectorCredentialsReveal
+                      organizationId={activeOrganizationId}
+                      profileId={status.client_profile_id}
+                    />
+                  </div>
+                )}
                 <StatusLine
                   label="Last check-in"
                   value={describeLastSeen(status.seconds_since_seen)}
@@ -405,7 +413,7 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
           </p>
         )}
         <a
-          href="/downloads/SiftEntry-Tally-Connector-Setup-0.3.0.exe"
+          href="/downloads/SiftEntry-Tally-Connector-Setup-0.4.0.exe"
           download
           className="flex items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 transition-colors hover:border-accent"
         >
@@ -448,6 +456,71 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
         </div>
       </div>
     </ContentCard>
+  );
+}
+
+function ConnectorCredentialsReveal({
+  organizationId,
+  profileId,
+}: {
+  organizationId: string;
+  profileId: string;
+}) {
+  const [token, setToken] = useState<string>("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function reveal() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/organizations/${organizationId}/client-profiles/${profileId}/connector-credentials`,
+      );
+      if (response.status === 403) {
+        throw new Error("Only owners and admins can reveal the connector token.");
+      }
+      if (!response.ok) throw new Error("Could not load the connector token.");
+      const payload = (await response.json()) as { connector_token?: string };
+      setToken(payload.connector_token || "");
+      if (!payload.connector_token) setError("No token is saved on this profile yet.");
+    } catch (revealError) {
+      setError((revealError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {token ? (
+        <>
+          <code className="rounded-lg border border-line bg-canvas px-2 py-1 text-xs font-bold text-ink">
+            {token}
+          </code>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void navigator.clipboard?.writeText(token)}
+          >
+            Copy
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setToken("")}>
+            Hide
+          </Button>
+        </>
+      ) : (
+        <Button size="sm" variant="secondary" onClick={() => void reveal()} disabled={busy}>
+          {busy ? "Loading…" : "Reveal connector token"}
+        </Button>
+      )}
+      {error && <span className="text-xs font-bold text-danger">{error}</span>}
+      {!token && !error && (
+        <span className="text-xs font-semibold text-ink-muted">
+          Owners and admins only. Needed once, when installing the connector.
+        </span>
+      )}
+    </div>
   );
 }
 
