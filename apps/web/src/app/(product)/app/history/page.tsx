@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, FileClock, FileDown } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -324,7 +324,26 @@ function PostingDetail({
   )?.role;
   const [result, setResult] = useState<PostingResult | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`/api/postings/${encodeURIComponent(id)}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Posting result is unavailable.");
+        const payload = (await response.json()) as PostingResult;
+        if (!controller.signal.aborted) setResult(payload);
+      })
+      .catch((error: Error) => {
+        if (!controller.signal.aborted) setError(error.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setBusy(false);
+      });
+    return () => controller.abort();
+  }, [id]);
   async function load(retry = false) {
     setBusy(true);
     setError("");
@@ -350,7 +369,8 @@ function PostingDetail({
   }
   return (
     <div className="mt-3 rounded-lg border border-line bg-surface-subtle p-4 text-sm">
-      {!result && (
+      {!result && busy && <p role="status">Loading posting result…</p>}
+      {!result && !busy && (
         <Button onClick={() => void load()} disabled={busy}>
           {busy ? "Loading…" : "Load recorded response"}
         </Button>

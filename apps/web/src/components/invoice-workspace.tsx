@@ -748,8 +748,8 @@ export function InvoiceWorkspace({
             </p>
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center 2xl:max-w-[1080px] 2xl:justify-end">
-            <label className="flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line-strong bg-surface px-3.5 2xl:max-w-[410px]">
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center 2xl:max-w-[1080px] 2xl:justify-end">
+            <label className="col-span-2 flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-line-strong bg-surface px-3.5 sm:min-w-40 2xl:max-w-[410px]">
               <Search size={17} className="shrink-0 text-ink-muted" />
               <input
                 aria-label="Search invoices"
@@ -1037,7 +1037,9 @@ export function InvoiceWorkspace({
 
       {detailMode !== "review" && (
         <>
-          <QueueMetrics counts={counts} />
+          <div className="hidden lg:block">
+            <QueueMetrics counts={counts} />
+          </div>
           <QueueTabsStrip
             status={status}
             invoices={invoices}

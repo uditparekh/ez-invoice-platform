@@ -17,6 +17,8 @@ def report_period(start: date | None, end: date | None) -> tuple[str, str]:
     start = start or end.replace(day=1)
     if start > end:
         raise ValueError("Start date must be on or before end date.")
+    if end == date.max:
+        raise ValueError("End date is outside the supported range.")
     if (end - start).days > 3660:
         raise ValueError("Choose a date range of ten years or less.")
     return (datetime.combine(start, time.min, timezone.utc).isoformat(),

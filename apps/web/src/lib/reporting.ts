@@ -60,7 +60,6 @@ export function reportMoney(value: string | number, currency: string) {
       style: "currency",
       currency,
       currencyDisplay: "code",
-      maximumFractionDigits: 2,
     }).format(number);
   } catch {
     return `${currency} ${number.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;

@@ -67,7 +67,7 @@ jobs:
           curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:8000/health
           curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://localhost:3000/login -o /dev/null
       - name: Light, dark, mobile and reporting regressions
-        run: pnpm e2e e2e/reporting-design.spec.ts --workers=1
+        run: pnpm e2e e2e/reporting-design.spec.ts --workers=1 --max-failures=1
       - uses: actions/upload-artifact@v4
         if: always()
         with:

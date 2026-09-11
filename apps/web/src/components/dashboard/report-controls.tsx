@@ -48,11 +48,19 @@ export function ReportControls({
         <Button size="sm" onClick={() => onChange(currentMonth())}>
           This month
         </Button>
-        <Button size="sm" onClick={() => {
-          const end = new Date();
-          const start = new Date(end.getTime() - 89 * 86400000);
-          onChange({ start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) });
-        }}>Last 90 days</Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            const end = new Date();
+            const start = new Date(end.getTime() - 89 * 86400000);
+            onChange({
+              start: start.toISOString().slice(0, 10),
+              end: end.toISOString().slice(0, 10),
+            });
+          }}
+        >
+          Last 90 days
+        </Button>
         <span className="pb-2 text-xs text-ink-secondary">UTC</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">

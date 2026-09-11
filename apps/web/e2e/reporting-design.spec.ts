@@ -75,13 +75,17 @@ for (const theme of ["light", "dark"]) {
       ]) {
         await page.goto(route);
         if (route === "/app" || route === "/app/analytics") {
-          await expect(page.getByText("Invoices received", { exact: true })).toBeVisible();
+          await expect(
+            page.getByText("Invoices received", { exact: true }),
+          ).toBeVisible();
         }
         if (route === "/app/history") {
           await expect(page.getByText(/\d+ recorded events/)).toBeVisible();
         }
         if (route === "/app/invoices") {
-          await expect(page.getByText("DEMO-QB-1001", { exact: true }).first()).toBeVisible();
+          await expect(
+            page.getByText("DEMO-QB-1001", { exact: true }).first(),
+          ).toBeVisible();
         }
         await expect(
           page.getByRole("heading", { level: 1 }).first(),
@@ -135,7 +139,6 @@ test("History shows real events and exports the same filtered records", async ({
     .getByRole("button", { name: "View posting result" })
     .first()
     .click();
-  await page.getByRole("button", { name: "Load recorded response" }).click();
   await expect(page.getByText(/succeeded ·/i).first()).toBeVisible();
   await page.getByRole("link", { name: "DEMO-QB-1001" }).first().click();
   await expect(
