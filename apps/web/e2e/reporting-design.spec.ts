@@ -1,24 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { qaOwner, qaEmail, qaPassword } from "./qa-auth";
 
 test("workspace dialog contains keyboard focus and restores it on close", async ({
   page,
   request,
 }) => {
-  const email = `design-qa-${Date.now()}@example.com`;
-  const password = "local-design-qa-only-123";
-  const created = await request.post(
-    "http://127.0.0.1:8000/api/v1/auth/bootstrap",
-    {
-      data: {
-        email,
-        password,
-        full_name: "Design QA",
-        organization_name: `QA ${Date.now()}`,
-        default_currency: "USD",
-      },
-    },
-  );
-  expect(created.status()).toBe(201);
+  const email = qaEmail;
+  const password = qaPassword;
+  await qaOwner(request);
   await page.goto("/login");
   await page.getByLabel("Work email").fill(email);
   await page.getByLabel("Password", { exact: false }).fill(password);

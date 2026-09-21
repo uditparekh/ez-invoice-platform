@@ -4,6 +4,13 @@ Tracks every file changed per delivered package, against the repo state each
 package was built on. Started at pkg32; earlier packages are recorded in
 CHANGELOG.md and their README-INTEGRATION files.
 
+## pkg35B — client profile organization, based on main 9331632
+
+One shared five-section editor, saved-profile connector status, explicit draft/
+activation actions, reviewer-confirmed sample notes, safe credential UI and
+light/dark/mobile regression coverage. No profile migration, connector rebuild
+or posting-adapter change. See docs/PKG35B-RELEASE.md for the exact boundaries.
+
 ## pkg35A — connector reliability, based on main e68d1dd
 
 0.5.0 adds safe credential validation/generation, public connector routing,

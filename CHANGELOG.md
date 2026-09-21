@@ -4,6 +4,19 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### pkg35B — organized client profile configuration
+
+- One five-section editor across Client Profiles and integration pages, with
+  responsive light/dark layouts, full-width long fields and keyboard navigation.
+- Separate connection setup/status, accounting rules, extraction guidance and
+  sample review. Mark manual Tally names Unverified; keep technical fields under
+  Advanced and preserve inactive inventory values without enabling allocations.
+- Separate Save draft from checked activation, protect unsaved edits, mask tokens,
+  enforce read-only viewer UI and record reviewer-confirmed sample notes.
+- Remove misleading AI-readiness claims and the overview's activation shortcut.
+  Existing settings, posting adapters, approval requirement and installer remain
+  unchanged. See docs/PKG35B-RELEASE.md for contracts and release gates.
+
 ### pkg35A — connector reliability (0.5.0)
 
 - Reject malformed connector credentials without a server crash; add secure
