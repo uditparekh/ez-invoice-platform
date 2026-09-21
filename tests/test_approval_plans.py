@@ -190,6 +190,30 @@ def test_pending_invoice_edit_revokes_approval_and_tracks_even_opt_out_correctio
         )
 
 
+def test_saving_unchanged_fields_does_not_claim_reviewer_provenance(tmp_path):
+    with make_client(tmp_path) as client:
+        _, _, invoice, headers = prepared(client)
+        repo = client.app.state.repository
+        current = repo.get_invoice(invoice)
+        repo.patch_invoice(
+            invoice,
+            InvoicePatch(invoice_number=current.invoice_number, lines=current.lines),
+        )
+        fields = client.get(
+            f"/api/v1/invoices/{invoice}/review", headers=headers
+        ).json()["fields"]
+        assert (
+            next(field for field in fields if field["field_path"] == "invoice_number")[
+                "origin"
+            ]
+            == "extracted"
+        )
+        assert (
+            next(field for field in fields if field["field_path"] == "lines")["origin"]
+            == "extracted"
+        )
+
+
 def test_inflight_invoice_cannot_be_edited_or_revalidated_and_plan_survives_profile_edit(
     tmp_path,
 ):

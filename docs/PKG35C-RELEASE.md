@@ -76,7 +76,7 @@ credential rotation, field origins, currency mismatches and bypass prevention.
 Browser tests run only against isolated localhost services. Physical Windows /
 Tally acceptance remains a client-side check before live accounting use.
 
-Local release verification: 189 backend tests passed (five existing SWIG
+Local release verification: 190 backend tests passed (five existing SWIG
 deprecation warnings), 23 browser tests passed, and typecheck/lint/build passed.
 Light desktop and dark 320px screenshots were visually inspected; the mobile
 ledger layout and headline amount were corrected and re-tested. GitHub database

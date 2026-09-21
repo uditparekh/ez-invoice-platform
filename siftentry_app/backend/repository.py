@@ -1744,8 +1744,17 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository):
         merged["status"] = InvoiceStatus.EXTRACTED
         merged["validation_issues"] = []
         origins = dict(merged["raw_payload"].get("_field_origins") or {})
+        old_fields = current.model_dump(mode="json")
+        new_fields = Invoice.model_validate(merged).model_dump(mode="json")
         for field_path in updates:
-            origins["supplier.name" if field_path == "supplier" else field_path] = "reviewer_confirmed"
+            old_value, new_value = old_fields[field_path], new_fields[field_path]
+            if field_path == "lines":
+                old_value = [{key: value for key, value in line.items() if key != "id"} for line in old_value]
+                new_value = [{key: value for key, value in line.items() if key != "id"} for line in new_value]
+            if field_path == "supplier":
+                old_value, new_value = old_value["name"], new_value["name"]
+            if old_value != new_value:
+                origins["supplier.name" if field_path == "supplier" else field_path] = "reviewer_confirmed"
         merged["raw_payload"] = {**merged["raw_payload"], "_field_origins": origins}
         updated = Invoice.model_validate(merged)
 
