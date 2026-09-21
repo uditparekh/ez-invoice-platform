@@ -19,6 +19,10 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { ResizableSplit } from "@/components/review/resizable-split";
+import {
+  PostingPreview,
+  type ApprovalChoice,
+} from "@/components/invoices/posting-preview";
 import { StatusBadge } from "@/components/status-badge";
 import {
   PdfEvidenceViewer,
@@ -148,6 +152,9 @@ function InvoiceDetail({
   const [postings, setPostings] = useState<PostingResult[]>([]);
   const [validating, setValidating] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [approvalChoice, setApprovalChoice] = useState<ApprovalChoice | null>(
+    null,
+  );
   const [posting, setPosting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [postingError, setPostingError] = useState("");
@@ -223,11 +230,28 @@ function InvoiceDetail({
 
   const canPost =
     !isPreviewOnly &&
+    resolvedPostingTarget !== "tally" &&
+    !approvalChoice?.tally &&
     resolvedPostingTarget !== null &&
     ["validated", "approved", "failed"].includes(invoice.status);
   const canValidate =
     !isPreviewOnly && !["posting", "posted"].includes(invoice.status);
-  const canApprove = !isPreviewOnly && invoice.status === "validated";
+  const draftChanged =
+    JSON.stringify(reviewDraft) !==
+    JSON.stringify(reviewDraftFromInvoice(invoice));
+  const canApprove =
+    !isPreviewOnly &&
+    invoice.status === "validated" &&
+    approvalChoice?.invoiceId === invoice.id &&
+    approvalChoice.ready &&
+    !draftChanged;
+  const postingPreview = !isPreviewOnly && (
+    <PostingPreview
+      invoiceId={invoice.id}
+      profileId={clientProfile?.id}
+      onChange={setApprovalChoice}
+    />
+  );
 
   async function validateInvoice() {
     setValidating(true);
@@ -256,12 +280,15 @@ function InvoiceDetail({
   }
 
   async function approveInvoice() {
+    if (!canApprove) return;
     setApproving(true);
     setWorkflowError("");
     setPostingError("");
     try {
       const response = await fetch(`/api/invoices/${invoice.id}/approve`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(approvalChoice),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -505,6 +532,13 @@ function InvoiceDetail({
           </div>
         )}
 
+        {postingPreview}
+        {draftChanged && (
+          <p className="mb-4 text-sm text-gold-ink">
+            Save your field changes and validate again before approving an
+            entry.
+          </p>
+        )}
         <ReviewWorkspace
           invoice={invoice}
           clientProfile={clientProfile}
@@ -580,6 +614,8 @@ function InvoiceDetail({
         clientProfile={clientProfile}
         onOpenReview={onOpenReview}
       />
+
+      {postingPreview}
 
       <div className="mt-6 grid gap-3 border-t border-line pt-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         <button
@@ -1604,6 +1640,18 @@ function ReviewFieldCard({
           {field.issue || field.suggestion}
         </p>
       )}
+      <p className="mt-2 text-xs font-medium text-ink-muted">
+        {(
+          {
+            extracted: "Extracted",
+            profile_default: "Profile default",
+            reviewer_confirmed: "Reviewer confirmed",
+            mixed_profile_defaults: "Includes profile defaults",
+            system_default: "System default",
+          } as Record<string, string>
+        )[field.origin ?? ""] ?? "Origin not recorded"}
+        {field.has_ai_suggestion && " · AI suggestion (display only)"}
+      </p>
       {evidenceSnippet && (
         <p className="mt-2 line-clamp-2 rounded-lg bg-surface-subtle px-2.5 py-2 text-xs font-semibold leading-4 text-ink-muted">
           {evidenceSnippet}

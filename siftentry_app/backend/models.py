@@ -595,6 +595,11 @@ class ValidationResult(BaseModel):
     issues: List[str] = Field(default_factory=list)
 
 
+class ApprovalRequest(BaseModel):
+    client_profile_id: Optional[str] = None
+    preview_hash: str = ""
+
+
 class PostingRequest(BaseModel):
     target: Optional[PostingTarget] = None
     dry_run: bool = False
@@ -890,6 +895,8 @@ class InvoiceReviewField(BaseModel):
     severity: InvoiceReviewSeverity = InvoiceReviewSeverity.OK
     issue: str = ""
     suggestion: str = ""
+    origin: str = "unrecorded"
+    has_ai_suggestion: bool = False
     evidence: List[ExtractionEvidence] = Field(default_factory=list)
 
 

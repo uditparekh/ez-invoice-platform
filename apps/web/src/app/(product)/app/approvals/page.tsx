@@ -17,6 +17,10 @@ import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { LoadingState } from "@/components/dashboard/loading-state";
+import {
+  PostingPreview,
+  type ApprovalChoice,
+} from "@/components/invoices/posting-preview";
 import { useWorkspaceInvoices } from "@/hooks/use-workspace-invoices";
 import type { ApiErrorPayload, Invoice } from "@/lib/types";
 import { apiErrorMessage, cn, formatCurrency, formatDate } from "@/lib/utils";
@@ -31,6 +35,9 @@ export default function ApprovalsPage() {
   const { invoices, loading, error, reload } = useWorkspaceInvoices();
   const [decided, setDecided] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [approvalChoice, setApprovalChoice] = useState<ApprovalChoice | null>(
+    null,
+  );
   const [actionError, setActionError] = useState("");
   const [approvedCount, setApprovedCount] = useState(0);
   const [rejectedCount, setRejectedCount] = useState(0);
@@ -73,10 +80,12 @@ export default function ApprovalsPage() {
   }
 
   async function approve(invoice: Invoice) {
+    if (!approvalChoice?.ready || approvalChoice.invoiceId !== invoice.id)
+      return;
     setBusy(true);
     setActionError("");
     try {
-      await post(`/api/invoices/${invoice.id}/approve`);
+      await post(`/api/invoices/${invoice.id}/approve`, approvalChoice);
       settle(invoice.id);
       setApprovedCount((count) => count + 1);
     } catch (approveError) {
@@ -172,7 +181,7 @@ export default function ApprovalsPage() {
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-canvas">
-      <div className="mx-auto max-w-[480px] px-4 py-5 pb-10">
+      <div className="mx-auto max-w-[880px] px-4 py-5 pb-10">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-ink">Approvals</h1>
           <span
@@ -222,7 +231,7 @@ export default function ApprovalsPage() {
               <EmptyState
                 icon={BadgeCheck}
                 title="Nothing awaiting approval"
-                description="Validated invoices routed by an approval rule land here for one-tap sign-off."
+                description="Validated invoices appear here for review and approval. Tally entries include an accounting preview."
               />
             )}
           </div>
@@ -234,7 +243,10 @@ export default function ApprovalsPage() {
                 {active.supplier.name || "Supplier pending"} · #
                 {active.invoice_number || "—"}
               </p>
-              <p className="mt-2 font-mono text-4xl font-semibold tracking-tight text-ink">
+              <p
+                data-approval-total
+                className="mt-2 max-w-full break-all font-mono text-2xl font-semibold tracking-tight text-ink sm:text-4xl"
+              >
                 {formatCurrency(active.total, active.currency)}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -252,7 +264,9 @@ export default function ApprovalsPage() {
                       : "bg-gold-soft text-gold-ink",
                   )}
                 >
-                  {taxVerified(active) ? "tax verified ✓" : "tax check pending"}
+                  {taxVerified(active)
+                    ? "Tax total matches"
+                    : "Tax check pending"}
                 </span>
               </div>
               <p className="mt-3 text-sm font-semibold leading-6 text-ink-secondary">
@@ -269,10 +283,19 @@ export default function ApprovalsPage() {
                 </p>
               )}
 
+              <PostingPreview
+                key={`${active.id}:${active.updated_at}`}
+                invoiceId={active.id}
+                onChange={setApprovalChoice}
+              />
               <div className="mt-5 grid gap-2.5">
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={
+                    busy ||
+                    !approvalChoice?.ready ||
+                    approvalChoice.invoiceId !== active.id
+                  }
                   onClick={() => void approve(active)}
                   className="inline-flex h-14 items-center justify-center gap-2.5 rounded-2xl bg-success-button text-base font-semibold text-white shadow-lg shadow-success/25 transition-transform hover:scale-[1.01] disabled:opacity-60"
                 >

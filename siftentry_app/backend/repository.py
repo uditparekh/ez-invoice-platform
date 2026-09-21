@@ -7,6 +7,8 @@ import sqlite3
 
 from . import db
 from .reporting import ReportingRepository
+from .approval_repository import ApprovalRepository
+from .approval_plans import ApprovalConflict, profile_fingerprint
 import threading
 import uuid
 from dataclasses import dataclass
@@ -119,7 +121,7 @@ class InvoiceFileRecord:
         )
 
 
-class InvoiceRepository(ReportingRepository):
+class InvoiceRepository(ApprovalRepository, ReportingRepository):
     def __init__(self, database_path: Path, database_url: str = ""):
         self.database_path = Path(database_path)
         self.database_url = (database_url or "").strip()
@@ -135,6 +137,10 @@ class InvoiceRepository(ReportingRepository):
 
     def initialize(self) -> None:
         with self._schema_lock, self._connect() as connection:
+            if db.is_postgres_url(self.database_url):
+                # API and worker can roll out together. Serialize schema changes
+                # across processes, not just threads, for the new plan table.
+                connection.execute("SELECT pg_advisory_xact_lock(356035)")
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS organizations (
@@ -374,6 +380,18 @@ class InvoiceRepository(ReportingRepository):
 
                 CREATE INDEX IF NOT EXISTS idx_client_profiles_org_system
                 ON client_profiles(organization_id, accounting_system, is_default);
+
+                CREATE TABLE IF NOT EXISTS approval_plans (
+                    id TEXT PRIMARY KEY,
+                    invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+                    organization_id TEXT NOT NULL,
+                    client_profile_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    plan_json TEXT NOT NULL,
+                    approved_by TEXT NOT NULL,
+                    approved_at TEXT NOT NULL,
+                    UNIQUE(invoice_id, version)
+                );
 
                 CREATE TABLE IF NOT EXISTS posting_attempts (
                     id TEXT PRIMARY KEY,
@@ -1107,6 +1125,10 @@ class InvoiceRepository(ReportingRepository):
         accounting_system = _enum_value(updated.accounting_system)
 
         with self._connect() as connection:
+            locked = self._locked_profile(connection, profile_id)
+            if not locked or locked.updated_at != current.updated_at:
+                raise ApprovalConflict("Profile changed while saving. Reload it before saving again.")
+            accounting_changed = profile_fingerprint(locked) != profile_fingerprint(updated)
             if updated.is_default:
                 connection.execute(
                     """
@@ -1138,6 +1160,8 @@ class InvoiceRepository(ReportingRepository):
                     profile_id,
                 ),
             )
+            if accounting_changed:
+                self._invalidate_profile_approvals(connection, profile_id, actor_id)
             self._insert_audit(
                 connection,
                 updated.organization_id,
@@ -1202,6 +1226,8 @@ class InvoiceRepository(ReportingRepository):
             return False
 
         with self._connect() as connection:
+            self._locked_profile(connection, profile_id)
+            self._invalidate_profile_approvals(connection, profile_id, actor_id)
             connection.execute("DELETE FROM client_profiles WHERE id = ?", (profile_id,))
             self._insert_audit(
                 connection,
@@ -1717,18 +1743,22 @@ class InvoiceRepository(ReportingRepository):
         merged["updated_at"] = utc_now()
         merged["status"] = InvoiceStatus.EXTRACTED
         merged["validation_issues"] = []
+        origins = dict(merged["raw_payload"].get("_field_origins") or {})
+        for field_path in updates:
+            origins["supplier.name" if field_path == "supplier" else field_path] = "reviewer_confirmed"
+        merged["raw_payload"] = {**merged["raw_payload"], "_field_origins": origins}
         updated = Invoice.model_validate(merged)
 
         with self._connect() as connection:
-            connection.execute(
+            changed = connection.execute(
                 """
                 UPDATE invoices SET
                     status = ?, invoice_number = ?, invoice_date = ?,
                     due_date = ?, purchase_order = ?, currency = ?,
                     subtotal = ?, tax_total = ?, total = ?, supplier_json = ?,
                     customer_json = ?, direction = ?, validation_issues_json = ?,
-                    updated_at = ?
-                WHERE id = ?
+                    updated_at = ?, raw_payload_json = ?
+                WHERE id = ? AND updated_at = ? AND status NOT IN ('posting', 'posted')
                 """,
                 (
                     InvoiceStatus.EXTRACTED.value,
@@ -1745,9 +1775,13 @@ class InvoiceRepository(ReportingRepository):
                     updated.direction,
                     _json([]),
                     updated.updated_at.isoformat(),
+                    _json(updated.raw_payload),
                     invoice_id,
+                    current.updated_at.isoformat(),
                 ),
             )
+            if changed.rowcount != 1:
+                raise ApprovalConflict("Invoice changed or is already posting. Reload before editing.")
             if "lines" in updates:
                 self._replace_lines(connection, invoice_id, updated.lines)
             if learn:
@@ -1930,20 +1964,24 @@ class InvoiceRepository(ReportingRepository):
         invoice_id: str,
         status: InvoiceStatus,
         issues: List[str],
+        expected_updated_at: Optional[datetime] = None,
     ) -> Optional[Invoice]:
         current = self.get_invoice(invoice_id)
         if not current:
             return None
         now = utc_now()
         with self._connect() as connection:
-            connection.execute(
+            changed = connection.execute(
                 """
                 UPDATE invoices
                 SET status = ?, validation_issues_json = ?, updated_at = ?
-                WHERE id = ?
+                WHERE id = ? AND updated_at = ? AND status NOT IN ('posting', 'posted')
                 """,
-                (status.value, _json(issues), now.isoformat(), invoice_id),
+                (status.value, _json(issues), now.isoformat(), invoice_id,
+                 (expected_updated_at or current.updated_at).isoformat()),
             )
+            if changed.rowcount != 1:
+                raise ApprovalConflict("Invoice changed or is already posting. Reload before validating.")
             self._insert_audit(
                 connection,
                 current.organization_id,
@@ -2097,16 +2135,23 @@ class InvoiceRepository(ReportingRepository):
             updated_at=now,
         )
         with self._connect() as connection:
+            claim_revision = current.updated_at.isoformat()
+            if _enum_value(target) == 'tally' and require_approval:
+                approved = self._approved_plan_for_claim(connection, invoice_id, client_profile_id)
+                if approved is None:
+                    return None
+                plan, claim_revision = approved
+                posting.request_payload = {**posting.request_payload, "posting_plan": plan}
             if require_approval and not dry_run:
                 cursor = connection.execute(
                     """UPDATE invoices SET status = ?, updated_at = ?
-                    WHERE id = ? AND status = ? AND NOT EXISTS (
+                    WHERE id = ? AND status = ? AND updated_at = ? AND NOT EXISTS (
                         SELECT 1 FROM posting_attempts
                         WHERE invoice_id = ? AND dry_run = 0
                           AND (status = 'started' OR (status = 'succeeded' AND target = ?))
                     )""",
                     (InvoiceStatus.POSTING.value, now.isoformat(), invoice_id,
-                     InvoiceStatus.APPROVED.value, invoice_id, _enum_value(target)),
+                     InvoiceStatus.APPROVED.value, claim_revision, invoice_id, _enum_value(target)),
                 )
                 if cursor.rowcount != 1:
                     return None

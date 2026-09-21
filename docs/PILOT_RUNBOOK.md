@@ -63,9 +63,23 @@ Recommended flow:
 4. Upload invoices.
 5. Let profile recommendation select the best profile, or manually choose one.
 6. Review extracted fields and save corrections.
-7. Validate.
-8. Post.
-9. Review posting logs and retry failed attempts from the invoice detail page.
+7. Validate. For Tally, review the proposed accounting entry: company, currency,
+   voucher date/type, ledgers, debit/credit amounts, stock allocations and godowns.
+8. Confirm the preview and approve. This saves a versioned Tally plan; the running
+   Windows connector collects its exact XML. Do not also import it manually.
+9. Review the actual result in History and Tally. A definite failure needs review,
+   validation and a new approval. An uncertain outcome must stay on hold: never
+   blindly retry or re-enter it. Contact support for reconciliation.
+
+Pending Tally approvals are invalidated by relevant invoice or posting-rule
+changes. Existing approvals from before pkg35C have no frozen plan: validate and
+review them again. Already-claimed entries cannot be recalled by editing a profile;
+they finish with their saved plan. Keep the selected company unchanged during
+posting and confirm the profile currency equals its base currency. Master-name
+verification and automatic reconciliation are not part of this release.
+
+The frozen-entry guarantee currently covers Tally, not the other accounting
+adapters. See [pkg35C release notes](PKG35C-RELEASE.md) for the exact boundary.
 
 ## Posting Ownership
 

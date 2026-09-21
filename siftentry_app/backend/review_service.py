@@ -67,6 +67,9 @@ def build_invoice_review(
     insights = _build_insights(invoice, fields, detected, profile_result)
     suggested_patch = _suggest_patch(invoice, detected, fields)
     ai_insight = _apply_ai_suggestions(invoice, fields)
+    origins = (invoice.raw_payload or {}).get("_field_origins") or {}
+    for field in fields:
+        field.origin = str(origins.get(field.field_path) or "unrecorded")
     if ai_insight is not None:
         insights.insert(0, ai_insight)
     needs_attention = sum(
@@ -409,6 +412,7 @@ def _apply_ai_suggestions(
         field = by_path.get(path)
         if field is None:
             continue
+        field.has_ai_suggestion = True
         if _ai_comparable(value) == _ai_comparable(field.value):
             if not field.suggestion:
                 field.suggestion = f"AI agrees: “{value}”."

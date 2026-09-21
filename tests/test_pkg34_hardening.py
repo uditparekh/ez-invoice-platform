@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from siftentry_app import tally_connector_runtime as rt
-from tests.test_api import (
+from tests.test_api import (approve_with_preview,
     make_client, bootstrap, organization_id, authorization,
     _connector_profile_and_invoice, _claim, _submit_result, _invite_and_accept,
     make_text_pdf,
@@ -16,7 +16,7 @@ def prepared(client):
     org = organization_id(tokens)
     profile_id, invoice_id, headers = _connector_profile_and_invoice(client, tokens, org)
     assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
-    assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+    assert approve_with_preview(client, invoice_id, headers).status_code == 200
     return org, profile_id, invoice_id, headers
 
 

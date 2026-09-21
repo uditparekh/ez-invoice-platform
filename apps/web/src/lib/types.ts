@@ -345,6 +345,8 @@ export interface ProfileRecommendationResult {
 export type InvoiceReviewSeverity = "ok" | "review" | "error";
 
 export interface InvoiceReviewField {
+  origin?: string;
+  has_ai_suggestion?: boolean;
   field_path: string;
   label: string;
   value: string;

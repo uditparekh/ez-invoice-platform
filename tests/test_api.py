@@ -89,6 +89,16 @@ def authorization(tokens: dict) -> dict:
     return {"Authorization": "Bearer " + tokens["access_token"]}
 
 
+def approve_with_preview(client, invoice_id, headers):
+    preview = client.post(f"/api/v1/invoices/{invoice_id}/posting-preview", json={}, headers=headers)
+    if preview.status_code != 200:
+        return preview
+    plan = preview.json().get("plan") or {}
+    return client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers, json={
+        "client_profile_id": plan.get("client_profile_id"), "preview_hash": plan.get("preview_hash", ""),
+    })
+
+
 def organization_id(tokens: dict, name: str = "Example Client") -> str:
     membership = next(
         item for item in tokens["user"]["memberships"] if item["organization_name"] == name
@@ -1150,7 +1160,7 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
         invoice = import_sample_invoice(client, tokens, org_id)
         invoice_id = invoice["id"]
         assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
-        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+        assert approve_with_preview(client, invoice_id, headers).status_code == 200
 
         unauthorized = client.post(
             "/api/v1/connectors/tally/jobs/claim",
@@ -1789,10 +1799,14 @@ def _tally_profile_body(name: str, connector_enabled: bool) -> dict:
         "name": name,
         "accounting_system": "tally",
         "settings": {
+            "default_currency": "INR",
             "company_name": "NEEL ENTERPRISE",
             "posting_mode": "voucher_with_inventory",
             "voucher_type": "Purchase",
             "purchase_ledger": "PURCHASES A/C",
+            "tax_ledger": "INPUT TAX",
+            "stock_item_name": "Material",
+            "stock_item_uom": "EA",
             "connection_settings": {
                 "connector_enabled": connector_enabled,
                 "workspace_id": "neel-prod",
@@ -2100,7 +2114,7 @@ def test_only_approved_invoices_are_offered_to_the_connector(tmp_path: Path):
         # Validated but not approved: nothing to claim.
         assert _claim(client).json()["jobs"] == []
 
-        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+        assert approve_with_preview(client, invoice_id, headers).status_code == 200
         assert len(_claim(client).json()["jobs"]) == 1
 
 
@@ -2113,7 +2127,7 @@ def test_overlapping_claims_yield_exactly_one_owner(tmp_path: Path):
         org_id = organization_id(tokens)
         _, invoice_id, headers = _connector_profile_and_invoice(client, tokens, org_id)
         assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
-        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+        assert approve_with_preview(client, invoice_id, headers).status_code == 200
 
         results = []
         barrier = threading.Barrier(2)
@@ -2140,7 +2154,7 @@ def test_late_failure_cannot_overwrite_a_successful_posting(tmp_path: Path):
         org_id = organization_id(tokens)
         _, invoice_id, headers = _connector_profile_and_invoice(client, tokens, org_id)
         assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
-        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+        assert approve_with_preview(client, invoice_id, headers).status_code == 200
         job = _claim(client).json()["jobs"][0]
 
         first = _submit_result(client, job, True, "Posted to Tally")
@@ -2177,7 +2191,7 @@ def test_concurrent_conflicting_results_cannot_overwrite_success(tmp_path: Path)
         org_id = organization_id(tokens)
         _, invoice_id, headers = _connector_profile_and_invoice(client, tokens, org_id)
         assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
-        assert client.post(f"/api/v1/invoices/{invoice_id}/approve", headers=headers).status_code == 200
+        assert approve_with_preview(client, invoice_id, headers).status_code == 200
         job = _claim(client).json()["jobs"][0]
 
         barrier = threading.Barrier(2)

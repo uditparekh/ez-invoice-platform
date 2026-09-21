@@ -560,9 +560,11 @@ def _apply_profile_hints(
     payment = invoice.setdefault("PAYMENT", {}).setdefault("ELECTRONIC", {})
     routing = invoice.setdefault("ROUTING", {})
     rows = invoice.setdefault("LINE ITEMS", {}).setdefault("ROWS", [])
+    origins = invoice.setdefault("DOCUMENT", {}).setdefault("FIELD ORIGINS", {})
 
     if settings.default_currency and not str(payment.get("CURRENCY") or "").strip():
         payment["CURRENCY"] = settings.default_currency
+        origins["currency"] = "profile_default"
     if settings.direction in {"inbound", "outbound"}:
         routing["DIRECTION"] = settings.direction
     if settings.purchase_ledger:
@@ -589,10 +591,13 @@ def _apply_profile_hints(
             row.setdefault("TARGET ITEM", target_item)
             if _looks_like_noise(description):
                 row["DESCRIPTION"] = target_item
+                origins["lines"] = "mixed_profile_defaults"
         if target_uom and not str(row.get("UOM") or "").strip():
             row["UOM"] = target_uom
+            origins["lines"] = "mixed_profile_defaults"
         if target_hsn and not str(row.get("HSN/SAC") or "").strip():
             row["HSN/SAC"] = target_hsn
+            origins["lines"] = "mixed_profile_defaults"
         if purchase_ledger:
             row.setdefault("PURCHASE LEDGER", purchase_ledger)
         if tax_ledger:
@@ -600,8 +605,10 @@ def _apply_profile_hints(
         if mapping and mapping.metadata:
             if mapping.metadata.get("category") and not row.get("CATEGORY"):
                 row["CATEGORY"] = mapping.metadata["category"]
+                origins["lines"] = "mixed_profile_defaults"
             if mapping.metadata.get("gl_code") and not row.get("GL_CODE"):
                 row["GL_CODE"] = mapping.metadata["gl_code"]
+                origins["lines"] = "mixed_profile_defaults"
 
     if settings.stock_item_name:
         header.setdefault("PROFILE STOCK ITEM", settings.stock_item_name)

@@ -4,6 +4,20 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### pkg35C — posting previews and frozen Tally approval plans
+
+- Show the actual Tally entry before approval; require a reviewed preview hash
+  and save a versioned immutable plan. Connector jobs execute its exact XML.
+- Invalidate pending approvals on accounting changes; protect approval/claim
+  races and preserve already-claimed plans. Block legacy unplanned approvals,
+  wrong-destination posts, and manual result bypasses.
+- Share the preview across desktop review and mobile approvals, with light/dark
+  layouts and large-amount handling. Distinguish extraction, profile defaults,
+  reviewer-confirmed values and display-only AI suggestions.
+- Tally only; master verification, FX conversion and reconciliation are not
+  included. Existing pending Tally approvals need reapproval. See
+  docs/PKG35C-RELEASE.md for migration behavior and release gates.
+
 ### pkg35B — organized client profile configuration
 
 - One five-section editor across Client Profiles and integration pages, with

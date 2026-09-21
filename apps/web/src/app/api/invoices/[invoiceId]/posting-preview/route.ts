@@ -5,8 +5,11 @@ export async function POST(
   context: { params: Promise<{ invoiceId: string }> },
 ) {
   const { invoiceId } = await context.params;
-  return authenticatedApiRequest(`/api/v1/invoices/${invoiceId}/approve`, {
-    method: "POST",
-    body: (await request.text()) || "{}",
-  });
+  return authenticatedApiRequest(
+    `/api/v1/invoices/${invoiceId}/posting-preview`,
+    {
+      method: "POST",
+      body: await request.text(),
+    },
+  );
 }

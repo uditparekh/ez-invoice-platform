@@ -1,7 +1,7 @@
 import pytest
 
 from siftentry_app.backend.models import ClientProfilePatch
-from tests.test_api import (make_client, bootstrap, organization_id, authorization,
+from tests.test_api import (approve_with_preview, make_client, bootstrap, organization_id, authorization,
                             _tally_profile_body, _connector_profile_and_invoice)
 
 
@@ -63,7 +63,7 @@ def test_diagnostics_does_not_claim_approved_invoice(tmp_path):
         owner = bootstrap(client)
         profile, invoice, headers = _connector_profile_and_invoice(client, owner, organization_id(owner))
         assert client.post(f"/api/v1/invoices/{invoice}/validate", headers=headers).status_code == 200
-        assert client.post(f"/api/v1/invoices/{invoice}/approve", headers=headers).status_code == 200
+        assert approve_with_preview(client, invoice, headers).status_code == 200
         result = client.post("/api/v1/connectors/tally/diagnostics", json={"workspace_id": "neel-prod"},
                              headers={"Authorization": "Bearer connector-secret"})
         assert result.status_code == 200

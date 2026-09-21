@@ -19,15 +19,17 @@ from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
-from .adapters import _profiled_legacy_payload, _tally_settings_from_profile, default_adapters
+from .adapters import default_adapters
+from .approval_plans import ApprovalConflict, build_plan, invoice_fingerprint, profile_fingerprint
 from .ai_parser import AiExtractorConfig, is_ai_parser_mode
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
 from .demo_seed import ensure_public_demo_workspace
 from .email_service import EmailDeliveryError, EmailService
 from .models import (
     AccountingSystem,
+    ApprovalRequest,
     AuthBootstrapRequest,
     AuthenticatedUser,
     AuthTokens,
@@ -108,7 +110,6 @@ from .security import (
 from .settings import DEFAULT_JWT_SECRET, ApiSettings
 from .storage import DocumentStorage, StoredDocument, build_document_storage
 from .validation import validate_invoice
-from ..tally_integration import build_tally_xml
 
 
 API_VERSION = "0.3.0"
@@ -1596,8 +1597,33 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> ValidationResult:
         invoice = _require_invoice(request, invoice_id, current_user, VALIDATE_ROLES)
         result = validate_invoice(invoice)
-        _repo(request).update_validation(invoice_id, result.status, result.issues)
+        _repo(request).update_validation(invoice_id, result.status, result.issues, expected_updated_at=invoice.updated_at)
         return result
+
+    @app.exception_handler(ApprovalConflict)
+    async def approval_conflict_handler(request: Request, exc: ApprovalConflict):
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.post("/api/v1/invoices/{invoice_id}/posting-preview", tags=["workflow"])
+    def posting_preview(request: Request, invoice_id: str, body: ApprovalRequest,
+                        current_user: CurrentUser) -> Dict[str, Any]:
+        invoice = _require_invoice(request, invoice_id, current_user, READ_ROLES)
+        frozen = _repo(request).get_approval_plan(invoice_id)
+        if invoice.status in {"posting", "posted"} and frozen:
+            return {"supported": True, "state": "approved", "requires_reapproval": False,
+                    "plan": frozen, "previous_version": frozen["version"]}
+        profile = _approval_profile(request, invoice, body.client_profile_id, current_user)
+        if not profile:
+            return {"supported": False, "message": "Frozen accounting-entry previews are currently available for Tally profiles."}
+        current = build_plan(invoice, profile)
+        matches = bool(frozen and frozen["client_profile_id"] == profile.id
+                       and frozen["invoice_fingerprint"] == invoice_fingerprint(invoice)
+                       and frozen["profile_fingerprint"] == profile_fingerprint(profile))
+        use_frozen = invoice.status == "approved" and matches
+        return {"supported": True, "state": "approved" if use_frozen else "draft",
+                "requires_reapproval": bool(frozen and not use_frozen) or (invoice.status == "approved" and not frozen),
+                "plan": frozen if use_frozen else current,
+                "previous_version": frozen["version"] if frozen else None}
 
     @app.post(
         "/api/v1/invoices/{invoice_id}/approve",
@@ -1608,6 +1634,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         request: Request,
         invoice_id: str,
         current_user: CurrentUser,
+        body: Optional[ApprovalRequest] = None,
     ) -> Invoice:
         invoice = _require_invoice(request, invoice_id, current_user, APPROVE_ROLES)
         current_status = InvoiceStatus(invoice.status)
@@ -1616,7 +1643,13 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 status_code=409,
                 detail="Only a validated invoice can be approved.",
             )
-        approved = _repo(request).set_status(invoice_id, InvoiceStatus.APPROVED, actor_id=current_user.id) or invoice
+        profile = _approval_profile(request, invoice, body.client_profile_id if body else None, current_user)
+        if profile:
+            if not body or not body.preview_hash:
+                raise ApprovalConflict("Review the proposed accounting entry before approving this Tally invoice.")
+            approved = _repo(request).approve_plan(invoice_id, profile.id, body.preview_hash, current_user.id)
+        else:
+            approved = _repo(request).set_status(invoice_id, InvoiceStatus.APPROVED, actor_id=current_user.id) or invoice
         # Training-mode signal: a clean approval (zero corrections) extends
         # this supplier format's trusted streak; corrections reset it.
         try:
@@ -2032,6 +2065,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> PostingResult:
         _require_invoice(request, invoice_id, current_user, EDIT_ROLES)
+        if not body.dry_run and (body.target == PostingTarget.TALLY or _repo(request).get_approval_plan(invoice_id)):
+            raise ApprovalConflict("Live Tally results must acknowledge an existing approved connector job.")
         posting = _repo(request).create_posting(
             invoice_id=invoice_id,
             target=body.target,
@@ -2110,7 +2145,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                     posting=posting,
                     profile=profile,
                     workspace_id=body.workspace_id,
-                    posting_plan=request_payload.get("posting_plan", {}),
+                    posting_plan=posting.request_payload["posting_plan"],
                 )
             )
         return TallyConnectorClaimResponse(
@@ -2593,6 +2628,24 @@ def _connector_token_from_headers(
     return ""
 
 
+def _approval_profile(request, invoice, profile_id, current_user):
+    repository = _repo(request)
+    frozen = repository.get_approval_plan(invoice.id)
+    if not profile_id and frozen:
+        profile_id = frozen["client_profile_id"]
+    if profile_id:
+        profile = _require_client_profile(request, invoice.organization_id, profile_id, current_user, READ_ROLES)
+        if profile.accounting_system == AccountingSystem.TALLY:
+            return profile
+        if frozen or repository.list_client_profiles(invoice.organization_id, "tally"):
+            raise ApprovalConflict("Select the Tally profile to review and approve its accounting entry.")
+        return None
+    profiles = repository.list_client_profiles(invoice.organization_id, "tally")
+    if len(profiles) > 1:
+        raise ApprovalConflict("Select a Tally client profile before reviewing the posting plan.")
+    return profiles[0] if profiles else None
+
+
 def _tally_connector_job(
     invoice: Invoice,
     posting: PostingResult,
@@ -2600,12 +2653,6 @@ def _tally_connector_job(
     workspace_id: str,
     posting_plan: Dict[str, Any],
 ) -> TallyConnectorJob:
-    settings = _tally_settings_from_profile(profile) or {}
-    xml = build_tally_xml(
-        _profiled_legacy_payload(invoice, profile),
-        settings=settings,
-        classifier=None,
-    )
     return TallyConnectorJob(
         posting_id=posting.id,
         invoice_id=invoice.id,
@@ -2614,9 +2661,9 @@ def _tally_connector_job(
         dry_run=posting.dry_run,
         client_profile_id=profile.id,
         workspace_id=workspace_id,
-        company_name=str(settings.get("company") or profile.settings.company_name),
-        tally_url=str(settings.get("url") or "http://localhost:9000"),
-        xml=xml,
+        company_name=posting_plan["company"],
+        tally_url=posting_plan["tally_url"],
+        xml=posting_plan["xml"],
         posting_plan=posting_plan,
     )
 
@@ -2649,11 +2696,15 @@ def _execute_posting(
         current_user,
         invoice,
     )
+    if not dry_run and resolved_target != PostingTarget.TALLY and _repo(request).get_approval_plan(invoice.id):
+        raise ApprovalConflict("This invoice has a Tally approval plan. It cannot be posted to a different destination.")
     adapter = request.app.state.adapters.get(resolved_target)
     if adapter is None:
         raise HTTPException(status_code=400, detail="Unsupported accounting target.")
     if resolved_target == PostingTarget.TALLY and not dry_run and current_status != InvoiceStatus.APPROVED:
         raise HTTPException(status_code=409, detail="Approve the invoice before live Tally posting or retrying.")
+    if resolved_target == PostingTarget.TALLY and not dry_run:
+        raise ApprovalConflict("Approved Tally plans are collected by the Windows connector. Keep it running; do not post the same entry through a second route.")
 
     request_payload = _posting_request_payload(
         invoice=invoice,
@@ -2672,15 +2723,12 @@ def _execute_posting(
         require_approval=resolved_target == PostingTarget.TALLY and not dry_run,
     )
     if posting is None:
-        raise HTTPException(status_code=409, detail="Invoice is no longer approved or is already being posted.")
+        raise HTTPException(status_code=409, detail="Review and approve the current posting plan first. The invoice may have changed or already be posting.")
+    request_payload = posting.request_payload
     if not dry_run:
         _repo(request).set_status(invoice.id, InvoiceStatus.POSTING)
     try:
-        connector_result = adapter.post(
-            invoice,
-            dry_run=dry_run,
-            client_profile=client_profile,
-        )
+        connector_result = adapter.post(invoice, dry_run=dry_run, client_profile=client_profile)
     except Exception as exc:
         completed = _repo(request).complete_posting(
             posting_id=posting.id,

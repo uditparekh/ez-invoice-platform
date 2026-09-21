@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any, Dict, Iterable, List
 
 from .models import Invoice, InvoiceCreate, InvoiceLine, InvoiceStatus, Party
@@ -115,6 +116,14 @@ def legacy_payload_to_invoice(
     if direction not in {"inbound", "outbound"}:
         direction = "inbound"
 
+    payload = deepcopy(payload)
+    origins = {field: "extracted" for field in (
+        "invoice_number", "invoice_date", "due_date", "supplier.name", "currency", "total", "tax_total", "lines"
+    )}
+    origins.update(document.get("FIELD ORIGINS", {}))
+    if not str(payment.get("CURRENCY") or payment.get("currency") or "").strip():
+        origins["currency"] = "system_default"
+    payload["_field_origins"] = origins
     return InvoiceCreate(
         organization_id=organization_id,
         source_file=source_file,
@@ -148,7 +157,7 @@ def legacy_payload_to_invoice(
 def invoice_to_legacy_payload(invoice: Invoice) -> Dict[str, Any]:
     """Overlay reviewed universal fields onto the original connector payload."""
 
-    payload = dict(invoice.raw_payload or {})
+    payload = deepcopy(invoice.raw_payload or {})
     legacy_invoice = payload.setdefault("INVOICE", {})
     document = legacy_invoice.setdefault("DOCUMENT", {})
     header = legacy_invoice.setdefault("INVOICE HEADER", {})
