@@ -186,6 +186,12 @@ def _guard_connector_credential_changes(request, current_user, organization_id, 
     protected = ("connector_token", "workspace_id", "connector_enabled")
     if any(key in incoming and incoming[key] != existing.get(key) for key in protected):
         _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+    # Permit unchanged legacy data to be edited, but never accept a new malformed
+    # credential. Errors deliberately contain no part of either secret.
+    from siftentry_app.connector_credentials import valid_connector_token, TOKEN_FORMAT_MESSAGE
+    token = incoming.get("connector_token")
+    if token and token != existing.get("connector_token") and not valid_connector_token(token):
+        raise HTTPException(status_code=422, detail=TOKEN_FORMAT_MESSAGE)
 
 
 def _connector_is_enabled(profile: ClientProfile) -> bool:
@@ -2175,6 +2181,25 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             errors=errors,
         )
 
+    @app.post("/api/v1/connectors/tally/diagnostics", tags=["connectors"])
+    def tally_connector_diagnostics(
+        request: Request,
+        body: TallyConnectorHeartbeatRequest,
+        authorization: Optional[str] = Header(default=None),
+        x_siftentry_connector_token: Optional[str] = Header(default=None),
+    ) -> Dict[str, Any]:
+        """Authenticate only. No claims, posting attempts, or heartbeat writes."""
+        profile = _require_tally_connector_profile(
+            request, body.workspace_id, authorization, x_siftentry_connector_token,
+        )
+        return {
+            "success": True,
+            "message": "Cloud authentication passed. No invoices were claimed or posted.",
+            "company_name": profile.settings.company_name,
+            "master_readiness": "not_verified",
+            "master_message": "Master names and mappings are not verified; master sync is not available yet.",
+        }
+
     @app.post(
         "/api/v1/connectors/tally/heartbeat",
         response_model=TallyConnectorHeartbeatResponse,
@@ -2534,6 +2559,9 @@ def _require_tally_connector_profile(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Connector token is required.",
         )
+    from siftentry_app.connector_credentials import valid_connector_token
+    if not valid_connector_token(supplied_token):
+        raise HTTPException(status_code=401, detail="Connector token format is invalid. Generate a new token in the client profile.")
     for profile in _repo(request).list_client_profiles_by_system(AccountingSystem.TALLY.value):
         connection_settings = profile.settings.connection_settings or {}
         saved_workspace_id = str(connection_settings.get("workspace_id") or "").strip()
@@ -2543,6 +2571,7 @@ def _require_tally_connector_profile(
             connector_enabled
             and saved_workspace_id == workspace_id
             and saved_token
+            and valid_connector_token(saved_token)
             and hmac.compare_digest(saved_token, supplied_token)
         ):
             return profile

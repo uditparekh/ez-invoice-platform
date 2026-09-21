@@ -19,7 +19,10 @@ try:
         load_config,
         poll_once,
         save_config,
-        test_tally_connection,
+        test_connection,
+        connection_config_error,
+        APP_VERSION,
+        OutboxUnreadable,
         write_status,
     )
 except ImportError:
@@ -30,7 +33,10 @@ except ImportError:
         load_config,
         poll_once,
         save_config,
-        test_tally_connection,
+        test_connection,
+        connection_config_error,
+        APP_VERSION,
+        OutboxUnreadable,
         write_status,
     )
 
@@ -79,6 +85,8 @@ class TallyConnectorWindow:
         self.last_invoice = tk.StringVar(value="None")
         self.failed_jobs = tk.StringVar(value="0")
         self.last_message = tk.StringVar(value="Ready.")
+        self.company_status = tk.StringVar(value="Not checked")
+        self.master_status = tk.StringVar(value="Not verified — master sync pending")
         self.running_badge: Optional[tk.Label] = None
 
         self.poll_lock = threading.Lock()
@@ -98,13 +106,34 @@ class TallyConnectorWindow:
                 self._append_log("Not auto-starting: settings are incomplete.")
 
     def _build_window(self) -> None:
-        self.root.title("SiftEntry Tally Connector")
+        self.root.title("SiftEntry Tally Connector " + APP_VERSION)
         self.root.geometry("980x720")
-        self.root.minsize(900, 660)
+        self.root.minsize(640, 480)
         self.root.configure(bg=self.BG)
 
-        outer = tk.Frame(self.root, bg=self.BG, padx=26, pady=26)
-        outer.pack(fill="both", expand=True)
+        # Reserve feedback and actions before allocating the scrollable body.
+        # At Windows 125/150% scaling no fixed-height form can hide an error.
+        self.message_label = tk.Label(self.root, textvariable=self.last_message,
+            bg="#EEF2FF", fg=self.INK, font=(self.FONT, 11), justify="left",
+            anchor="w", padx=16, pady=10, wraplength=900)
+        self.message_label.pack(side="top", fill="x")
+        self.controls = tk.Frame(self.root, bg=self.BG, padx=10, pady=10)
+        self.controls.pack(side="bottom", fill="x")
+        viewport = tk.Frame(self.root, bg=self.BG)
+        viewport.pack(fill="both", expand=True)
+        canvas = tk.Canvas(viewport, bg=self.BG, highlightthickness=0)
+        scrollbar = tk.Scrollbar(viewport, orient="vertical", command=canvas.yview)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        outer = tk.Frame(canvas, bg=self.BG, padx=16, pady=16)
+        window_id = canvas.create_window((0, 0), window=outer, anchor="nw")
+        outer.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        def resize(event):
+            canvas.itemconfigure(window_id, width=event.width)
+            self.message_label.configure(wraplength=max(300, event.width - 32))
+        canvas.bind("<Configure>", resize)
+        self.root.bind("<MouseWheel>", lambda event: canvas.yview_scroll(-1 if event.delta > 0 else 1, "units"))
 
         header = tk.Frame(outer, bg=self.BG)
         header.pack(fill="x", pady=(0, 18))
@@ -133,8 +162,8 @@ class TallyConnectorWindow:
             status_grid.columnconfigure(index, weight=1, uniform="status")
         self._status_card(status_grid, 0, 0, "Connected to SiftEntry", self.siftentry_status)
         self._status_card(status_grid, 0, 1, "Tally detected", self.tally_status)
-        self._status_card(status_grid, 1, 0, "Last posted invoice", self.last_invoice)
-        self._status_card(status_grid, 1, 1, "Retry failed jobs", self.failed_jobs)
+        self._status_card(status_grid, 1, 0, "Configured company", self.company_status)
+        self._status_card(status_grid, 1, 1, "Master readiness", self.master_status)
 
         form_outer, form = self._panel(outer)
         form_outer.pack(fill="x", pady=(0, 16))
@@ -173,16 +202,15 @@ class TallyConnectorWindow:
             highlightthickness=0,
         ).grid(row=0, column=2, sticky="w", padx=(30, 0))
 
-        controls = tk.Frame(outer, bg=self.BG)
-        controls.pack(fill="x", pady=(0, 16))
-        self._button(controls, "Save settings", lambda: self.save_settings(notify=True)).pack(
-            side="left",
-            padx=(0, 10),
-        )
-        self._button(controls, "Test Tally", self.test_tally).pack(side="left", padx=(0, 10))
-        self._button(controls, "Poll once", self.poll_once_now).pack(side="left", padx=(0, 10))
-        self._button(controls, "Start connector", self.start, primary=True).pack(side="left", padx=(0, 10))
-        self._button(controls, "Stop", self.stop).pack(side="left")
+        controls = self.controls
+        for column in range(3):
+            controls.columnconfigure(column, weight=1)
+        actions = [("Save settings", lambda: self.save_settings(notify=True)),
+                   ("Test connection", self.test_tally), ("Poll once", self.poll_once_now),
+                   ("Start connector", self.start), ("Stop", self.stop)]
+        for index, (label, action) in enumerate(actions):
+            self._button(controls, label, action, primary=label == "Start connector").grid(
+                row=index // 3, column=index % 3, sticky="ew", padx=4, pady=4)
         self.running_badge = tk.Label(
             controls,
             textvariable=self.running,
@@ -192,7 +220,7 @@ class TallyConnectorWindow:
             padx=18,
             pady=8,
         )
-        self.running_badge.pack(side="right")
+        self.running_badge.grid(row=1, column=2, sticky="ew", padx=4)
 
         log_outer, log_frame = self._panel(outer)
         log_outer.pack(fill="both", expand=True)
@@ -254,18 +282,14 @@ class TallyConnectorWindow:
         ).pack(anchor="w")
         row_frame = tk.Frame(card, bg=self.CARD)
         row_frame.pack(fill="x", pady=(8, 0))
-        if title.lower() in {"connected to siftentry", "tally detected"}:
-            tk.Label(row_frame, text="●", bg=self.CARD, fg=self.SUCCESS, font=(self.FONT, 13, "bold")).pack(
-                side="left",
-                padx=(0, 8),
-            )
+        # Do not show a permanent green dot beside a disconnected/untested state.
         tk.Label(
             row_frame,
             textvariable=value,
             bg=self.CARD,
             fg=self.INK,
             font=(self.FONT, 16, "bold"),
-            wraplength=390,
+            wraplength=240,
             justify="left",
         ).pack(side="left", fill="x", expand=True, anchor="w")
 
@@ -334,37 +358,13 @@ class TallyConnectorWindow:
         )
         spinbox.pack(side="left", ipady=5)
 
-    def _button(self, parent: tk.Widget, text: str, command: Any, primary: bool = False) -> tk.Frame:
+    def _button(self, parent: tk.Widget, text: str, command: Any, primary: bool = False) -> tk.Button:
         bg = self.PRIMARY if primary else self.CARD
         fg = "#FFFFFF" if primary else self.INK
-        border_color = self.PRIMARY if primary else "#CBD5E1"
-        outer = tk.Frame(parent, bg=border_color)
-        label = tk.Label(
-            outer,
-            text=text,
-            bg=bg,
-            fg=fg,
-            font=(self.FONT, 11, "bold"),
-            padx=22,
-            pady=11,
-            cursor="hand2",
-        )
-        label.pack(fill="both", expand=True, padx=1, pady=1)
-
-        def click(_event: Any = None) -> None:
-            command()
-
-        def hover(_event: Any = None) -> None:
-            label.configure(bg=self.PRIMARY_DARK if primary else self.FIELD)
-
-        def leave(_event: Any = None) -> None:
-            label.configure(bg=bg)
-
-        for widget in (outer, label):
-            widget.bind("<Button-1>", click)
-            widget.bind("<Enter>", hover)
-            widget.bind("<Leave>", leave)
-        return outer
+        return tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
+            activebackground=self.PRIMARY_DARK if primary else self.FIELD,
+            activeforeground=fg, font=(self.FONT, 11, "bold"), padx=10, pady=8,
+            relief="solid", bd=1, takefocus=True)
 
     def _set_running_state(self, is_running: bool) -> None:
         self.running.set("Running" if is_running else "Stopped")
@@ -387,21 +387,62 @@ class TallyConnectorWindow:
             config_path=str(self.config_path),
         )
 
-    def save_settings(self, notify: bool = False) -> None:
-        config = self.current_config()
-        saved_path = save_config(config, self.config_path)
+    def _is_busy(self) -> bool:
+        return bool(self.worker and self.worker.is_alive()) or self.poll_lock.locked()
+
+    def save_settings(self, notify: bool = False) -> bool:
+        if self._is_busy():
+            self._append_log("Stop the connector and wait for the current check before saving settings.")
+            return False
+        try:
+            config = self.current_config()
+        except (ValueError, tk.TclError):
+            self._append_log("Poll seconds and claim limit must be whole numbers.")
+            return False
+        problem = connection_config_error(config)
+        if problem:
+            self._append_log(problem)
+            return False
+        try:
+            saved_path = save_config(config, self.config_path)
+        except OutboxUnreadable:
+            self._append_log("Pending or unreadable recovery data prevents changing settings. Preserve the files and contact support.")
+            return False
+        except OSError:
+            self._append_log("Settings could not be saved. Check folder permissions or contact support.")
+            return False
         self.config = config
         self._append_log("Saved settings to " + str(saved_path))
         if notify:
             messagebox.showinfo("SiftEntry Tally Connector", "Settings saved.")
+        return True
 
     def test_tally(self) -> None:
-        self._append_log("Testing TallyPrime at " + self.tally_url.get().strip())
-        threading.Thread(target=self._test_tally_worker, daemon=True).start()
+        if self._is_busy():
+            self._append_log("Stop the connector and wait for the current poll before running a read-only test.")
+            return
+        try:
+            config = self.current_config()
+        except (ValueError, tk.TclError):
+            self._append_log("Poll seconds and claim limit must be whole numbers.")
+            return
+        self._append_log("Checking cloud authentication and Tally. This test never claims or posts invoices.")
+        self.worker = threading.Thread(target=self._test_tally_worker, args=(config,), daemon=True)
+        self.worker.start()
 
-    def _test_tally_worker(self) -> None:
-        result = test_tally_connection(self.current_config().tally_url)
-        self.events.put({"type": "tally_test", "result": result})
+    def _test_tally_worker(self, config: ConnectorConfig) -> None:
+        self._run_check(config, diagnostic=True)
+
+    def _run_check(self, config: ConnectorConfig, diagnostic: bool = False) -> None:
+        try:
+            with self.poll_lock:
+                status = test_connection(config) if diagnostic else poll_once(config)
+            write_status(status, self.status_path)
+            self.events.put({"type": "poll", "status": status})
+        except Exception:
+            self.stop_event.set()
+            self.events.put({"type": "error", "message":
+                "Connector paused after an unexpected error. Preserve recovery files and contact support; do not re-enter vouchers."})
 
     def poll_once_now(self) -> None:
         if self.worker and self.worker.is_alive():
@@ -411,25 +452,25 @@ class TallyConnectorWindow:
             self._append_log("A poll is already in progress.")
             return
         self.poll_lock.release()
-        self.save_settings()
+        if not self.save_settings():
+            return
         self._append_log("Polling SiftEntry once.")
-        threading.Thread(target=self._poll_once_worker, daemon=True).start()
+        self.worker = threading.Thread(target=self._poll_once_worker, args=(self.config,), daemon=True)
+        self.worker.start()
 
-    def _poll_once_worker(self) -> None:
+    def _poll_once_worker(self, config: ConnectorConfig) -> None:
         # Mutual exclusion with the background loop: a manual poll can never
         # overlap a scheduled one, so one machine cannot race itself.
-        with self.poll_lock:
-            status = poll_once(self.current_config())
-        write_status(status, self.status_path)
-        self.events.put({"type": "poll", "status": status})
+        self._run_check(config)
 
     def start(self) -> None:
         if self.worker and self.worker.is_alive():
             return
-        self.save_settings()
+        if not self.save_settings():
+            return
         self.stop_event.clear()
         self._set_running_state(True)
-        self.worker = threading.Thread(target=self._poll_loop, daemon=True)
+        self.worker = threading.Thread(target=self._poll_loop, args=(self.config,), daemon=True)
         self.worker.start()
         self._append_log("Connector started.")
 
@@ -438,16 +479,10 @@ class TallyConnectorWindow:
         self._set_running_state(False)
         self._append_log("Connector stopped.")
 
-    def _poll_loop(self) -> None:
+    def _poll_loop(self, config: ConnectorConfig) -> None:
         while not self.stop_event.is_set():
-            with self.poll_lock:
-                status = poll_once(self.current_config())
-            write_status(status, self.status_path)
-            self.events.put({"type": "poll", "status": status})
-            for _ in range(max(1, self.current_config().poll_interval)):
-                if self.stop_event.is_set():
-                    break
-                time.sleep(1)
+            self._run_check(config)
+            self.stop_event.wait(config.poll_interval)
 
     def _drain_events(self) -> None:
         while True:
@@ -455,16 +490,12 @@ class TallyConnectorWindow:
                 event = self.events.get_nowait()
             except queue.Empty:
                 break
-            if event.get("type") == "tally_test":
-                self._apply_tally_result(event["result"])
+            if event.get("type") == "error":
+                self._set_running_state(False)
+                self._append_log(event["message"])
             elif event.get("type") == "poll":
                 self._apply_poll_status(event["status"])
         self.root.after(250, self._drain_events)
-
-    def _apply_tally_result(self, result: Dict[str, Any]) -> None:
-        ok = bool(result.get("success"))
-        self.tally_status.set("Online" if ok else "Offline")
-        self._append_log(("Tally test passed: " if ok else "Tally test failed: ") + str(result.get("message", result)))
 
     def _apply_poll_status(self, status: Dict[str, Any]) -> None:
         connected = status.get("connected_to_siftentry")
@@ -475,6 +506,10 @@ class TallyConnectorWindow:
         else:
             self.siftentry_status.set("Not checked")
         self.tally_status.set("Online" if status.get("tally_detected") else "Offline")
+        for key, variable in (("company", self.company_status), ("masters", self.master_status)):
+            check = status.get("checks", {}).get(key)
+            if check:
+                variable.set(check["message"])
         if status.get("last_posted_invoice"):
             self.last_invoice.set(self._short_text(str(status.get("last_posted_invoice")), 34))
         self.failed_jobs.set(str(status.get("failed_jobs", 0)))
@@ -489,6 +524,7 @@ class TallyConnectorWindow:
         return cleaned[: max(0, limit - 1)].rstrip() + "..."
 
     def _append_log(self, message: str) -> None:
+        self.last_message.set(message)
         timestamp = time.strftime("%H:%M:%S")
         self.activity.insert("end", f"[{timestamp}] {message}\n")
         self.activity.see("end")
@@ -528,6 +564,16 @@ def main() -> None:
             window.poll_once_now()
             assert any("background polling" in message for message in messages)
             root.update_idletasks()
+            # Check the layout at small work areas and high Windows DPI.
+            # All essential actions and the feedback strip stay on-screen.
+            for scaling in (1.0, 1.5, 2.0):
+                root.tk.call("tk", "scaling", scaling)
+                root.geometry("800x600")
+                root.deiconify()
+                root.update()
+                assert window.controls.winfo_y() + window.controls.winfo_height() <= root.winfo_height()
+                assert window.message_label.winfo_y() == 0
+                assert window.controls.winfo_height() > 40
             root.destroy()
         return
     root = tk.Tk()

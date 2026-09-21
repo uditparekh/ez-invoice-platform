@@ -23,6 +23,7 @@ OUTPUT = ROOT / "apps" / "web" / "public" / "downloads" / "SiftEntry-Tally-Conne
 FOLDER = "SiftEntry-Tally-Connector"
 
 CONNECTOR_MODULES = [
+    "connector_credentials.py",
     "tally_connector_desktop.py",
     "tally_connector_agent.py",
     "tally_connector_runtime.py",
@@ -62,6 +63,8 @@ def main() -> None:
             bundle.write(APP_DIR / name, f"{FOLDER}/{name}")
         for name in KIT_FILES:
             bundle.write(KIT_DIR / name, f"{FOLDER}/{name}")
+        bundle.write(ROOT / "packaging/windows/tally-connector/CLIENT_INSTALL_GUIDE.md",
+                     f"{FOLDER}/CLIENT_INSTALL_GUIDE.md")
         bundle.writestr(
             f"{FOLDER}/tally_connector_config.sample.json",
             json.dumps(CONFIG_SAMPLE, indent=2) + "\n",

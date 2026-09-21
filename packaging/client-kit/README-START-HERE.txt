@@ -1,4 +1,4 @@
-SIFTENTRY TALLY CONNECTOR — SETUP GUIDE
+SIFTENTRY TALLY CONNECTOR 0.5.0 — SCRIPT KIT SETUP GUIDE
 ========================================
 
 This small program connects your TallyPrime to SiftEntry. When an invoice
@@ -66,8 +66,13 @@ The "SiftEntry Tally Connector" window will open. Fill in:
 
 Then click, in order:
     1. Save settings
-    2. Test Tally      (should say Tally responded)
-    3. Start connector
+    2. Test connection (safe with zero invoices; never claims or posts)
+    3. Confirm cloud, Tally XML, and company checks.
+    4. Start connector only after the client profile/mappings are confirmed.
+
+Master readiness says Not verified until master sync is available. This is
+not a failed login. Poll once CAN post approved invoices; it is not a test.
+See CLIENT_INSTALL_GUIDE.md for diagnostics and upgrade/recovery instructions.
 
 WHAT GOOD LOOKS LIKE: the window shows "Connected to SiftEntry" and
 "Tally detected", and the SiftEntry website shows this connector as
@@ -95,7 +100,7 @@ IF SOMETHING LOOKS WRONG
 ------------------------
 "Tally not detected"
     TallyPrime is not open, the company is not loaded, or the port is
-    not 9000. Repeat Step 3 and click "Test Tally" again.
+    not 9000. Repeat Step 3 and click "Test connection" again.
 
 "Cannot connect to SiftEntry" or "token" errors
     Check your internet connection, and check the Workspace ID and
@@ -112,5 +117,9 @@ Anything else
 
 SAFETY NOTES
 ------------
-- Never share your Connector Token except with the SiftEntry team.
+- Never share your Connector Token in screenshots, logs, chat, or email.
+- Generate tokens in the client profile, save, then copy into the connector.
+- Outcome uncertain: do not repost or delete recovery files; contact support.
+- Stop before changing settings. Keep the original URL/workspace if results
+  are pending. The installer bundles Python; this fallback script kit does not.
 - Never open port 9000 to the internet. The connector does not need it.

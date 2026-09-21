@@ -4,6 +4,14 @@ Tracks every file changed per delivered package, against the repo state each
 package was built on. Started at pkg32; earlier packages are recorded in
 CHANGELOG.md and their README-INTEGRATION files.
 
+## pkg35A — connector reliability, based on main e68d1dd
+
+0.5.0 adds safe credential validation/generation, public connector routing,
+no-posting diagnostics, usable desktop errors, immutable worker settings, and
+uncertain-outcome holds. See docs/PKG35A-RELEASE.md for release/acceptance gates
+and docs/CONNECTOR-RELIABILITY-PLAN.md for the agreed boundaries of later phases.
+No profile-layout redesign, approval-policy change or multi-company support.
+
 ## pkg34 r2 — posting safety (Batch A), built against main @ ee310f2
 
 Revision 2 after the 10 Sep shipping verification found three failures in r1:

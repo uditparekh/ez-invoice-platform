@@ -15,7 +15,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
 from xml.etree import ElementTree as ET
+
+try:
+    from .connector_credentials import valid_connector_token, TOKEN_FORMAT_MESSAGE
+except ImportError:  # direct script / frozen desktop entrypoint
+    from connector_credentials import valid_connector_token, TOKEN_FORMAT_MESSAGE
 
 try:
     import requests
@@ -23,7 +29,7 @@ except ImportError:  # pragma: no cover
     requests = None
 
 
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.5.0"
 
 
 @dataclass(frozen=True)
@@ -125,11 +131,21 @@ def drain_outbox(config: "ConnectorConfig", path: Path) -> Dict[str, Any]:
         if (item.get("connector_workspace_id", config.workspace_id) != config.workspace_id
                 or item.get("connector_cloud_url", config.cloud_url.rstrip("/")) != config.cloud_url.rstrip("/")):
             raise OutboxUnreadable(f"{path} belongs to different connector settings; restore the original workspace")
-    submitted = submit_cloud_results(config, pending)
-    if (submitted.get("success") and submitted.get("accepted") == len(pending)
+    # A timeout is not proof Tally rejected a voucher. Never turn an uncertain
+    # outcome into a retryable failure. Keep evidence until manual reconciliation.
+    uncertain = [item for item in pending if item.get("outcome_uncertain")]
+    confirmed = [item for item in pending if not item.get("outcome_uncertain")]
+    if not confirmed:
+        return {"success": False, "pending": len(pending), "uncertain": True,
+                "message": "Outcome uncertain. Check Tally with support before retrying; do not re-enter vouchers."}
+    submitted = submit_cloud_results(config, confirmed)
+    if (submitted.get("success") and submitted.get("accepted") == len(confirmed)
             and not submitted.get("rejected")):
-        write_outbox(path, [])
-        return {"success": True, "accepted": len(pending), "pending": 0}
+        write_outbox(path, uncertain)
+        if uncertain:
+            return {"success": False, "pending": len(uncertain), "uncertain": True,
+                    "message": "Outcome uncertain. Check Tally with support before retrying; do not re-enter vouchers."}
+        return {"success": True, "accepted": len(confirmed), "pending": 0}
     return {
         "success": False,
         "accepted": 0,
@@ -169,7 +185,12 @@ def load_config(path: Optional[Path] = None) -> ConnectorConfig:
 
 
 def save_config(config: ConnectorConfig, path: Optional[Path] = None) -> Path:
-    config_path = path or default_config_path()
+    config_path = path or (Path(config.config_path) if config.config_path else default_config_path())
+    pending = read_outbox(default_outbox_path(str(config_path)))
+    for item in pending:
+        if (item.get("connector_workspace_id", config.workspace_id) != config.workspace_id
+                or item.get("connector_cloud_url", config.cloud_url.rstrip("/")) != config.cloud_url.rstrip("/")):
+            raise OutboxUnreadable("Pending results belong to the original URL/workspace. Reconcile them before changing connection identity.")
     config_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "cloud_url": config.cloud_url,
@@ -190,7 +211,9 @@ def write_status(status: Dict[str, Any], path: Optional[Path] = None) -> Path:
     payload = dict(status)
     payload.setdefault("updated_at", datetime.now().isoformat(timespec="seconds"))
     payload.setdefault("host", socket.gethostname())
-    status_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    temp = status_path.with_suffix(".tmp")
+    temp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    temp.replace(status_path)
     return status_path
 
 
@@ -255,8 +278,9 @@ def post_xml_to_tally(tally_url: str, invoice_id: str, xml: str, dry_run: bool =
             headers={"Content-Type": "application/xml"},
             timeout=30,
         )
-    except Exception as exc:
-        return {"invoice_id": invoice_id, "success": False, "message": "Tally post failed: " + str(exc)}
+    except Exception:
+        return {"invoice_id": invoice_id, "success": False, "outcome_uncertain": True,
+                "message": "Tally did not confirm the result. Outcome uncertain; do not repost. Contact support."}
     parsed = parse_tally_response(response.text)
     ok = response.status_code == 200 and parsed.get("errors") == 0 and (
         parsed.get("created") or parsed.get("altered")
@@ -264,6 +288,11 @@ def post_xml_to_tally(tally_url: str, invoice_id: str, xml: str, dry_run: bool =
     return {
         "invoice_id": invoice_id,
         "success": bool(ok),
+        "outcome_uncertain": not ok and not (
+            response.status_code == 200 and parsed.get("line_error")
+            and not parsed.get("created") and not parsed.get("altered")
+            and "<LINEERROR" in response.text.upper()
+        ),
         "message": "Posted to Tally" if ok else (parsed.get("line_error") or response.text[:300]),
         "status_code": response.status_code,
         "response": parsed,
@@ -276,21 +305,7 @@ def post_xml_to_tally(tally_url: str, invoice_id: str, xml: str, dry_run: bool =
 
 
 def test_tally_connection(tally_url: str) -> Dict[str, Any]:
-    if not requests:
-        return {"success": False, "message": "requests not installed"}
-    try:
-        response = requests.get(tally_url, timeout=6)
-        text = response.text.strip()
-        if response.status_code == 200 and text:
-            return {"success": True, "message": "Tally responded on " + tally_url + ": " + text[:120]}
-        if response.status_code == 200:
-            return {"success": True, "message": "Tally responded on " + tally_url}
-    except Exception:
-        return {
-            "success": False,
-            "message": "Tally port check failed. Open TallyPrime, load the company, and confirm port 9000 is enabled.",
-        }
-    return {"success": False, "message": "HTTP " + str(response.status_code) + ": " + response.text[:160]}
+    return read_tally_companies(tally_url)
 
 
 
@@ -306,77 +321,138 @@ def connector_metadata(tally_detected: Optional[bool] = None) -> Dict[str, Any]:
     }
 
 
-def send_cloud_heartbeat(config: ConnectorConfig, tally_detected: Optional[bool] = None) -> Dict[str, Any]:
-    """Tell SiftEntry the connector is alive even when no jobs can be claimed."""
-    if not requests:
-        return {"success": False, "message": "requests is not installed"}
+def connection_config_error(config: ConnectorConfig) -> str:
     try:
-        response = requests.post(
-            cloud_url(config.cloud_url, "/api/v1/connectors/tally/heartbeat"),
-            json={
-                "workspace_id": config.workspace_id,
-                **connector_metadata(tally_detected),
-            },
-            headers=auth_headers(config.token),
-            timeout=15,
-        )
-    except Exception as exc:
-        return {"success": False, "message": "Cloud heartbeat failed: " + str(exc)}
+        url = urlsplit(config.cloud_url)
+        if (url.scheme not in {"http", "https"} or not url.hostname or url.username
+                or url.password or url.query or url.fragment or url.path not in {"", "/"}):
+            return "Use a base SiftEntry URL such as https://app.siftentry.com, without /app or other paths."
+        if url.scheme != "https" and url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            return "Use HTTPS for SiftEntry. Plain HTTP is allowed only for local development."
+    except ValueError:
+        return "SiftEntry URL is invalid. Use https://app.siftentry.com."
+    if not config.workspace_id.strip():
+        return "Workspace ID is missing. Copy it from the client profile."
+    if not valid_connector_token(config.token):
+        return TOKEN_FORMAT_MESSAGE
+    return ""
+
+
+def cloud_request(config: ConnectorConfig, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """One secret-safe error path for all connector calls; redirects never carry tokens."""
+    problem = connection_config_error(config)
+    if problem:
+        return {"success": False, "message": problem}
+    if not requests:
+        return {"success": False, "message": "Connector HTTP support is missing. Reinstall the connector."}
+    try:
+        response = requests.post(cloud_url(config.cloud_url, path), json=payload,
+                                 headers=auth_headers(config.token), timeout=30,
+                                 allow_redirects=False)
+    except Exception:
+        # Exception messages can contain URLs or invalid Authorization values.
+        return {"success": False, "message": "Could not reach SiftEntry. Check internet, URL, and TLS/firewall settings."}
+    code = response.status_code
+    messages = {
+        401: "Workspace ID or connector token was not accepted. Check the saved profile and copy its token again.",
+        403: "Connector access is not permitted. Ask the workspace administrator.",
+        404: "Connector endpoint was not found. Check the SiftEntry base URL and server deployment.",
+        413: "Connector result is too large. Contact support; do not re-enter vouchers.",
+        422: "Connector settings or request format were rejected. Check the Workspace ID and update the connector.",
+        429: "SiftEntry is busy. Wait before testing again.",
+    }
+    if code >= 300:
+        message = messages.get(code, "SiftEntry returned a server error. Contact support with the HTTP status and time.")
+        if 300 <= code < 400:
+            message = "SiftEntry returned a redirect. Use the correct HTTPS base URL; credentials were not forwarded."
+        return {"success": False, "message": f"{message} (HTTP {code})", "status_code": code}
     try:
         data = response.json()
-    except Exception:
-        data = {"message": response.text[:300]}
-    data.setdefault("success", response.status_code < 400)
-    data["status_code"] = response.status_code
+        if not isinstance(data, dict):
+            raise ValueError("object required")
+    except (ValueError, TypeError):
+        return {"success": False, "message": "SiftEntry returned an unexpected response. Check the base URL.", "status_code": code}
+    data.setdefault("success", True)
+    data["status_code"] = code
     return data
+
+
+def test_connection(config: ConnectorConfig) -> Dict[str, Any]:
+    """Read-only diagnostics. Never claim invoices or touch the local outbox."""
+    checks = {key: {"state": "not_checked", "message": "Not checked"}
+              for key in ("cloud", "tally", "company", "masters")}
+    cloud = cloud_request(config, "/api/v1/connectors/tally/diagnostics",
+                          {"workspace_id": config.workspace_id, **connector_metadata()})
+    checks["cloud"] = {"state": "passed" if cloud.get("success") else "failed",
+                       "message": cloud.get("message", "Cloud authentication passed.")}
+    # Independent local check remains useful when cloud authentication is down.
+    tally = read_tally_companies(config.tally_url)
+    checks["tally"] = {"state": "passed" if tally.get("success") else "failed",
+                       "message": tally["message"]}
+    company = str(cloud.get("company_name") or "")
+    if cloud.get("success") and tally.get("success"):
+        found = bool(company) and company in tally.get("companies", [])
+        checks["company"] = {"state": "passed" if found else "failed", "message":
+            f"Configured company is available: {company}" if found else
+            "Configured company was not found. Open the correct company in Tally and verify the profile company name."}
+    checks["masters"] = {"state": "not_verified", "message":
+        "Master names and accounting mappings are not verified. Master sync is not available yet."}
+    connected = bool(cloud.get("success"))
+    failures = [check["message"] for check in checks.values() if check["state"] == "failed"]
+    return {"success": not failures, "connected_to_siftentry": connected,
+            "tally_detected": bool(tally.get("success")), "checks": checks,
+            "message": " | ".join(failures) if failures else
+            "Connection checks passed. Masters remain unverified. No invoices were claimed or posted.",
+            "claimed": 0, "submitted": 0, "failed_jobs": 0,
+            "updated_at": datetime.now().isoformat(timespec="seconds")}
+
+
+def read_tally_companies(tally_url: str) -> Dict[str, Any]:
+    """Fixed local XML EXPORT; a web server returning 200 is not a Tally pass."""
+    xml = ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST>'
+           '<TYPE>Collection</TYPE><ID>SiftEntryCompanies</ID></HEADER><BODY><DESC>'
+           '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>'
+           '<TDL><TDLMESSAGE><COLLECTION NAME="SiftEntryCompanies" ISINITIALIZE="Yes">'
+           '<TYPE>Company</TYPE><NATIVEMETHOD>Name</NATIVEMETHOD>'
+           '</COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+    try:
+        response = requests.post(tally_url, data=xml.encode("utf-8"),
+                                 headers={"Content-Type": "application/xml"}, timeout=8,
+                                 allow_redirects=False)
+        if response.status_code != 200 or len(response.content) > 2_000_000:
+            raise ValueError("unexpected response")
+        root = ET.fromstring(response.content)
+        if (root.tag != "ENVELOPE" or root.find(".//COLLECTION") is None
+                or root.findtext(".//STATUS") == "0" or root.find(".//LINEERROR") is not None):
+            raise ValueError("not a Tally collection")
+        names = [node.get("NAME") or node.findtext(".//NAME") or ""
+                 for node in root.findall(".//COMPANY")]
+        return {"success": True, "companies": names, "message": "Tally XML export responded."}
+    except Exception:
+        return {"success": False, "companies": [], "message":
+                "Tally XML check failed. Open TallyPrime, load the company, and enable XML access on port 9000."}
+
+
+def send_cloud_heartbeat(config: ConnectorConfig, tally_detected: Optional[bool] = None) -> Dict[str, Any]:
+    """Tell SiftEntry the connector is alive even when no jobs can be claimed."""
+    return cloud_request(config, "/api/v1/connectors/tally/heartbeat", {
+        "workspace_id": config.workspace_id, **connector_metadata(tally_detected),
+    })
 
 
 def claim_cloud_jobs(config: ConnectorConfig) -> Dict[str, Any]:
-    if not requests:
-        return {"success": False, "message": "requests is not installed", "jobs": []}
-    try:
-        response = requests.post(
-            cloud_url(config.cloud_url, "/api/v1/connectors/tally/jobs/claim"),
-            json={
-                "workspace_id": config.workspace_id,
-                "limit": config.claim_limit,
-                "dry_run": config.dry_run,
-                **connector_metadata(tally_detected=True),
-            },
-            headers=auth_headers(config.token),
-            timeout=30,
-        )
-    except Exception as exc:
-        return {"success": False, "message": "Cloud claim failed: " + str(exc), "jobs": []}
-    try:
-        data = response.json()
-    except Exception:
-        data = {"message": response.text[:500]}
-    data.setdefault("success", response.status_code < 400)
-    data.setdefault("jobs", [])
-    data["status_code"] = response.status_code
-    return data
+    result = cloud_request(config, "/api/v1/connectors/tally/jobs/claim", {
+        "workspace_id": config.workspace_id, "limit": config.claim_limit,
+        "dry_run": config.dry_run, **connector_metadata(tally_detected=True),
+    })
+    result.setdefault("jobs", [])
+    return result
 
 
 def submit_cloud_results(config: ConnectorConfig, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    if not requests:
-        return {"success": False, "message": "requests is not installed"}
-    try:
-        response = requests.post(
-            cloud_url(config.cloud_url, "/api/v1/connectors/tally/jobs/results"),
-            json={"workspace_id": config.workspace_id, "results": results},
-            headers=auth_headers(config.token),
-            timeout=30,
-        )
-    except Exception as exc:
-        return {"success": False, "message": "Cloud result submit failed: " + str(exc)}
-    try:
-        data = response.json()
-    except Exception:
-        data = {"message": response.text[:500]}
-    data.setdefault("success", response.status_code < 400)
-    data["status_code"] = response.status_code
-    return data
+    return cloud_request(config, "/api/v1/connectors/tally/jobs/results", {
+        "workspace_id": config.workspace_id, "results": results,
+    })
 
 
 @contextmanager
@@ -468,8 +544,9 @@ def _poll_once_locked(config: ConnectorConfig) -> Dict[str, Any]:
             "connected_to_siftentry": bool(heartbeat.get("success")),
             "tally_detected": False,
             "message": (
-                f"{drained.get('pending', 0)} posting result(s) posted to Tally but not yet "
-                "confirmed to SiftEntry — retrying. Do not re-enter these vouchers."
+                drained["message"] if drained.get("uncertain") else
+                f"{drained.get('pending', 0)} posting result(s) await cloud acknowledgement. "
+                "Retrying acknowledgement only. Do not re-enter vouchers."
             ),
             "claimed": 0,
             "submitted": 0,
@@ -519,6 +596,14 @@ def _poll_once_locked(config: ConnectorConfig) -> Dict[str, Any]:
         append_outbox(outbox_path, [result])
         results.append(result)
         last_invoice = str(job.get("invoice_number") or job.get("invoice_id") or last_invoice)
+        if result.get("outcome_uncertain"):
+            # The server keeps this and any unattempted batch claims reserved.
+            # A human must reconcile; an inconclusive outcome never authorizes retry.
+            drained = drain_outbox(config, outbox_path)
+            return {"success": False, "connected_to_siftentry": True, "tally_detected": True,
+                    "claimed": len(jobs), "submitted": 0, "failed_jobs": 0,
+                    "awaiting_ack": drained.get("pending", 1), "message":
+                    "Outcome uncertain. Posting is paused. Contact support to reconcile the batch; do not re-enter vouchers."}
 
     submitted: Dict[str, Any] = {"success": True, "accepted": 0}
     awaiting_ack = 0

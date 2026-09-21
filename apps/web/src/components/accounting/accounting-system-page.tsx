@@ -421,7 +421,7 @@ function TallySetupCard({ config }: { config: AccountingSystemConfig }) {
           </p>
         )}
         <a
-          href="/downloads/SiftEntry-Tally-Connector-Setup-0.4.0.exe"
+          href="/downloads/SiftEntry-Tally-Connector-Setup-0.5.0.exe"
           download
           className="flex items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 transition-colors hover:border-accent"
         >

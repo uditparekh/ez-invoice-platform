@@ -4,6 +4,21 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### pkg35A — connector reliability (0.5.0)
+
+- Reject malformed connector credentials without a server crash; add secure
+  token generation to the existing profile form without changing posting policy.
+- Forward the four native connector POST routes through the public app domain,
+  without browser cookies, arbitrary paths, or credential-bearing redirects.
+- Add a no-posting connection test for cloud authentication, local Tally XML,
+  configured company availability, and explicitly unverified master readiness.
+- Keep desktop feedback/actions visible on small work areas, scroll the form,
+  and pass immutable settings to workers with visible unexpected-error handling.
+- Hold ambiguous Tally outcomes for reconciliation instead of reporting a
+  retryable failure; protect pending results from connection identity changes.
+- Ship a matching Windows installer, fallback kit, onboarding guide, and
+  regression tests. Physical Windows/Tally pilot acceptance remains required.
+
 ### Calm Finance redesign and reporting
 
 - Rebuild Home and Insights with date-scoped, server-backed reporting, separate

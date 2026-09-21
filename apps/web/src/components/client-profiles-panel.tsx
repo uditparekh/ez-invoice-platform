@@ -2290,14 +2290,27 @@ function renderConnectionFields(
             placeholder={
               connectionBool(settings, "connector_token_set", false)
                 ? "Saved — leave blank to keep it"
-                : "Paste or type a token"
+                : "Generate a token below"
             }
             hint={
               connectionBool(settings, "connector_token_set", false)
                 ? "A token is saved. It is not shown here; owners and admins can reveal it from the Integrations page when installing the connector. Type a new one to replace it."
-                : "Used by the connector on the Tally computer to identify this workspace."
+                : "Generate a secure token, save this profile, then copy the same value into the Windows connector."
             }
           />
+          <div className="space-y-2">
+            <button
+              type="button"
+              className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-canvas"
+              onClick={() => {
+                if (connectionBool(settings, "connector_token_set", false)
+                  && !window.confirm("Replace the saved connector token? After saving this profile, existing connectors will need the new token. Stop the connector before rotating its token.")) return;
+                const bytes = crypto.getRandomValues(new Uint8Array(32));
+                onChange("connector_token", Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(""));
+              }}
+            >Generate secure token</button>
+            <p className="text-sm text-muted">Generation changes this draft only. Save the profile to apply it. Never share the token in screenshots or support logs.</p>
+          </div>
           <TextField
             label="Tally URL"
             value={connectionText(

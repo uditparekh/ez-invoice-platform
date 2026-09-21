@@ -30,6 +30,7 @@ try:
         post_xml_to_tally,
         test_tally_connection,
         write_status,
+        valid_connector_token,
     )
 except ImportError:
     from tally_connector_runtime import (
@@ -40,6 +41,7 @@ except ImportError:
         post_xml_to_tally,
         test_tally_connection,
         write_status,
+        valid_connector_token,
     )
 
 
@@ -113,7 +115,8 @@ def create_app(config: Dict[str, Any]) -> "Flask":
         supplied = header_token
         if auth.lower().startswith("bearer "):
             supplied = auth.split(" ", 1)[1].strip()
-        return hmac.compare_digest(supplied, token)
+        return (valid_connector_token(supplied) and valid_connector_token(token)
+                and hmac.compare_digest(supplied, token))
 
     def require_auth():
         if authorized():
