@@ -57,5 +57,20 @@ https://help.tallysolutions.com/sample-xml/
 
 ## Release verification record
 
-Record actual CI/build/deployment results here before publication. Physical
-Windows/Tally pilot acceptance remains pending until the client confirms it.
+- Source: `c1a092298edb93b6648a5e87c3018ce458884540`.
+- Local: 163 Python tests passed; web typecheck, lint and production build passed;
+  both native gateway Playwright regressions passed.
+- [Platform verification](https://github.com/uditparekh/ez-invoice-platform/actions/runs/35643770236):
+  web and both SQLite/PostgreSQL backend jobs passed.
+- [Windows installer verification](https://github.com/uditparekh/ez-invoice-platform/actions/runs/35643770264):
+  build, installation, packaged UI self-test and autostart registry checks passed.
+- Installer: `SiftEntry-Tally-Connector-Setup-0.5.0.exe`, 13,085,646 bytes;
+  SHA-256 `a08e3c97aed56dbf9b4ba6833041f88c4db194ae96a08867103f658bee5ae964`.
+  Verified against the committed release manifest. Installer remains unsigned.
+- Matching script kit contains the shared credentials helper and updated client
+  guide. The 0.4.0 installer is preserved for existing links.
+- Production deployment probes happen after publication; a green build alone
+  does not establish that the live deployment is current.
+- Physical Windows/Tally pilot acceptance remains pending until the client
+  confirms it. In particular, verify the real company's diagnostic export,
+  empty-workspace authentication, readable errors, and a Windows restart.
