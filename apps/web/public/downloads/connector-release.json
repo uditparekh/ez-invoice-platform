@@ -1,7 +1,7 @@
 {
-  "source_commit": "d9df14a1eac57a96430026842199e7c4146156bc",
-  "file": "SiftEntry-Tally-Connector-Setup-0.6.0.exe",
-  "sha256": "4a90c0a52a46df09b0de1114869dae337d8c39a455fb440757179477297ea37a",
-  "version": "0.6.0",
-  "signed": false
+  "file": "SiftEntry-Tally-Connector-Setup-0.7.0.exe",
+  "version": "0.7.0",
+  "signed": false,
+  "source_commit": "5da82abf35b3f19cd41d1d47dbdf01cb8e0af80b",
+  "sha256": "407c7fcf8e587953718f1148fbe315eff77cfe4cbcbe1e74ff8f3af9b56366e1"
 }

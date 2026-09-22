@@ -1,1 +1,1 @@
-4a90c0a52a46df09b0de1114869dae337d8c39a455fb440757179477297ea37a  SiftEntry-Tally-Connector-Setup-0.6.0.exe
+407c7fcf8e587953718f1148fbe315eff77cfe4cbcbe1e74ff8f3af9b56366e1  SiftEntry-Tally-Connector-Setup-0.7.0.exe
