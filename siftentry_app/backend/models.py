@@ -667,12 +667,7 @@ class JobEnqueueResult(BaseModel):
 
 
 class LearningExportBundle(BaseModel):
-    """Portable backup of everything the AI learns from — provider-independent.
-
-    This is the same knowledge injected into whichever AI provider is active,
-    so migrating brains (or instances) means exporting here and importing
-    there; the new model picks up exactly where the old one left off.
-    """
+    """Legacy settings/profile backup. Benchmarks require DB/storage backups."""
 
     schema_version: str = "siftentry_learning_v1"
     generated_at: datetime

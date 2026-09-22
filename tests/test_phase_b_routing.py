@@ -129,7 +129,7 @@ def _upload(client, headers, org_id, filename):
     return response.json()
 
 
-def test_auto_routing_gates_ai_by_format_status(live_ai_client):
+def test_review_streak_alone_does_not_bypass_ai(live_ai_client):
     client, calls = live_ai_client
     headers, org_id = _bootstrap(client)
 
@@ -139,7 +139,7 @@ def test_auto_routing_gates_ai_by_format_status(live_ai_client):
     document = first["raw_payload"]["INVOICE"]["DOCUMENT"]
     assert document["AI/OCR PROVIDER"] == "openai_compatible"
     assert document["AI/OCR MODEL"] == "llama-3.3-70b-versatile"
-    assert document["AI/OCR TRIGGER"] == "training_format"
+    assert document["AI/OCR TRIGGER"] == "extraction_evidence"
     assert document["AI/OCR SUGGESTIONS"]["invoice_number"]["value"] == "2620002662"
 
     supplier_name = first["supplier"]["name"]
@@ -158,12 +158,12 @@ def test_auto_routing_gates_ai_by_format_status(live_ai_client):
         )
     assert outcome["status"] == "trusted"
 
-    # 3) Trusted format -> deterministic only, zero provider calls.
+    # 3) A legacy review streak is NOT held-out extraction evidence.
     second = _upload(client, headers, org_id, "trusted-format.pdf")
-    assert len(calls) == 1  # unchanged
+    assert len(calls) == 2
     trusted_document = second["raw_payload"]["INVOICE"]["DOCUMENT"]
-    assert "AI/OCR TRIGGER" not in trusted_document
-    assert "AI/OCR SUGGESTIONS" not in trusted_document
+    assert trusted_document["AI/OCR TRIGGER"] == "extraction_evidence"
+    assert "AI/OCR SUGGESTIONS" in trusted_document
 
     # 4) A correction demotes to training -> the gate re-opens.
     demoted = repository.record_supplier_format_outcome(
@@ -175,9 +175,9 @@ def test_auto_routing_gates_ai_by_format_status(live_ai_client):
     )
     assert demoted["status"] == "training"
     third = _upload(client, headers, org_id, "demoted-format.pdf")
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert third["raw_payload"]["INVOICE"]["DOCUMENT"]["AI/OCR TRIGGER"] == (
-        "training_format"
+        "extraction_evidence"
     )
 
 
@@ -198,7 +198,7 @@ def test_review_surfaces_ai_suggestions(live_ai_client):
     assert insight["title"] == "AI extraction ran"
     assert "openai_compatible" in insight["detail"]
     assert "llama-3.3-70b-versatile" in insight["detail"]
-    assert "training format" in insight["detail"]
+    assert "review required" in insight["detail"]
     assert "field suggestion" in insight["action"]
 
     number_field = next(

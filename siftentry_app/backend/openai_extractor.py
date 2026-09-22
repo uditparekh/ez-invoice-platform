@@ -71,20 +71,24 @@ def extract_with_openai_compatible(
         started = time.monotonic()
         req = urlrequest.Request(endpoint, data=body, headers=headers, method="POST")
         with urlrequest.urlopen(req, timeout=timeout_seconds) as response:
-            raw = response.read().decode("utf-8")
+            data = response.read(2_000_001)
+            if len(data) > 2_000_000:
+                raise ValueError("Provider response exceeds the extraction size limit.")
+            raw = data.decode("utf-8")
         latency_ms = int((time.monotonic() - started) * 1000)
-    except (OSError, URLError, TimeoutError) as exc:
+    except (OSError, URLError, TimeoutError, ValueError) as exc:
         return _outcome(model, error=str(exc))
 
     try:
         envelope = json.loads(raw)
     except json.JSONDecodeError as exc:
         return _outcome(model, error=f"Provider response was not JSON: {exc}")
-    if envelope.get("error"):
-        detail = envelope["error"].get("message", "unknown error")
-        return _outcome(model, latency_ms=latency_ms, error=f"Provider API error: {detail}")
+    if not isinstance(envelope, dict) or envelope.get("error"):
+        return _outcome(model, latency_ms=latency_ms, error="Provider returned an invalid or error response.")
 
     choices = envelope.get("choices") or []
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict) or not isinstance(choices[0].get("message"), dict):
+        return _outcome(model, latency_ms=latency_ms, error="Provider returned no valid extraction message.")
     text = (
         (choices[0].get("message") or {}).get("content", "") if choices else ""
     )

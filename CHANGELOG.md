@@ -4,6 +4,18 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### pkg37 — scoped extraction lessons and measured regression checks
+
+- Add independently confirmed learning/held-out PDF benchmarks with structured
+  answers, scoped label hints, real-parser worker replay and separate AI scoring.
+- Replace approval-streak AI bypass with current held-out evidence and per-invoice
+  layout/currency/document/quality checks; corrections invalidate qualification.
+- Separate extraction from accounting context, validate provider outputs, and
+  keep AI suggestions display-only with mandatory human approval.
+- Add cancellable checks, durable PDF-deletion retries, audit records, and responsive
+  light/dark Samples & checks UI. No client data is changed during deployment.
+- See docs/PKG37-RELEASE.md for operation, retention and honest evaluation limits.
+
 ### pkg36B — company-bound posting reconciliation (connector 0.7.0)
 
 - Freeze company identity and a durable voucher reference in new approvals.

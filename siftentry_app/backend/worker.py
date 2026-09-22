@@ -56,6 +56,9 @@ def _request_shim(app) -> SimpleNamespace:
 def execute_job(app, job) -> Dict[str, Any]:
     """Dispatch one claimed job. Returns the result payload to store."""
     repo = app.state.repository
+    if job.kind == "extraction_benchmark":
+        from .benchmark_service import execute_benchmark
+        return execute_benchmark(app, job)
     if job.kind == "batch_post_ready":
         payload = job.payload or {}
         wanted_status = str(payload.get("status") or "approved")
@@ -114,7 +117,10 @@ def run_once(app) -> bool:
     try:
         result = execute_job(app, job)
         repo.finish_job(job.id, result=result)
-        logger.info("job %s done: %s", job.id, result)
+        if job.kind == "extraction_benchmark":
+            logger.info("job %s finished (benchmark values kept in scoped storage, not logs)", job.id)
+        else:
+            logger.info("job %s done: %s", job.id, result)
     except Exception as exc:
         repo.finish_job(job.id, error=str(exc))
         logger.exception("job %s failed", job.id)
@@ -143,6 +149,11 @@ async def _poll_forever(app) -> None:
         while True:
             if time.monotonic() >= next_digest_check:
                 next_digest_check = time.monotonic() + DIGEST_CHECK_SECONDS
+                from .benchmark_service import cleanup_benchmark_pdfs
+                try:
+                    cleanup_benchmark_pdfs(app)
+                except Exception:
+                    logger.exception("benchmark PDF cleanup failed; will retry")
                 try:
                     outcome = maybe_send_weekly_digests(
                         app.state.repository, app.state.email

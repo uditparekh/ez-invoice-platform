@@ -69,23 +69,25 @@ def extract_with_anthropic(
             ANTHROPIC_API_URL, data=body, headers=headers, method="POST"
         )
         with urlrequest.urlopen(req, timeout=timeout_seconds) as response:
-            raw = response.read().decode("utf-8")
+            data = response.read(2_000_001)
+            if len(data) > 2_000_000:
+                raise ValueError("Provider response exceeds the extraction size limit.")
+            raw = data.decode("utf-8")
         latency_ms = int((time.monotonic() - started) * 1000)
-    except (OSError, URLError, TimeoutError) as exc:
+    except (OSError, URLError, TimeoutError, ValueError) as exc:
         return _outcome(model, error=str(exc))
 
     try:
         envelope = json.loads(raw)
     except json.JSONDecodeError as exc:
         return _outcome(model, error=f"Anthropic response was not JSON: {exc}")
-    if envelope.get("type") == "error":
-        detail = (envelope.get("error") or {}).get("message", "unknown error")
-        return _outcome(model, latency_ms=latency_ms, error=f"Anthropic API error: {detail}")
+    if not isinstance(envelope, dict) or envelope.get("type") == "error" or not isinstance(envelope.get("content"), list):
+        return _outcome(model, latency_ms=latency_ms, error="Anthropic returned an invalid or error response.")
 
     text = "".join(
         block.get("text", "")
         for block in envelope.get("content", [])
-        if isinstance(block, dict) and block.get("type") == "text"
+        if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str)
     )
     parsed, parse_error = parse_json_block(text)
     if parse_error:

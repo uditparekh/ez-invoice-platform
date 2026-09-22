@@ -1871,12 +1871,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
         limit: int = Query(default=2000, ge=1, le=10000),
     ) -> LearningExportBundle:
-        """One portable JSON bundle of everything the AI learns from.
-
-        Download it as an off-platform backup; import it into a fresh
-        instance (or hand it to a new AI provider) and extraction context
-        continues from exactly where it left off.
-        """
+        """Legacy profile/settings backup, not a complete benchmark backup."""
         _require_membership(request, current_user, organization_id, MANAGE_ROLES)
         repo = _repo(request)
         signals = repo.list_correction_learning_signals(organization_id, limit=limit)
@@ -1894,6 +1889,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 "signal_count": len(signals),
                 "field_counts": field_counts,
                 "profile_count": len(profiles),
+                "benchmark_backup": "Confirmed benchmark PDFs, scoped lessons and immutable check runs require database and private-storage backups; this legacy bundle does not include them.",
             },
         )
 
@@ -2411,6 +2407,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             statuses=statuses,
         )
 
+    from .benchmark_routes import router as benchmark_router
+    app.include_router(benchmark_router)
     return app
 
 
@@ -2455,30 +2453,13 @@ def _process_invoice_pdf_bytes(
         current_user,
     )
     ai_config = request.app.state.ai_extractor_config
-    auto_ai_candidate = (
-        (parser_mode or "").strip().lower() == "auto" and ai_config.live_provider
-    )
-    correction_signals = (
-        _repo(request).list_correction_learning_signals(organization_id, limit=50)
-        if is_ai_parser_mode(parser_mode) or auto_ai_candidate
-        else []
-    )
+    # Workspace-wide correction values/counts are not supplier-specific lessons.
+    correction_signals = []
 
-    def _training_format_gate(supplier_name: str, supplier_tax_id: str) -> bool:
-        """Phase B routing: external AI for training/unseen formats only.
-
-        Trusted formats parse deterministically with zero provider calls. A
-        format that graduated under its name before a tax id ever parsed
-        stays trusted (name-only fallback lookup), and any correction demotes
-        via record_supplier_format_outcome, which re-opens this gate.
-        """
-        repository = _repo(request)
-        record = repository.get_supplier_format(
-            organization_id, supplier_name, supplier_tax_id
-        )
-        if record is None and supplier_tax_id:
-            record = repository.get_supplier_format(organization_id, supplier_name)
-        return record is None or record.get("status") != "trusted"
+    def extraction_guidance(scope, reasons):
+        if not client_profile:
+            return {"lessons": [], "reasons": [*reasons, "profile_required_for_evidence"], "allow_skip": False}
+        return _repo(request).extraction_guidance(client_profile, scope, reasons, ai_config.status())
 
     retention_policy, retention_until = _resolve_pdf_retention(
         request,
@@ -2506,7 +2487,7 @@ def _process_invoice_pdf_bytes(
             client_profile=client_profile,
             correction_signals=correction_signals,
             ai_config=ai_config,
-            ai_gate=_training_format_gate,
+            learning_resolver=extraction_guidance,
         )
         if source_metadata:
             parsed.raw_payload = {**parsed.raw_payload, **source_metadata}
@@ -3326,13 +3307,14 @@ def _resolve_parser_profile(
             current_user,
             READ_ROLES,
         )
-    if not is_ai_parser_mode(parser_mode):
+    if not is_ai_parser_mode(parser_mode) and (parser_mode or "").strip().lower() != "auto":
         return None
 
     profiles = _repo(request).list_client_profiles(organization_id)
-    return next((profile for profile in profiles if profile.is_default), None) or (
-        profiles[0] if profiles else None
-    )
+    defaults = [profile for profile in profiles if profile.is_default]
+    if len(defaults) == 1:
+        return defaults[0]
+    return profiles[0] if len(profiles) == 1 else None
 
 
 app = create_app()

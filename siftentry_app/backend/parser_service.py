@@ -12,6 +12,7 @@ from .ai_parser import AiExtractorConfig, apply_ai_parser_context
 from .extraction_common import locate_field_evidence
 from .domain import legacy_payload_to_invoice
 from .models import ClientProfile, CorrectionLearningSignal, InvoiceCreate
+from .extraction_benchmarks import extraction_scope, field_values, quality_reasons, normalized
 
 
 def extract_pdf_text(pdf_bytes: bytes) -> Tuple[str, str, int]:
@@ -57,6 +58,7 @@ def parse_pdf_invoice(
     correction_signals: Optional[List[CorrectionLearningSignal]] = None,
     ai_config: Optional[AiExtractorConfig] = None,
     ai_gate: Optional[Callable[[str, str], bool]] = None,
+    learning_resolver: Optional[Callable] = None,
 ) -> InvoiceCreate:
     text, engine, pages = extract_pdf_text(pdf_bytes)
     extracted_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -90,18 +92,25 @@ def parse_pdf_invoice(
 
     apply_accounting_route(payload, homes=legal_names)
 
+    baseline = legacy_payload_to_invoice(payload, organization_id=organization_id, source_file=filename, source_path=source_path)
+    values = field_values(baseline)
+    scope = extraction_scope(client_profile.id if client_profile else "", values, text, pages, pdf_bytes)
+    reasons = quality_reasons(values, text, scope)
+    guidance = learning_resolver(scope, reasons) if learning_resolver else {"lessons": [], "allow_skip": False, "reasons": reasons}
+    guidance["lessons"] = [lesson for lesson in guidance["lessons"] if normalized(lesson["anchor"]) in normalized(text)]
+
     # Phase B routing: in `auto` mode with a live provider configured, the
     # deterministic parse runs first so the supplier is known, then the gate
     # decides — external AI only for training/unseen formats, never trusted.
     effective_mode = parser_mode
     if (
         normalized_mode == "auto"
-        and ai_gate is not None
+        and (ai_gate is not None or learning_resolver is not None)
         and ai_config is not None
         and ai_config.live_provider
     ):
         supplier_name, supplier_tax_id = _supplier_identity(payload)
-        if ai_gate(supplier_name, supplier_tax_id):
+        if (not guidance["allow_skip"] if learning_resolver else ai_gate(supplier_name, supplier_tax_id)):
             effective_mode = "ai"
 
     apply_ai_parser_context(
@@ -112,11 +121,12 @@ def parse_pdf_invoice(
         ai_config=ai_config,
         document_text=text,
         pdf_bytes=pdf_bytes,
+        extraction_lessons=guidance["lessons"],
     )
     if effective_mode != parser_mode:
         document = (payload.get("INVOICE", payload) or {}).get("DOCUMENT")
         if isinstance(document, dict):
-            document["AI/OCR TRIGGER"] = "training_format"
+            document["AI/OCR TRIGGER"] = "extraction_evidence" if learning_resolver else "training_format"
     invoice_create = legacy_payload_to_invoice(
         payload,
         organization_id=organization_id,
@@ -124,6 +134,8 @@ def parse_pdf_invoice(
         source_path=source_path,
     )
     invoice_create.evidence = build_parse_evidence(pdf_bytes, invoice_create)
+    invoice_create.raw_payload["_extraction_scope"] = scope
+    invoice_create.raw_payload["_extraction_routing"] = {"reasons": guidance["reasons"], "lesson_ids": [l["id"] for l in guidance["lessons"]], "evidence_qualified": guidance["allow_skip"]}
     return invoice_create
 
 

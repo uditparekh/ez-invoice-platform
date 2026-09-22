@@ -435,6 +435,12 @@ def _apply_ai_suggestions(
     detail_parts = [part for part in (provider, model) if part]
     if trigger == "training_format":
         detail_parts.append("training format")
+    if trigger == "extraction_evidence":
+        routing = payload.get("_extraction_routing") or {}
+        reasons = routing.get("reasons") or ["manual AI review"]
+        detail_parts.append("review required: " + ", ".join(str(reason).replace("_", " ") for reason in reasons[:3]))
+        if routing.get("lesson_ids"):
+            detail_parts.append(f"{len(routing['lesson_ids'])} confirmed label hint(s)")
     return InvoiceReviewInsight(
         title="AI extraction ran",
         detail=" · ".join(detail_parts) if detail_parts else "AI suggestions stored",

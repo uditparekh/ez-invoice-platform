@@ -10,6 +10,7 @@ from .reporting import ReportingRepository
 from .approval_repository import ApprovalRepository
 from .tally_masters import MasterRepository
 from .posting_reconciliation import ReconciliationRepository
+from .extraction_benchmarks import ExtractionBenchmarkRepository
 from .approval_plans import ApprovalConflict, profile_fingerprint
 import threading
 import uuid
@@ -123,7 +124,7 @@ class InvoiceFileRecord:
         )
 
 
-class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepository, ReconciliationRepository):
+class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepository, ReconciliationRepository, ExtractionBenchmarkRepository):
     def __init__(self, database_path: Path, database_url: str = ""):
         self.database_path = Path(database_path)
         self.database_url = (database_url or "").strip()
@@ -463,6 +464,7 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
                     ON users (LOWER(email))
                     """
                 )
+            self.initialize_extraction_benchmarks(connection)
             self._migrate_posting_attempts(connection)
             # Columns must exist before creating this index on older databases.
             connection.execute("""
@@ -1239,6 +1241,9 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
         with self._connect() as connection:
             self._locked_profile(connection, profile_id)
             self._invalidate_profile_approvals(connection, profile_id, actor_id)
+            connection.execute("UPDATE extraction_samples SET deleted_at = ?, expected_json = '{}' WHERE profile_id = ? AND deleted_at = ''", (utc_now().isoformat(), profile_id))
+            connection.execute("UPDATE extraction_lessons SET deleted_at = ? WHERE profile_id = ? AND deleted_at = ''", (utc_now().isoformat(), profile_id))
+            connection.execute("UPDATE jobs SET status = 'failed', error = 'Profile deleted; check cancelled.', updated_at = ? WHERE id IN (SELECT job_id FROM extraction_runs WHERE profile_id = ?) AND status IN ('queued', 'running')", (utc_now().isoformat(), profile_id))
             connection.execute("DELETE FROM tally_master_sync WHERE profile_id = ?", (profile_id,))
             connection.execute("DELETE FROM client_profiles WHERE id = ?", (profile_id,))
             self._insert_audit(
@@ -1803,6 +1808,12 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
             )
             if changed.rowcount != 1:
                 raise ApprovalConflict("Invoice changed or is already posting. Reload before editing.")
+            if any(old_values[field] != value for field, value in updates.items()):
+                scope = current.raw_payload.get("_extraction_scope") or {}
+                # Quality evidence is invalidated even when lesson sharing is opted out.
+                scoped_profile = connection.execute("SELECT organization_id FROM client_profiles WHERE id = ?", (scope.get("profile_id", ""),)).fetchone()
+                if scoped_profile and scoped_profile["organization_id"] == current.organization_id:
+                    self.bump_extraction_revision(connection, scope.get("profile_id"))
             if "lines" in updates:
                 self._replace_lines(connection, invoice_id, updated.lines)
             if learn:
@@ -1902,7 +1913,7 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
             row = connection.execute(
                 """
                 UPDATE jobs SET status = ?, result_json = ?, error = ?, updated_at = ?
-                WHERE id = ?
+                WHERE id = ? AND (kind != 'extraction_benchmark' OR status = 'running')
                 RETURNING *
                 """,
                 (

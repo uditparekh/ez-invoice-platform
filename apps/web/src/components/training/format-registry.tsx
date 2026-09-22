@@ -9,10 +9,7 @@ import {
 } from "@/hooks/use-supplier-formats";
 import { cn } from "@/lib/utils";
 
-/** Training mode — UI for the supplier format registry (Phase B).
- *  Every supplier format starts in Training; five consecutive approvals
- *  with zero corrections graduate it to Trusted. Reviewing invoices IS
- *  the training — the "Train" actions route into the queue. */
+/** Review streaks are historical telemetry, not extraction qualification. */
 export function FormatRegistry() {
   const { loading, trustedAfter, formats, untrained } = useSupplierFormats();
 
@@ -26,20 +23,23 @@ export function FormatRegistry() {
       <div className="flex flex-col gap-4 rounded-2xl bg-gradient-to-r from-[var(--hero-from)] via-[var(--hero-via)] to-[var(--hero-to)] px-6 py-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-200/80">
-            Training mode
+            Review history
           </p>
           <p className="mt-1 text-lg font-semibold leading-snug text-white sm:text-xl">
-            {trusted.length} trusted format{trusted.length === 1 ? "" : "s"} ·{" "}
-            {formats.length - trusted.length + untrained.length} in training —
-            every clean approval teaches SiftEntry.
+            {trusted.length} supplier{trusted.length === 1 ? "" : "s"} with a
+            clean review streak.
+          </p>
+          <p className="mt-2 text-sm text-indigo-100/90">
+            A streak is not proof of accuracy. Confirm samples and run held-out
+            checks in Client profiles.
           </p>
         </div>
         <Link
-          href="/app/invoices"
+          href="/app/client-profiles"
           className="inline-flex h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-white px-5 text-sm font-semibold text-[var(--hero-via)] shadow-sm sm:self-auto"
         >
           <GraduationCap size={17} />
-          Train formats
+          Extraction checks
           <ArrowRight size={15} />
         </Link>
       </div>
@@ -60,7 +60,7 @@ export function FormatRegistry() {
               )
               .join(" · ")}
             {untrained.length > 3 ? ` · +${untrained.length - 3} more` : ""} —
-            review and approve their invoices to start training.
+            review their invoices and confirm representative samples.
           </p>
         </div>
       )}
@@ -126,7 +126,9 @@ function FormatRow({
           )}
         >
           {isTrusted ? <ShieldCheck size={12} /> : <GraduationCap size={12} />}
-          {isTrusted ? "Trusted" : `Training ${progress}/${trustedAfter}`}
+          {isTrusted
+            ? "Clean streak"
+            : `Review streak ${progress}/${trustedAfter}`}
         </span>
       </div>
     </div>

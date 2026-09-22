@@ -37,6 +37,7 @@ import {
 
 import { useAuth } from "@/components/auth-provider";
 import { ProfileConnectionStatus } from "@/components/profile-connection-status";
+import { ExtractionEvidence } from "@/components/client-profiles/extraction-evidence";
 import {
   TallyMasterProvider,
   MasterSnapshotPanel,
@@ -1892,6 +1893,15 @@ function ProfileEditor({
                     onNotesChange={setTrainingSampleNotes}
                     onUpload={() => void uploadTrainingSampleAction()}
                   />
+                  {selectedProfile && activeOrganizationId && (
+                    <ExtractionEvidence
+                      key={selectedProfile.id}
+                      organizationId={activeOrganizationId}
+                      profileId={selectedProfile.id}
+                      canEdit={canEdit}
+                      dirty={isDirty}
+                    />
+                  )}
                   <OnboardingApprovalPanel
                     selectedProfile={selectedProfile}
                     status={onboardingStatus}

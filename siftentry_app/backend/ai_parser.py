@@ -170,6 +170,7 @@ def apply_ai_parser_context(
     ai_config: Optional[AiExtractorConfig] = None,
     document_text: str = "",
     pdf_bytes: bytes = b"",
+    extraction_lessons: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     if not is_ai_parser_mode(parser_mode):
         return payload
@@ -177,9 +178,9 @@ def apply_ai_parser_context(
     invoice = payload.setdefault("INVOICE", payload)
     document = invoice.setdefault("DOCUMENT", {})
     context = build_ai_parser_context(client_profile, correction_signals or [])
+    context["extraction_lessons"] = extraction_lessons or []
     config = ai_config or AiExtractorConfig.from_environment()
 
-    _apply_profile_hints(invoice, client_profile)
     external_result = request_external_ai_suggestions(
         invoice,
         context,
@@ -187,6 +188,7 @@ def apply_ai_parser_context(
         document_text=document_text,
         pdf_bytes=pdf_bytes,
     )
+    _apply_profile_hints(invoice, client_profile)
 
     base_parser = str(document.get("PARSER") or document.get("ADAPTER") or "Generic")
     document["PARSER"] = "AI/OCR assisted"
@@ -230,16 +232,6 @@ def build_ai_parser_context(
         "invoice_format": settings.invoice_format if settings else "",
         "tax_mode": settings.tax_mode if settings else "",
         "direction": settings.direction if settings else "",
-        "posting_mode": str(settings.posting_mode) if settings else "",
-        "purchase_ledger": settings.purchase_ledger if settings else "",
-        "tax_ledger": settings.tax_ledger if settings else "",
-        "tcs_ledger": settings.tcs_ledger if settings else "",
-        "round_off_ledger": settings.round_off_ledger if settings else "",
-        "stock_item_name": settings.stock_item_name if settings else "",
-        "stock_item_hsn": settings.stock_item_hsn if settings else "",
-        "stock_item_uom": settings.stock_item_uom if settings else "",
-        "godown_name": settings.godown_name if settings else "",
-        "item_mapping_count": len(settings.item_mappings) if settings else 0,
         "training": {
             "onboarding_status": training.onboarding_status if training else "",
             "business_process": training.business_process if training else "",
@@ -252,7 +244,7 @@ def build_ai_parser_context(
             ),
             "extraction_instructions": training.extraction_instructions if training else "",
             "validation_rules": training.validation_rules if training else [],
-            "posting_expectations": training.posting_expectations if training else "",
+            "exception_examples": training.exception_examples if training else "",
             "llm_ready": training.llm_ready if training else False,
             "llm_policy": training.llm_policy if training else "review_only",
         },
@@ -460,14 +452,27 @@ def request_external_ai_suggestions(
         started = time.monotonic()
         req = urlrequest.Request(resolved.endpoint, data=body, headers=headers, method="POST")
         with urlrequest.urlopen(req, timeout=resolved.timeout_seconds) as response:
-            raw = response.read().decode("utf-8")
+            data = response.read(2_000_001)
+            if len(data) > 2_000_000:
+                raise ValueError("Provider response exceeds the extraction size limit.")
+            raw = data.decode("utf-8")
         latency_ms = int((time.monotonic() - started) * 1000)
         parsed = json.loads(raw) if raw else {}
+        if not isinstance(parsed, dict):
+            raise ValueError("Webhook returned an invalid extraction envelope.")
+        candidate = parsed.get("suggestions") or parsed.get("fields") or {}
+        if not isinstance(candidate, dict):
+            raise ValueError("Webhook returned invalid extraction fields.")
+        from .extraction_common import parse_json_block, shape_suggestions
+        fields = {( "supplier_name" if name == "supplier" else name): value if isinstance(value, dict) else {"value": value} for name, value in candidate.items() if name != "lines"}
+        validated, error = parse_json_block(json.dumps({"fields": fields, "lines": candidate.get("lines", [])}))
+        if error:
+            raise ValueError(error)
         return _ai_result(
             provider=parsed.get("provider") or AI_PROVIDER_WEBHOOK,
             configured=True,
             policy=resolved.policy,
-            suggestions=parsed.get("suggestions") or parsed.get("fields") or {},
+            suggestions=shape_suggestions(validated),
             model=parsed.get("model") or parsed.get("engine") or "",
             latency_ms=latency_ms,
         )

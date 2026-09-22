@@ -40,7 +40,7 @@ def test_webhook_ai_provider_normalizes_result(monkeypatch):
         def __exit__(self, exc_type, exc, traceback):
             return False
 
-        def read(self):
+        def read(self, size=-1):
             return json.dumps(
                 {
                     "provider": "fixture-llm",
@@ -80,5 +80,5 @@ def test_webhook_ai_provider_normalizes_result(monkeypatch):
     assert captured["body"]["mode"] == "review_suggestions"
     assert result["provider"] == "fixture-llm"
     assert result["model"] == "invoice-model-v1"
-    assert result["suggestions"]["invoice_number"] == "INV-100"
+    assert result["suggestions"]["invoice_number"]["value"] == "INV-100"
     assert result["error"] == ""

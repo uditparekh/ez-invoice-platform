@@ -2,7 +2,7 @@ name: Platform verification
 
 on:
   push:
-    branches: [main, 'codex/pkg34-complete', 'codex/calm-finance-release', 'codex/pkg35a-connector-reliability', 'codex/pkg35b-client-profile', 'codex/pkg35c-frozen-approval', 'codex/pkg36-master-sync', 'codex/pkg36b-posting-reconciliation']
+    branches: [main, 'codex/pkg34-complete', 'codex/calm-finance-release', 'codex/pkg35a-connector-reliability', 'codex/pkg35b-client-profile', 'codex/pkg35c-frozen-approval', 'codex/pkg36-master-sync', 'codex/pkg36b-posting-reconciliation', 'codex/pkg37-extraction-evidence']
   pull_request:
 
 permissions:
@@ -66,6 +66,7 @@ jobs:
           EZ_WEB_API_BASE_URL=http://127.0.0.1:8000 pnpm start > /tmp/siftentry-qa-web.log 2>&1 &
           curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:8000/health || { tail -80 /tmp/siftentry-qa-api.log; exit 1; }
           curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://localhost:3000/login -o /dev/null
+          PYTHONPATH=../.. EZ_API_ALLOW_DEV_BOOTSTRAP=true EZ_API_DATABASE_URL=sqlite:////tmp/siftentry-ui-tests.db EZ_API_UPLOAD_DIRECTORY=/tmp/siftentry-ui-uploads EZ_API_EMAIL_PROVIDER=memory python -m siftentry_app.backend.worker > /tmp/siftentry-qa-worker.log 2>&1 &
       - name: Light, dark, mobile and reporting regressions
         run: pnpm e2e --workers=1 --max-failures=1
       - uses: actions/upload-artifact@v4
