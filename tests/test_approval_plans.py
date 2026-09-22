@@ -18,6 +18,7 @@ from tests.test_api import (
     _submit_result,
     approve_with_preview,
     _invite_and_accept,
+    CONNECTOR_HEADERS,
 )
 
 
@@ -301,7 +302,16 @@ def test_edit_vs_claim_never_posts_changed_unapproved_values(tmp_path, race):
 
         def claim():
             barrier.wait()
-            return _claim(client).json()["jobs"]
+            # Race only the claim against the edit. The convenience _claim helper
+            # also syncs masters and requests execution, which are separate
+            # operations and may correctly reject a concurrently changed profile.
+            response = client.post(
+                "/api/v1/connectors/tally/jobs/claim",
+                json={"workspace_id": "neel-prod", "limit": 5, "reconciliation_protocol": 1},
+                headers=CONNECTOR_HEADERS,
+            )
+            assert response.status_code == 200, response.text
+            return response.json()["jobs"]
 
         with ThreadPoolExecutor(2) as pool:
             editing = pool.submit(edit)
