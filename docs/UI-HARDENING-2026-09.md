@@ -38,8 +38,11 @@ emails, accounting credentials or live postings are involved.
 
 - Backend: **285 tests passed**. Only existing SWIG/Python deprecation warnings.
 - Web: typecheck, lint and production build.
-- Browser suite: **49 tests**, including the existing approval-plan, master-sync,
-  extraction-evidence and reporting regressions plus **14 new UI tests**.
+- Browser suite: **50 tests**, including the existing approval-plan, master-sync,
+  extraction-evidence and reporting regressions plus **15 new UI tests**.
+- A Linux CI failure exposed review cards expanding to 355px on a 320px screen
+  with wider fallback fonts. Explicit zero-minimum grid tracks and bounded cards
+  fix the layout; a system-ui/Arial/Verdana regression guards this case.
 - Sign-in control bounds: 320, 375, 390, 768, 1024 and 1440px in both themes.
 - All 20 top-level product routes: 375, 768 and 1024px in both themes; existing
   core-workflow tests also cover 320, 390 and 1440px. This is not every possible

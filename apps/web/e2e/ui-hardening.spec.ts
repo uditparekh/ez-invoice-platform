@@ -397,3 +397,29 @@ for (const width of [375, 768, 1024]) {
     expect(errors).toEqual([]);
   });
 }
+
+test("review cards stay bounded with wider system fallback fonts", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await demo(page);
+  await page.goto("/app/review");
+  const cards = page.locator("[data-review-field]");
+  await expect(cards.first()).toBeVisible();
+  for (const font of ["system-ui", "Arial", "Verdana"]) {
+    await page.addStyleTag({
+      content: `body { font-family: ${font}, sans-serif !important; }`,
+    });
+    for (const card of await cards.all()) {
+      await contained(card, 320, 200);
+      expect(
+        await card.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth + 1,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(321);
+  }
+});

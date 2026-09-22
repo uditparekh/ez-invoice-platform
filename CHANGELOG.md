@@ -14,8 +14,10 @@ All notable platform changes will be recorded here.
   deletion from Save, and simplify the invoice-review heading hierarchy.
 - Make demo previews and read-only Settings explicit; label Settings controls,
   strengthen helper-text contrast, and align extraction copy with shipped behavior.
-- Add 14 browser regressions for breakpoints, long names, focus, themes, large USD
+- Add 15 browser regressions for breakpoints, long names, focus, themes, large USD
   amounts, Settings permissions and all 20 product routes. Posting logic is unchanged.
+- Bound review-card grid tracks and metadata pills for wider fallback fonts; Linux
+  CI exposed a narrow-screen overflow masked by the previous shell clipping.
 - See docs/UI-HARDENING-2026-09.md for verification and acceptance limits.
 
 ### pkg37 — scoped extraction lessons and measured regression checks

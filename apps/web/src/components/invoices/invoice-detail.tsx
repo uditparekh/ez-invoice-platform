@@ -1055,7 +1055,11 @@ function ReviewWorkspace({
             />
             <ReviewCommandPill
               label="Attention"
-              value={needsAttention ? `${needsAttention} fields` : "Clean"}
+              value={
+                needsAttention
+                  ? `${needsAttention} field${needsAttention === 1 ? "" : "s"}`
+                  : "Clean"
+              }
               tone={needsAttention ? "warning" : "success"}
             />
             <ReviewCommandPill
@@ -1387,7 +1391,7 @@ function ReviewCommandPill({
     <span
       className={cn(
         "inline-flex h-10 min-w-0 items-center gap-2 rounded-full border px-3 text-xs font-semibold",
-        wide ? "max-w-[320px]" : "max-w-[190px]",
+        wide ? "max-w-[min(100%,320px)]" : "max-w-[min(100%,190px)]",
         tone === "success"
           ? "border-success/25 bg-success-soft text-success"
           : tone === "warning"
@@ -1447,9 +1451,9 @@ function ReviewIntelligencePanel({
   const suggestedEntries = Object.entries(review.suggested_patch ?? {});
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 2xl:grid-cols-[240px_1fr]">
-        <div className="rounded-xl border border-line bg-canvas p-4">
+    <div className="min-w-0 space-y-3">
+      <div className="grid min-w-0 grid-cols-1 gap-3 2xl:grid-cols-[240px_minmax(0,1fr)]">
+        <div className="min-w-0 rounded-xl border border-line bg-canvas p-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
             <Sparkles size={15} className="text-cyan-ink" />
             AI review score
@@ -1475,12 +1479,12 @@ function ReviewIntelligencePanel({
           </div>
           <p className="mt-3 text-xs font-medium leading-5 text-ink-secondary">
             {review.needs_attention
-              ? `${review.needs_attention} item${review.needs_attention === 1 ? "" : "s"} need accountant review.`
+              ? `${review.needs_attention} item${review.needs_attention === 1 ? " needs" : "s need"} accountant review.`
               : "Core fields look ready for validation."}
           </p>
         </div>
 
-        <div className="grid gap-3 2xl:grid-cols-2">
+        <div className="grid min-w-0 grid-cols-1 gap-3 2xl:grid-cols-2">
           <ReviewInsightCard
             title={`${review.detected.country_name} · ${review.detected.currency}`}
             detail={`${review.detected.invoice_format} · ${review.detected.tax_mode}`}
@@ -1503,7 +1507,7 @@ function ReviewIntelligencePanel({
         </div>
       </div>
 
-      <div className="grid gap-2 2xl:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-2">
         {fieldPreview.map((field) => (
           <ReviewFieldCard
             key={field.field_path}
@@ -1563,7 +1567,7 @@ function ReviewInsightCard({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-canvas p-4",
+        "min-w-0 rounded-xl border bg-canvas p-4 [overflow-wrap:anywhere]",
         severityBorder(severity),
       )}
     >
@@ -1602,8 +1606,9 @@ function ReviewFieldCard({
     <button
       type="button"
       onClick={onSelect}
+      data-review-field={field.field_path}
       className={cn(
-        "rounded-xl border bg-canvas p-3 text-left transition-colors hover:bg-accent-soft",
+        "min-w-0 max-w-full rounded-xl border bg-canvas p-3 text-left transition-colors hover:bg-accent-soft [overflow-wrap:anywhere]",
         severityBorder(field.severity),
         active && "border-accent bg-accent-soft shadow-sm",
       )}
