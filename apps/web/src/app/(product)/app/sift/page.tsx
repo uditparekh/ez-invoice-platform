@@ -32,7 +32,7 @@ function isSiftableInvoice(invoice: Invoice) {
 
 /**
  * Sift mode — UI Spec §7.
- * Full-screen, always-dark triage cockpit: one flagged decision per invoice,
+ * Focused triage workspace: one flagged decision per invoice,
  * one keypress per decision. A approve · E edit (escalates to Review
  * Workspace) · S skip · J/K next/prev · Esc exit.
  */
@@ -194,10 +194,10 @@ export default function SiftModePage() {
   const cleared = seeded && !loading && queue.length === 0;
 
   return (
-    <div className="dark min-h-[calc(100vh-64px)] bg-canvas text-ink">
+    <div className="min-h-[calc(100vh-64px)] bg-canvas text-ink">
       <main className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6 lg:px-8">
         {/* chrome: mode label · progress · exit */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan/20 bg-cyan/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-ink">
             <Sparkles size={14} />
             Sift mode
@@ -213,7 +213,7 @@ export default function SiftModePage() {
             )}
             <Link
               href="/app/invoices"
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-semibold text-ink-secondary transition-colors hover:bg-surface-strong"
               title="Exit Sift mode (Esc)"
             >
               Exit
@@ -233,7 +233,7 @@ export default function SiftModePage() {
             <LoadingState label="Preparing sift queue" />
           </div>
         ) : cleared ? (
-          <div className="mt-6 grid min-h-[480px] place-items-center rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-2xl shadow-black/30">
+          <div className="mt-6 grid min-h-[480px] place-items-center rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
             <div>
               <PartyPopper className="mx-auto text-cyan-ink" size={40} />
               <h1 className="mt-5 text-3xl font-semibold sm:text-4xl">
@@ -257,10 +257,10 @@ export default function SiftModePage() {
             </div>
           </div>
         ) : active && flag ? (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/30">
+          <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
             <div className="grid gap-0 xl:grid-cols-[minmax(360px,1.05fr)_minmax(420px,0.95fr)]">
               {/* PDF stage */}
-              <div className="relative border-b border-line bg-shell p-5 xl:border-b-0 xl:border-r">
+              <div className="relative min-w-0 border-b border-line bg-shell p-3 sm:p-5 xl:border-b-0 xl:border-r">
                 <div className="relative h-[540px] overflow-hidden rounded-2xl border border-line bg-surface">
                   {pdfUrl ? (
                     <object
@@ -287,13 +287,13 @@ export default function SiftModePage() {
               </div>
 
               {/* decision column */}
-              <div className="flex flex-col p-5">
-                <div className="rounded-2xl border border-line bg-surface-strong p-5">
+              <div className="flex min-w-0 flex-col p-3 sm:p-5">
+                <div className="min-w-0 rounded-xl border border-line bg-surface-strong p-3 sm:p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
                     {active.supplier.name || "Supplier pending"} ·{" "}
                     {formatDate(active.invoice_date)}
                   </p>
-                  <h1 className="mt-1.5 break-words font-mono text-3xl font-semibold tracking-tight sm:text-4xl">
+                  <h1 className="mt-1.5 break-words font-mono text-xl font-semibold tracking-tight sm:text-4xl">
                     {formatCurrency(active.total, active.currency)}
                   </h1>
                   <p className="mt-1.5 text-sm font-medium text-ink-secondary">
@@ -352,19 +352,19 @@ export default function SiftModePage() {
                     Approve &amp; next
                     <KeyChip>A</KeyChip>
                   </button>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <button
                       type="button"
                       onClick={escalateCurrent}
-                      className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-semibold text-ink-secondary transition-colors hover:bg-surface-strong"
                     >
-                      Edit in Workspace
+                      Edit invoice
                       <KeyChip>E</KeyChip>
                     </button>
                     <button
                       type="button"
                       onClick={skipCurrent}
-                      className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-semibold text-ink-secondary transition-colors hover:bg-surface-strong"
                     >
                       Skip
                       <KeyChip>S</KeyChip>
@@ -461,7 +461,7 @@ function SiftPdfPlaceholder() {
 
 function KeyChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="mx-0.5 inline-grid min-w-6 place-items-center rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-cyan-ink">
+    <span className="mx-0.5 inline-grid min-w-6 shrink-0 place-items-center rounded-md border border-current/20 px-1.5 py-0.5 font-mono text-xs font-semibold text-inherit">
       {children}
     </span>
   );

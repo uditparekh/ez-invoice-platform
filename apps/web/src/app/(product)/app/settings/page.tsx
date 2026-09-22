@@ -1,5 +1,7 @@
 "use client";
 
+import { useTheme } from "@/lib/theme";
+
 import {
   Bell,
   Building2,
@@ -158,6 +160,7 @@ type OrgSettings = {
 };
 
 type OrgSettingsState = {
+  canEdit: boolean;
   settings: OrgSettings | null;
   status: "loading" | "ready" | "saving" | "saved" | "error";
   error: string;
@@ -165,7 +168,13 @@ type OrgSettingsState = {
 };
 
 function useOrgSettings(): OrgSettingsState {
-  const { activeOrganizationId } = useAuth();
+  const { activeOrganizationId, user } = useAuth();
+  const role = user?.memberships.find(
+    (membership) => membership.organization_id === activeOrganizationId,
+  )?.role;
+  const canEdit =
+    user?.email.toLowerCase() !== "demo@siftentry.com" &&
+    (role === "owner" || role === "admin");
   const [settings, setSettings] = useState<OrgSettings | null>(null);
   const [status, setStatus] = useState<OrgSettingsState["status"]>("loading");
   const [error, setError] = useState("");
@@ -197,6 +206,7 @@ function useOrgSettings(): OrgSettingsState {
   }, [activeOrganizationId]);
 
   function save(next: OrgSettings) {
+    if (!canEdit) return;
     const previous = settings;
     setSettings(next); // optimistic
     setStatus("saving");
@@ -231,10 +241,17 @@ function useOrgSettings(): OrgSettingsState {
     })();
   }
 
-  return { settings, status, error, save };
+  return { settings, status, error, save, canEdit };
 }
 
 function SyncState({ org }: { org: OrgSettingsState }) {
+  if (!org.canEdit)
+    return (
+      <p className="text-xs leading-5 text-ink-muted">
+        Read-only settings. A workspace owner or admin can update these
+        preferences.
+      </p>
+    );
   if (org.status === "error")
     return <p className="text-xs font-medium text-danger">{org.error}</p>;
   return (
@@ -266,7 +283,7 @@ function OrganizationPane({ org }: { org: OrgSettingsState }) {
       detail="Defaults that frame every invoice, connector, and mapping."
     >
       <Field label="Organization name">
-        <p className="flex h-12 items-center rounded-xl border border-line bg-surface-subtle px-4 text-sm font-semibold text-ink">
+        <p className="min-h-12 break-words rounded-xl border border-line bg-surface-subtle px-4 py-3 text-sm font-semibold text-ink [overflow-wrap:anywhere]">
           {orgName}
         </p>
         <Hint>Managed by the workspace owner.</Hint>
@@ -283,6 +300,7 @@ function OrganizationPane({ org }: { org: OrgSettingsState }) {
         </div>
         <Button
           variant="secondary"
+          disabled={user?.email.toLowerCase() === "demo@siftentry.com"}
           onClick={() => setWorkspaceDialogOpen(true)}
         >
           <Plus size={14} />
@@ -296,6 +314,12 @@ function OrganizationPane({ org }: { org: OrgSettingsState }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Default currency">
           <Select
+            label="Default currency"
+            disabled={
+              !org.canEdit ||
+              org.status === "loading" ||
+              org.status === "saving"
+            }
             value={settings?.default_currency ?? "USD"}
             onChange={(currency) =>
               settings && org.save({ ...settings, default_currency: currency })
@@ -311,6 +335,12 @@ function OrganizationPane({ org }: { org: OrgSettingsState }) {
         </Field>
         <Field label="Default country / tax">
           <Select
+            label="Default country / tax"
+            disabled={
+              !org.canEdit ||
+              org.status === "loading" ||
+              org.status === "saving"
+            }
             value={settings?.default_country ?? "auto"}
             onChange={(country) =>
               settings && org.save({ ...settings, default_country: country })
@@ -326,6 +356,10 @@ function OrganizationPane({ org }: { org: OrgSettingsState }) {
       </div>
       <Field label="Primary accounting system">
         <Select
+          label="Primary accounting system"
+          disabled={
+            !org.canEdit || org.status === "loading" || org.status === "saving"
+          }
           value={settings?.primary_accounting_system ?? "tally"}
           onChange={(system) =>
             settings &&
@@ -377,6 +411,12 @@ function RetentionPane({ org }: { org: OrgSettingsState }) {
           <button
             key={value}
             type="button"
+            disabled={
+              !org.canEdit ||
+              org.status === "loading" ||
+              org.status === "saving"
+            }
+            aria-pressed={mode === value}
             onClick={() =>
               settings && org.save({ ...settings, data_retention: value })
             }
@@ -416,7 +456,7 @@ function ProfilePane() {
       detail="How you appear in approvals and the audit trail."
     >
       <div className="flex items-center gap-4">
-        <span className="grid size-14 place-items-center rounded-2xl bg-accent-soft font-display text-lg font-semibold text-accent-ink">
+        <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-accent-soft font-display text-lg font-semibold text-accent-ink">
           {name
             .split(/\s+/)
             .slice(0, 2)
@@ -424,7 +464,7 @@ function ProfilePane() {
             .join("")
             .toUpperCase()}
         </span>
-        <div>
+        <div className="min-w-0 [overflow-wrap:anywhere]">
           <p className="text-base font-semibold text-ink">{name}</p>
           <p className="text-sm font-semibold text-ink-secondary">{email}</p>
         </div>
@@ -479,6 +519,11 @@ function NotificationsPane({ org }: { org: OrgSettingsState }) {
             </span>
             <input
               type="checkbox"
+              disabled={
+                !org.canEdit ||
+                org.status === "loading" ||
+                org.status === "saving"
+              }
               checked={prefs[key] ?? false}
               onChange={(event) =>
                 settings &&
@@ -498,22 +543,7 @@ function NotificationsPane({ org }: { org: OrgSettingsState }) {
 }
 
 function AppearancePane() {
-  const [theme, setThemeState] = useState<"light" | "dark" | "system">(() => {
-    if (typeof window === "undefined") return "light";
-    const saved = window.localStorage.getItem("siftentry-theme");
-    return saved === "dark" || saved === "light" ? saved : "system";
-  });
-
-  function apply(next: "light" | "dark" | "system") {
-    setThemeState(next);
-    const dark =
-      next === "dark" ||
-      (next === "system" &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
-    document.documentElement.classList.toggle("dark", dark);
-    if (next === "system") window.localStorage.removeItem("siftentry-theme");
-    else window.localStorage.setItem("siftentry-theme", next);
-  }
+  const { theme, setTheme: apply } = useTheme();
 
   return (
     <Pane title="Appearance" detail="Light, dark, or follow your device.">
@@ -529,6 +559,7 @@ function AppearancePane() {
             key={value}
             type="button"
             onClick={() => apply(value)}
+            aria-pressed={theme === value}
             className={cn(
               "flex flex-col items-center gap-2 rounded-2xl border bg-surface py-6 transition-all",
               theme === value
@@ -561,7 +592,7 @@ function Pane({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-line bg-surface p-6 shadow-card">
+    <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-6">
       <h2 className="text-lg font-semibold text-ink">{title}</h2>
       <p className="mt-1 text-sm font-semibold text-ink-secondary">{detail}</p>
       <div className="mt-5 space-y-4">{children}</div>
@@ -581,16 +612,22 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Select({
+  label,
+  disabled,
   value,
   onChange,
   options,
 }: {
+  label: string;
+  disabled?: boolean;
   value: string;
   onChange: (value: string) => void;
   options: [string, string][];
 }) {
   return (
     <select
+      aria-label={label}
+      disabled={disabled}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className="h-12 w-full rounded-xl border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink outline-none transition-colors focus:border-accent"

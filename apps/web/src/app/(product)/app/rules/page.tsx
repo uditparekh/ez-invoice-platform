@@ -75,12 +75,12 @@ export default function RulesPage() {
         description="Accounting mappings, posting controls, correction history, and measured extraction checks."
         action={
           profiles.length > 1 ? (
-            <label className="flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-semibold text-ink">
+            <label className="flex min-h-11 w-full min-w-0 max-w-sm items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-semibold text-ink">
               Profile
               <select
                 value={profile?.id ?? ""}
                 onChange={(event) => setProfileId(event.target.value)}
-                className="bg-transparent font-medium text-accent-ink outline-none"
+                className="h-11 min-w-0 flex-1 truncate bg-transparent font-medium text-accent-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {profiles.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>

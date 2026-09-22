@@ -47,10 +47,10 @@ export default function LoginPage() {
         </p>
       </section>
 
-      <section className="flex min-h-screen flex-col bg-surface px-6 py-6 sm:px-10 lg:px-16">
-        <div className="flex items-center justify-between lg:justify-end">
-          <div className="lg:hidden">
-            <BrandMark size="lg" />
+      <section className="flex min-h-screen min-w-0 flex-col bg-surface px-4 py-6 sm:px-10 lg:px-16">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:flex lg:justify-end">
+          <div className="min-w-0 lg:hidden">
+            <BrandMark />
           </div>
           <ThemeToggle />
         </div>

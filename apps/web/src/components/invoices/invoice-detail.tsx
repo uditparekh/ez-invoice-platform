@@ -418,22 +418,12 @@ function InvoiceDetail({
       <article className="mx-auto w-full max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8">
         <div className="mb-4 flex flex-col gap-4 border-b border-line pb-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-ink-secondary">
-              <button
-                type="button"
-                onClick={onCloseReview}
-                className="text-ink-muted transition-colors hover:text-accent-ink"
-              >
-                Invoices
-              </button>{" "}
-              /{" "}
-              <span className="text-ink">
-                {invoice.supplier.name || "Supplier pending"} ·{" "}
-                {invoice.invoice_number || "Number pending"}
+            <h2 className="break-words text-base font-semibold text-ink [overflow-wrap:anywhere]">
+              {invoice.supplier.name || "Supplier pending"}
+              <span className="font-medium text-ink-secondary">
+                {" "}
+                · {invoice.invoice_number || "Number pending"}
               </span>
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold leading-tight text-ink sm:text-3xl">
-              Review Workspace
             </h2>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">

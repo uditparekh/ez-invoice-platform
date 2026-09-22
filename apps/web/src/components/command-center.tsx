@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { setTheme } from "@/lib/theme";
 import { useWorkspaceInvoices } from "@/hooks/use-workspace-invoices";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -71,8 +72,8 @@ const commands: Command[] = [
   {
     id: "act-profile",
     group: "Actions",
-    label: "New client profile",
-    hint: "4-minute wizard",
+    label: "Manage client profiles",
+    hint: "company, connection, and posting rules",
     keywords: "client profile onboarding wizard new create",
     icon: <Plus size={16} />,
     run: (router) => router.push("/app/client-profiles"),
@@ -94,8 +95,7 @@ const commands: Command[] = [
     icon: <Moon size={16} />,
     run: () => {
       const dark = !document.documentElement.classList.contains("dark");
-      document.documentElement.classList.toggle("dark", dark);
-      window.localStorage.setItem("siftentry-theme", dark ? "dark" : "light");
+      setTheme(dark ? "dark" : "light");
     },
   },
   {

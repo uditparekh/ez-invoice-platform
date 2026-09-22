@@ -51,7 +51,7 @@ export function FormatRegistry() {
             <Sparkles size={15} className="mr-1.5 inline" />
             New format{untrained.length === 1 ? "" : "s"} detected
           </p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-accent-ink/80">
+          <p className="mt-1 text-xs font-semibold leading-5 text-accent-ink">
             {untrained
               .slice(0, 3)
               .map(

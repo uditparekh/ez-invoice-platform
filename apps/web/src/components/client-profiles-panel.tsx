@@ -1007,6 +1007,7 @@ function ProfileEditor({
       canEdit={canEdit}
     >
       <ContentCard
+        bodyClassName="p-2 sm:p-5"
         title={title}
         subtitle={subtitle}
         action={
@@ -1274,17 +1275,6 @@ function ProfileEditor({
                       Set default
                     </Button>
                   )}
-                  {selectedProfile && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={removeProfile}
-                      disabled={!canManage || saving}
-                    >
-                      <Trash2 size={14} />
-                      Delete
-                    </Button>
-                  )}
                   <Button
                     size="sm"
                     variant="primary"
@@ -1327,7 +1317,7 @@ function ProfileEditor({
                 <div
                   role="tablist"
                   aria-label="Client profile setup"
-                  className="grid grid-cols-2 gap-2 lg:grid-cols-5"
+                  className="flex gap-1 overflow-x-auto pb-1 lg:grid lg:grid-cols-5 lg:overflow-visible lg:pb-0"
                 >
                   {profileSections.map((section, index) => (
                     <button
@@ -1361,13 +1351,13 @@ function ProfileEditor({
                           ?.focus();
                       }}
                       className={cn(
-                        "min-h-12 rounded-xl border px-3 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                        "min-h-11 shrink-0 whitespace-nowrap rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:whitespace-normal",
                         activeSection === section.id
                           ? "border-accent/40 bg-accent-soft text-accent-ink"
                           : "border-transparent text-ink-secondary hover:bg-canvas",
                       )}
                     >
-                      <span className="mb-0.5 block text-xs opacity-70">
+                      <span className="mb-0.5 hidden text-xs opacity-70 lg:block">
                         0{index + 1}
                       </span>
                       {section.label}
@@ -1389,7 +1379,7 @@ function ProfileEditor({
                   aria-labelledby={`${editorId}-tab-company`}
                   hidden={activeSection !== "company"}
                 >
-                  <div className="rounded-2xl border border-line bg-surface p-4">
+                  <div className="min-w-0 sm:rounded-2xl sm:border sm:border-line sm:bg-surface sm:p-4">
                     <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
@@ -1940,6 +1930,26 @@ function ProfileEditor({
                     : "Save draft"}
                 </Button>
               </div>
+              {selectedProfile && canManage && (
+                <details className="border-t border-line bg-surface px-4 py-3">
+                  <summary className="cursor-pointer py-2 text-sm text-ink-muted">
+                    Profile management
+                  </summary>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pb-2">
+                    <p className="text-sm text-ink-secondary">
+                      Delete this profile only when it is no longer needed.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={removeProfile}
+                      disabled={saving}
+                    >
+                      <Trash2 size={14} /> Delete profile
+                    </Button>
+                  </div>
+                </details>
+              )}
             </section>
           </div>
         </div>
@@ -2706,7 +2716,7 @@ function SettingsPanel({
           <ChevronDown size={16} />
         </span>
       </summary>
-      <div className="border-t border-line p-4">{children}</div>
+      <div className="border-t border-line py-4 sm:p-4">{children}</div>
     </details>
   );
 }
@@ -2741,7 +2751,7 @@ function TrainingProfileSection({
   const samples = trainingProfile.sample_invoices ?? [];
   const sampleInputId = `sample-${selectedProfile?.id ?? "new"}`;
   return (
-    <div className="space-y-5 rounded-2xl border border-line bg-surface p-4">
+    <div className="min-w-0 space-y-5 sm:rounded-2xl sm:border sm:border-line sm:bg-surface sm:p-4">
       <div>
         <h4 className="text-lg font-semibold text-ink">
           {section === "guidance"
@@ -2751,7 +2761,7 @@ function TrainingProfileSection({
         <p className="mt-1 text-sm leading-6 text-ink-secondary">
           {section === "guidance"
             ? "Describe where to find values. Keep accounting destinations in Posting rules. Invoice approval remains mandatory regardless of AI policy."
-            : "Keep representative examples and reviewer notes together. A structured, scored regression test set will follow in the extraction-learning phase."}
+            : "Keep onboarding PDFs and reviewer notes here. Use Extraction checks below for structured expected values, held-out samples, and measured regression results."}
         </p>
       </div>
       {section === "guidance" ? (
@@ -2843,7 +2853,7 @@ function TrainingProfileSection({
               label="Exception examples"
               value={trainingProfile.exception_examples}
               onChange={(value) => onUpdate({ exception_examples: value })}
-              hint="Notes for your reviewer. These examples are stored with the profile but are not currently sent to the AI."
+              hint="These examples guide reviewers and are included in AI extraction context when AI assistance runs. Describe document patterns, not passwords or sensitive account details."
               status={{
                 ready: trainingProfile.exception_examples.trim().length > 0,
                 readyText: "Saved",
@@ -3057,7 +3067,7 @@ function TextField({
           </span>
         )}
         {optional && (
-          <span className="ml-1.5 font-medium normal-case tracking-normal text-ink-muted/70">
+          <span className="ml-1.5 font-medium normal-case tracking-normal text-ink-muted">
             · optional
           </span>
         )}
@@ -3105,7 +3115,7 @@ function FieldGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-canvas p-4">
+    <div className="min-w-0 border-t border-line py-4 sm:rounded-2xl sm:border sm:bg-canvas sm:p-4">
       <p className="text-sm font-semibold text-ink">{title}</p>
       <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
         {detail}

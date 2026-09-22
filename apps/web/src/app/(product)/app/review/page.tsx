@@ -101,12 +101,8 @@ function ReviewPageContent() {
               <ArrowLeft size={16} />
               Invoices
             </Link>
-            <h1 className="mt-3 flex flex-wrap items-baseline gap-x-1 text-3xl font-semibold leading-tight text-ink">
-              <span>Review</span>
-              <span className="text-ink-secondary">/</span>
-              <span className="text-2xl font-semibold text-ink-secondary">
-                Extraction workspace
-              </span>
+            <h1 className="mt-2 text-2xl font-semibold leading-tight text-ink">
+              Invoice review
             </h1>
             <p className="mt-1 text-sm font-semibold text-ink-secondary">
               Verify source evidence, correct fields, and review the proposed

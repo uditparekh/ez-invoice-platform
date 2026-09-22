@@ -1085,7 +1085,7 @@ export function InvoiceWorkspace({
                         : ""}
                     </span>
                     <span className="shrink-0 text-xs font-semibold text-accent-ink">
-                      Train it →
+                      Configure extraction →
                     </span>
                   </Link>
                 )}

@@ -13,8 +13,8 @@ export function PageHeader({
 }) {
   return (
     <section className="border-b border-line bg-canvas px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0 flex-[1_1_24rem] [overflow-wrap:anywhere]">
           <h1 className="flex min-w-0 flex-wrap items-baseline text-2xl font-semibold leading-tight text-ink">
             <span>{title}</span>
             {section && (
@@ -32,7 +32,9 @@ export function PageHeader({
             </p>
           )}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && (
+          <div className="min-w-0 max-w-full flex-[0_1_auto]">{action}</div>
+        )}
       </div>
     </section>
   );

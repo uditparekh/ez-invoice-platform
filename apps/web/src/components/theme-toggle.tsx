@@ -1,37 +1,12 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useTheme } from "@/lib/theme";
 
 import { cn } from "@/lib/utils";
 
-type ThemeMode = "light" | "dark";
-
 export function ThemeToggle() {
-  const [theme, setThemeState] = useState<ThemeMode>("light");
-
-  useEffect(() => {
-    const saved =
-      window.localStorage.getItem("siftentry-theme") ??
-      window.localStorage.getItem("ez-theme");
-    const prefersDark = window.matchMedia(
-      "(prefers-color-scheme: dark)",
-    ).matches;
-    const nextTheme: ThemeMode = saved
-      ? saved === "dark"
-        ? "dark"
-        : "light"
-      : prefersDark
-        ? "dark"
-        : "light";
-    setTheme(nextTheme);
-  }, []);
-
-  function setTheme(nextTheme: ThemeMode) {
-    setThemeState(nextTheme);
-    document.documentElement.classList.toggle("dark", nextTheme === "dark");
-    window.localStorage.setItem("siftentry-theme", nextTheme);
-  }
+  const { resolvedTheme: theme, setTheme } = useTheme();
 
   return (
     <div

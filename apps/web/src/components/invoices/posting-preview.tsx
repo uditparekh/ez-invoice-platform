@@ -9,6 +9,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { apiErrorMessage, formatCurrency } from "@/lib/utils";
+import { useAuth } from "@/components/auth-provider";
 
 type Ledger = { ledger: string; amount: string; side: string; party: boolean };
 type Allocation = {
@@ -65,6 +66,8 @@ export function PostingPreview({
   profileId?: string;
   onChange: (choice: ApprovalChoice) => void;
 }) {
+  const { user, loading: authLoading } = useAuth();
+  const isDemo = user?.email.toLowerCase() === "demo@siftentry.com";
   const [data, setData] = useState<Preview | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -77,6 +80,10 @@ export function PostingPreview({
       setError("");
       setConfirmed(false);
       onChange({ invoiceId, ready: false, tally: true });
+      if (isDemo || authLoading) {
+        setLoading(false);
+        return;
+      }
       try {
         const response = await fetch(
           `/api/invoices/${invoiceId}/posting-preview`,
@@ -109,7 +116,29 @@ export function PostingPreview({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [invoiceId, profileId, revision, onChange]);
+  }, [invoiceId, profileId, revision, onChange, isDemo, authLoading]);
+
+  if (isDemo) {
+    return (
+      <section
+        aria-label="Proposed accounting entry"
+        className="my-4 flex min-w-0 items-start gap-3 rounded-xl border border-line bg-surface-subtle p-4"
+      >
+        <LockKeyhole size={18} className="mt-0.5 shrink-0 text-ink-muted" />
+        <div>
+          <h3 className="text-sm font-semibold text-ink">
+            Demo · read-only accounting preview
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-ink-secondary">
+            Explore the sample invoice and its review evidence below. Generating
+            a posting plan, approving, and posting are disabled in the public
+            demo. In your own workspace, the proposed entry is reviewed before
+            approval.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   const plan = data?.plan;
   const frozen = data?.state === "approved";
@@ -168,8 +197,10 @@ export function PostingPreview({
             <>
               {data.invoice_status === "posting" && (
                 <p className="rounded-xl bg-gold-soft p-3 text-sm text-gold-ink">
-                  If this attempt is not completing, stop the Windows connector and select Reconcile postings.
-                  That check never creates another voucher. Keep uncertain outcomes on hold; do not manually re-enter them.
+                  If this attempt is not completing, stop the Windows connector
+                  and select Reconcile postings. That check never creates
+                  another voucher. Keep uncertain outcomes on hold; do not
+                  manually re-enter them.
                 </p>
               )}
               {data.requires_reapproval && (
@@ -181,13 +212,23 @@ export function PostingPreview({
               <dl className="grid min-w-0 gap-4 sm:grid-cols-2">
                 {[
                   ["Tally company", plan.company],
-                  ["Company identity", plan.company_guid || (frozen ? "Not captured in this legacy approval" : "Sync Tally masters before approval")],
+                  [
+                    "Company identity",
+                    plan.company_guid ||
+                      (frozen
+                        ? "Not captured in this legacy approval"
+                        : "Sync Tally masters before approval"),
+                  ],
                   ["Profile", plan.client_profile_name],
                   ["Voucher", `${plan.voucher_type} · ${plan.invoice_number}`],
                   ["Posting mode", plan.posting_mode],
                   ["Voucher date", plan.voucher_date],
                   ["Invoice total", formatCurrency(plan.total, plan.currency)],
-                  ["Recovery reference", plan.posting_reference || "Legacy plan · no automatic recovery"],
+                  [
+                    "Recovery reference",
+                    plan.posting_reference ||
+                      "Legacy plan · no automatic recovery",
+                  ],
                 ].map(([label, value]) => (
                   <div key={label} className="min-w-0">
                     <dt className="text-xs text-ink-muted">{label}</dt>

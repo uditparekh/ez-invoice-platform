@@ -6,12 +6,14 @@ export function ContentCard({
   action,
   children,
   className = "",
+  bodyClassName = "p-4 sm:p-5",
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  bodyClassName?: string;
 }) {
   return (
     <section
@@ -30,7 +32,7 @@ export function ContentCard({
           <div className="min-w-0 w-full xl:w-auto xl:shrink-0">{action}</div>
         )}
       </div>
-      <div className="min-w-0 p-5">{children}</div>
+      <div className={`min-w-0 ${bodyClassName}`}>{children}</div>
     </section>
   );
 }

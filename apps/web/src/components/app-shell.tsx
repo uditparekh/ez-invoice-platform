@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -28,6 +28,7 @@ import { CreateWorkspaceDialog } from "@/components/create-workspace-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { containDialogFocus } from "@/lib/dialog-focus";
 
 const navGroups = [
   {
@@ -56,6 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     useAuth();
   const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const drawerRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -67,11 +69,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     const previousOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMobileOpen(false);
-      }
-    };
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const drawer = drawerRef.current;
+    drawer?.showModal();
     const closeOnDesktop = () => {
       if (window.innerWidth >= 1024) {
         setMobileOpen(false);
@@ -79,12 +79,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
 
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
     window.addEventListener("resize", closeOnDesktop);
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
+      drawer?.close();
+      previouslyFocused?.focus({ preventScroll: true });
       window.removeEventListener("resize", closeOnDesktop);
     };
   }, [mobileOpen]);
@@ -160,32 +160,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="product-shell min-h-screen overflow-x-hidden bg-canvas">
+    <div className="product-shell min-h-screen bg-canvas">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] flex-col border-r border-line bg-shell lg:flex">
         {nav}
       </aside>
 
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            className="absolute inset-0 bg-black/35"
+      <dialog
+        ref={drawerRef}
+        aria-label="Navigation"
+        onKeyDown={containDialogFocus}
+        className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none w-[286px] max-w-[calc(100%-1.5rem)] border-0 bg-shell p-0 text-ink shadow-pop backdrop:bg-black/40"
+        onCancel={(event) => {
+          event.preventDefault();
+          setMobileOpen(false);
+        }}
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (event.clientX > rect.right || event.clientX < rect.left)
+            setMobileOpen(false);
+        }}
+      >
+        <aside className="relative flex h-full min-h-0 flex-col border-r border-line pb-[env(safe-area-inset-bottom)]">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="absolute right-3 top-3 z-10 size-10 rounded-xl px-0"
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation"
-          />
-          <aside className="relative flex h-full w-[286px] flex-col border-r border-line bg-shell shadow-pop">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="absolute right-3 top-3 z-10 size-10 rounded-xl px-0"
-              onClick={() => setMobileOpen(false)}
-              aria-label="Close navigation"
-            >
-              <X size={18} />
-            </Button>
-            {nav}
-          </aside>
-        </div>
-      )}
+          >
+            <X size={18} />
+          </Button>
+          {nav}
+        </aside>
+      </dialog>
 
       <CreateWorkspaceDialog
         open={workspaceDialogOpen}
@@ -250,7 +258,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={openCommandPalette}
-            className="ml-auto mr-2 grid size-11 place-items-center rounded-full border border-line bg-surface-subtle text-ink-secondary transition-colors hover:border-line-strong hover:text-ink xl:hidden"
+            className="ml-auto mr-2 grid size-11 shrink-0 place-items-center rounded-full border border-line bg-surface-subtle text-ink-secondary transition-colors hover:border-line-strong hover:text-ink xl:hidden"
             aria-label="Search invoices, vendors, and pages"
           >
             <Search size={17} />

@@ -271,7 +271,7 @@ export function ExtractionEvidence({
   return (
     <section
       aria-labelledby={`${id}-title`}
-      className="space-y-5 rounded-2xl border border-line bg-surface p-4 sm:p-6"
+      className="min-w-0 space-y-5 border-t border-line py-5 sm:rounded-2xl sm:border sm:bg-surface sm:p-6"
     >
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
         <div className="min-w-0 flex-1">
@@ -408,7 +408,7 @@ export function ExtractionEvidence({
       {adding && (
         <form
           onSubmit={addSample}
-          className="space-y-5 rounded-xl border border-line-strong bg-canvas p-4"
+          className="min-w-0 space-y-5 border-y border-line-strong py-4 sm:rounded-xl sm:border sm:bg-canvas sm:p-4"
         >
           <fieldset disabled={disabled} className="min-w-0 space-y-5">
             <legend className="text-base font-semibold text-ink">

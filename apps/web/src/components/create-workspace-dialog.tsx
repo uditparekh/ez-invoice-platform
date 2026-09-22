@@ -1,5 +1,7 @@
 "use client";
 
+import { containDialogFocus } from "@/lib/dialog-focus";
+
 import { Building2, LoaderCircle, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -108,23 +110,7 @@ export function CreateWorkspaceDialog({
       ref={dialogRef}
       className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-md border-0 bg-transparent p-0 text-ink backdrop:bg-black/40 backdrop:backdrop-blur-sm"
       aria-labelledby="create-workspace-title"
-      onKeyDown={(event) => {
-        if (event.key !== "Tab") return;
-        const targets = Array.from(
-          event.currentTarget.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]',
-          ),
-        ).filter((element) => element.getClientRects().length > 0);
-        const first = targets[0];
-        const last = targets[targets.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first?.focus();
-        }
-      }}
+      onKeyDown={containDialogFocus}
       onCancel={(event) => {
         event.preventDefault();
         close();
@@ -133,9 +119,9 @@ export function CreateWorkspaceDialog({
         if (event.target === event.currentTarget) close();
       }}
     >
-      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-4 shadow-2xl sm:p-6">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent-ink">
               <Building2 size={20} />
             </span>
@@ -146,11 +132,6 @@ export function CreateWorkspaceDialog({
               >
                 New workspace
               </h2>
-              <p className="mt-1 text-sm leading-6 text-ink-secondary">
-                One workspace per client. Its invoices, profiles, team, and
-                Tally connection stay completely separate from every other
-                workspace.
-              </p>
             </div>
           </div>
           <button
@@ -163,6 +144,10 @@ export function CreateWorkspaceDialog({
             <X size={16} />
           </button>
         </div>
+        <p className="mt-3 text-sm leading-6 text-ink-secondary">
+          Keep each client’s invoices, profiles, team, and Tally connection
+          separate. Use one workspace per Tally company.
+        </p>
 
         <div className="mt-5 space-y-4">
           <label className="block">
@@ -210,11 +195,21 @@ export function CreateWorkspaceDialog({
           )}
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-2">
-          <Button variant="secondary" onClick={close} disabled={saving}>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            onClick={close}
+            disabled={saving}
+          >
             Cancel
           </Button>
-          <Button onClick={() => void submit()} disabled={saving}>
+          <Button
+            variant="primary"
+            className="w-full whitespace-nowrap sm:w-auto"
+            onClick={() => void submit()}
+            disabled={saving}
+          >
             {saving ? (
               <LoaderCircle size={16} className="animate-spin" />
             ) : (

@@ -4,6 +4,20 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### UI hardening — responsive Calm Finance workspace
+
+- Repair narrow-phone sign-in, long-name page headers, viewport-sticky navigation,
+  and modal drawer focus without hiding page overflow.
+- Centralize Light/Dark/System state across Settings, the header and commands;
+  initialize before paint and make Sift respect the same semantic colors.
+- Flatten mobile profile-form spacing, use compact section tabs, separate profile
+  deletion from Save, and simplify the invoice-review heading hierarchy.
+- Make demo previews and read-only Settings explicit; label Settings controls,
+  strengthen helper-text contrast, and align extraction copy with shipped behavior.
+- Add 14 browser regressions for breakpoints, long names, focus, themes, large USD
+  amounts, Settings permissions and all 20 product routes. Posting logic is unchanged.
+- See docs/UI-HARDENING-2026-09.md for verification and acceptance limits.
+
 ### pkg37 — scoped extraction lessons and measured regression checks
 
 - Add independently confirmed learning/held-out PDF benchmarks with structured
