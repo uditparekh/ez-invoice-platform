@@ -64,7 +64,7 @@ jobs:
         run: |
           EZ_API_ALLOW_DEV_BOOTSTRAP=true EZ_API_DATABASE_URL=sqlite:////tmp/siftentry-ui-tests.db EZ_API_UPLOAD_DIRECTORY=/tmp/siftentry-ui-uploads EZ_API_EMAIL_PROVIDER=memory python -m uvicorn siftentry_app.backend.main:app --app-dir ../.. --host 127.0.0.1 --port 8000 > /tmp/siftentry-qa-api.log 2>&1 &
           EZ_WEB_API_BASE_URL=http://127.0.0.1:8000 pnpm start > /tmp/siftentry-qa-web.log 2>&1 &
-          curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:8000/health
+          curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:8000/health || { tail -80 /tmp/siftentry-qa-api.log; exit 1; }
           curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://localhost:3000/login -o /dev/null
       - name: Light, dark, mobile and reporting regressions
         run: pnpm e2e --workers=1 --max-failures=1

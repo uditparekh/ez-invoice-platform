@@ -174,8 +174,12 @@ def test_inventory_and_accounting_allocations_must_match(field, value):
         b"<html/>",
         b"<ENVELOPE><HEADER><STATUS>0</STATUS></HEADER></ENVELOPE>",
         b"<!DOCTYPE foo><ENVELOPE/>",
+        '<!DOCTYPE x [<!ENTITY test "expanded">]><ENVELOPE>&test;</ENVELOPE>'.encode(
+            "utf-16"
+        ),
         b"x" * (rec.MAX_BYTES + 1),
     ],
+    ids=["html", "unsuccessful-export", "doctype", "utf16-entity", "oversized"],
 )
 def test_partial_unsafe_and_oversized_results_are_held(monkeypatch, data):
     plan, _ = plan_and_voucher()

@@ -12,12 +12,12 @@ import re
 from decimal import Decimal, InvalidOperation
 from xml.etree import ElementTree as ET
 
-import requests
-
 try:
-    from .tally_master_sync import read_collection, MasterSyncError
-except ImportError:
-    from tally_master_sync import read_collection, MasterSyncError
+    import requests
+except (
+    ModuleNotFoundError
+):  # API verifies evidence without connector HTTP dependencies.
+    requests = None
 
 MAX_BYTES = 2 * 1024 * 1024
 MAX_PROOF_BYTES = 256 * 1024
@@ -32,6 +32,7 @@ def safe_xml(data):
         data = data.encode()
     if (
         len(data) > MAX_BYTES
+        or b"\x00" in data
         or b"<!DOCTYPE" in data.upper()
         or b"<!ENTITY" in data.upper()
     ):
@@ -66,6 +67,11 @@ def reference_from_plan(plan):
 
 
 def company_identity(url, name):
+    # Connector-only imports must not become API startup dependencies.
+    try:
+        from .tally_master_sync import read_collection, MasterSyncError
+    except ImportError:
+        from tally_master_sync import read_collection, MasterSyncError
     try:
         matches = [r for r in read_collection(url, "companies") if r["name"] == name]
     except MasterSyncError as exc:
@@ -236,6 +242,10 @@ def verify_voucher(plan, voucher_xml):
 
 
 def lookup_voucher(url, plan, company):
+    if requests is None:
+        raise ReconciliationError(
+            "Connector HTTP support is missing. Reinstall; do not repost."
+        )
     if (
         not company
         or company.get("name") != plan.get("company")

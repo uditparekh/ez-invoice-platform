@@ -181,13 +181,13 @@ export function PostingPreview({
               <dl className="grid min-w-0 gap-4 sm:grid-cols-2">
                 {[
                   ["Tally company", plan.company],
-                  ["Company identity", plan.company_guid || "Sync Tally masters before approval"],
+                  ["Company identity", plan.company_guid || (frozen ? "Not captured in this legacy approval" : "Sync Tally masters before approval")],
                   ["Profile", plan.client_profile_name],
                   ["Voucher", `${plan.voucher_type} · ${plan.invoice_number}`],
                   ["Posting mode", plan.posting_mode],
                   ["Voucher date", plan.voucher_date],
                   ["Invoice total", formatCurrency(plan.total, plan.currency)],
-                  ["Recovery reference", plan.posting_reference || "Legacy plan · reapproval required before posting"],
+                  ["Recovery reference", plan.posting_reference || "Legacy plan · no automatic recovery"],
                 ].map(([label, value]) => (
                   <div key={label} className="min-w-0">
                     <dt className="text-xs text-ink-muted">{label}</dt>
@@ -311,8 +311,12 @@ export function PostingPreview({
                     ? new Date(plan.approved_at).toLocaleString()
                     : ""}
                   . Pending entries require reapproval if accounting values or
-                  posting rules change. Keep the Windows connector running to
-                  collect this entry.
+                  posting rules change.{" "}
+                  {data.invoice_status === "posting"
+                    ? "This attempt is awaiting confirmation; use the recovery guidance above if it stalls."
+                    : data.invoice_status === "posted"
+                      ? "The recorded posting result is available in History."
+                      : "Keep the Windows connector running to collect this entry."}
                 </p>
               )}
             </>
