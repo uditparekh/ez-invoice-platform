@@ -10,12 +10,12 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
-  UploadCloud,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { ExtractionEvidence } from "@/components/client-profiles/extraction-evidence";
 import {
   TallyMasterProvider,
   useMasterNames,
@@ -41,14 +41,17 @@ import { cn, formatCurrency } from "@/lib/utils";
 type RulesTab = "mapping" | "rules" | "vendors" | "training";
 
 export default function RulesPage() {
-  const { activeOrganizationId } = useAuth();
+  const { activeOrganizationId, user } = useAuth();
+  const canEditEvidence = ["owner", "admin", "accountant"].includes(
+    user?.memberships.find((m) => m.organization_id === activeOrganizationId)
+      ?.role ?? "",
+  );
   const { invoices } = useWorkspaceInvoices();
   const {
     profiles,
     loading: profilesLoading,
     saving,
     updateProfile,
-    uploadTrainingSample,
   } = useClientProfiles();
 
   const [tab, setTab] = useState<RulesTab>("mapping");
@@ -69,7 +72,7 @@ export default function RulesPage() {
       <PageHeader
         title="Rules & mapping"
         section={profile ? profile.name : "Client configuration"}
-        description="Ledger mappings, posting controls, vendor memory, and parser training — the logic layer every invoice flows through."
+        description="Accounting mappings, posting controls, correction history, and measured extraction checks."
         action={
           profiles.length > 1 ? (
             <label className="flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-semibold text-ink">
@@ -108,13 +111,13 @@ export default function RulesPage() {
             active={tab === "vendors"}
             onClick={() => setTab("vendors")}
           >
-            Vendor memory
+            Correction history
           </TabButton>
           <TabButton
             active={tab === "training"}
             onClick={() => setTab("training")}
           >
-            Parser training
+            Extraction checks
           </TabButton>
         </div>
       </div>
@@ -148,14 +151,15 @@ export default function RulesPage() {
             invoices={invoices}
           />
         ) : (
-          <TrainingTab
-            profile={profile}
-            invoices={invoices}
-            saving={saving}
-            onUpload={(file, notes) =>
-              uploadTrainingSample(profile.id, file, notes)
-            }
-          />
+          activeOrganizationId && (
+            <ExtractionEvidence
+              key={profile.id}
+              organizationId={activeOrganizationId}
+              profileId={profile.id}
+              canEdit={canEditEvidence}
+              dirty={false}
+            />
+          )
         )}
       </main>
     </div>
@@ -734,13 +738,14 @@ function VendorMemoryTab({
       .sort((a, b) => b.invoices - a.invoices);
   }, [invoices, records]);
 
-  if (records === null) return <LoadingState label="Loading vendor memory" />;
+  if (records === null)
+    return <LoadingState label="Loading correction history" />;
   if (!vendors.length)
     return (
       <EmptyState
         icon={BrainCircuit}
-        title="Vendor memory builds itself"
-        description="Every correction saved in the Review Workspace with the vendor-memory toggle on becomes a learned behavior here."
+        title="No recorded corrections yet"
+        description="Recorded corrections appear here for review. They are not auto-applied; create confirmed label hints in Extraction checks."
       />
     );
 
@@ -749,12 +754,12 @@ function VendorMemoryTab({
       {vendors.slice(0, 9).map((vendor) => {
         const state =
           vendor.flags === 0 && vendor.invoices >= 3
-            ? "Active · touchless"
+            ? "No current flags"
             : vendor.learned > 0
-              ? "Learning"
+              ? "Corrections recorded"
               : vendor.flags > 0
-                ? "Training"
-                : "Watching";
+                ? "Needs review"
+                : "Review history";
         return (
           <article
             key={vendor.name}
@@ -767,9 +772,9 @@ function VendorMemoryTab({
               <span
                 className={cn(
                   "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-                  state.startsWith("Active")
+                  state === "No current flags"
                     ? "bg-success-soft text-success"
-                    : state === "Learning"
+                    : state === "Corrections recorded"
                       ? "bg-cyan-soft text-cyan-ink"
                       : "bg-gold-soft text-gold-ink",
                 )}
@@ -783,180 +788,12 @@ function VendorMemoryTab({
             </p>
             <p className="mt-1 text-sm font-semibold text-ink-muted">
               {vendor.learned
-                ? `${vendor.learned} correction${vendor.learned === 1 ? "" : "s"} learned and auto-applied`
-                : "No learned corrections yet"}
+                ? `${vendor.learned} recorded correction${vendor.learned === 1 ? "" : "s"} · not auto-applied`
+                : "No recorded corrections yet"}
             </p>
           </article>
         );
       })}
-    </div>
-  );
-}
-
-/* ================= tab 4: parser training ================= */
-
-function TrainingTab({
-  profile,
-  invoices,
-  saving,
-  onUpload,
-}: {
-  profile: ClientProfile;
-  invoices: Invoice[];
-  saving: boolean;
-  onUpload: (file: File, notes: string) => Promise<unknown>;
-}) {
-  const fileInput = useRef<HTMLInputElement>(null);
-  const [notice, setNotice] = useState("");
-  const [uploadError, setUploadError] = useState("");
-  const [uploadedCount, setUploadedCount] = useState(0);
-
-  const weakVendors = useMemo(() => {
-    const byVendor = new Map<
-      string,
-      { sum: number; count: number; flags: number }
-    >();
-    for (const invoice of invoices) {
-      const name = invoice.supplier.name || "Unknown supplier";
-      const entry = byVendor.get(name) ?? { sum: 0, count: 0, flags: 0 };
-      if (invoice.confidence != null) {
-        entry.sum +=
-          invoice.confidence <= 1
-            ? invoice.confidence * 100
-            : invoice.confidence;
-        entry.count += 1;
-      }
-      if (invoice.validation_issues.length) entry.flags += 1;
-      byVendor.set(name, entry);
-    }
-    return [...byVendor.entries()]
-      .map(([name, entry]) => ({
-        name,
-        avg: entry.count ? Math.round(entry.sum / entry.count) : null,
-        flags: entry.flags,
-      }))
-      .filter(
-        (vendor) => (vendor.avg != null && vendor.avg < 92) || vendor.flags > 0,
-      )
-      .sort((a, b) => (a.avg ?? 100) - (b.avg ?? 100));
-  }, [invoices]);
-
-  async function handleFiles(files: FileList | null) {
-    if (!files?.length) return;
-    setNotice("");
-    setUploadError("");
-    try {
-      for (const file of Array.from(files)) {
-        await onUpload(file, "Uploaded from Rules › Parser training");
-      }
-      setUploadedCount((count) => count + files.length);
-      setNotice(
-        `${files.length} sample${files.length === 1 ? "" : "s"} uploaded — the parser pre-trains on this client's real formats.`,
-      );
-    } catch (error) {
-      setUploadError((error as Error).message);
-    } finally {
-      if (fileInput.current) fileInput.current.value = "";
-    }
-  }
-
-  return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_1.1fr]">
-      <ContentCard
-        title="Training queue"
-        subtitle="Vendors where extraction confidence or flags say the parser needs more examples"
-      >
-        {weakVendors.length ? (
-          <div className="divide-y divide-line">
-            {weakVendors.slice(0, 6).map((vendor) => (
-              <div
-                key={vendor.name}
-                className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-ink">
-                    {vendor.name}
-                  </p>
-                  <p className="text-xs font-medium text-gold-ink">
-                    {vendor.avg != null
-                      ? `avg confidence ${vendor.avg}%`
-                      : "confidence pending"}
-                    {vendor.flags ? ` · ${vendor.flags} flagged` : ""}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => fileInput.current?.click()}
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-xs font-semibold text-accent-ink transition-colors hover:border-accent hover:bg-accent-soft"
-                >
-                  <UploadCloud size={13} />
-                  Add samples
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm font-semibold text-ink-muted">
-            All vendors ≥92% confidence with no flags — nothing needs training
-            right now.
-          </p>
-        )}
-      </ContentCard>
-
-      <ContentCard
-        title={`Upload training samples · ${profile.name}`}
-        subtitle="2–3 real PDFs per vendor teach layout, tax placement, and invoice-number patterns"
-      >
-        <input
-          ref={fileInput}
-          type="file"
-          accept="application/pdf"
-          multiple
-          className="hidden"
-          onChange={(event) => void handleFiles(event.target.files)}
-        />
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => fileInput.current?.click()}
-          className="grid w-full place-items-center rounded-2xl border-2 border-dashed border-accent/40 bg-accent-soft/40 px-6 py-10 text-center transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-60"
-        >
-          {saving ? (
-            <LoaderCircle size={26} className="animate-spin text-accent-ink" />
-          ) : (
-            <UploadCloud size={26} className="text-accent-ink" />
-          )}
-          <span className="mt-3 text-sm font-semibold text-accent-ink">
-            Drop PDFs here or click to browse
-          </span>
-          <span className="mt-1 text-xs font-semibold text-ink-muted">
-            {(profile.settings.training_profile?.sample_invoices?.length ?? 0) +
-              uploadedCount}{" "}
-            sample
-            {(profile.settings.training_profile?.sample_invoices?.length ?? 0) +
-              uploadedCount ===
-            1
-              ? ""
-              : "s"}{" "}
-            on file · used to pre-train extraction
-          </span>
-        </button>
-        {notice && (
-          <p className="mt-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
-            {notice}
-          </p>
-        )}
-        {uploadError && (
-          <p className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
-            {uploadError}
-          </p>
-        )}
-        <p className="mt-4 text-xs font-semibold leading-5 text-ink-muted">
-          Teach-fields region marking (click a field on the sample → the parser
-          learns its location) ships once extraction returns coordinates —
-          samples uploaded here already improve this vendor&apos;s parsing.
-        </p>
-      </ContentCard>
     </div>
   );
 }

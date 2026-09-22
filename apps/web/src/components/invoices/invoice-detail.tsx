@@ -1326,9 +1326,10 @@ function ReviewWorkspace({
                   className="mt-0.5 size-4 shrink-0 accent-[var(--accent)]"
                 />
                 <span>
-                  Save corrections to vendor memory —{" "}
-                  <span className="font-semibold text-ink">{vendorShort}</span>{" "}
-                  learns these fixes for future invoices.
+                  Record correction history for{" "}
+                  <span className="font-semibold text-ink">{vendorShort}</span>.
+                  This does not auto-apply values to future invoices. Confirm
+                  label hints in Extraction quality checks.
                 </span>
               </label>
               <button
@@ -1770,8 +1771,8 @@ function ReviewEvidenceFocus({
           ))
         ) : (
           <div className="rounded-lg border border-dashed border-line-strong bg-canvas px-3 py-2 text-xs font-semibold text-ink-muted">
-            No source snippet stored yet. Save a correction to create learning
-            evidence for this vendor.
+            No source snippet was located. Check the original PDF before
+            confirming this field; a correction is not source evidence.
           </div>
         )}
       </div>
@@ -2533,13 +2534,17 @@ function PostingActivity({
                 <p className="break-words font-semibold text-ink-secondary">
                   {posting.message}
                 </p>
-                {posting.status === "started" && posting.target === "tally" && !posting.dry_run && (
-                  <p className="mt-2 rounded-lg bg-gold-soft p-3 text-sm text-gold-ink">
-                    If this attempt is not completing, stop the Windows connector and select Reconcile postings.
-                    It checks the original company for an existing voucher without posting again.
-                    Do not manually re-enter or retry an uncertain voucher.
-                  </p>
-                )}
+                {posting.status === "started" &&
+                  posting.target === "tally" &&
+                  !posting.dry_run && (
+                    <p className="mt-2 rounded-lg bg-gold-soft p-3 text-sm text-gold-ink">
+                      If this attempt is not completing, stop the Windows
+                      connector and select Reconcile postings. It checks the
+                      original company for an existing voucher without posting
+                      again. Do not manually re-enter or retry an uncertain
+                      voucher.
+                    </p>
+                  )}
                 <p className="mt-1 text-xs font-medium text-ink-muted">
                   {posting.external_id
                     ? `External ID ${posting.external_id}`

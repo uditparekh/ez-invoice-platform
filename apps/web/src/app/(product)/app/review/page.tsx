@@ -109,8 +109,8 @@ function ReviewPageContent() {
               </span>
             </h1>
             <p className="mt-1 text-sm font-semibold text-ink-secondary">
-              Verify source evidence, correct fields, and save vendor learning
-              before posting.
+              Verify source evidence, correct fields, and review the proposed
+              entry before approval.
             </p>
           </div>
 

@@ -96,13 +96,11 @@ for (const theme of ["light", "dark"]) {
         .getByRole("button", { name: "Add confirmed sample" })
         .click();
       const form = section.locator("form").first();
-      await form
-        .getByLabel("Original PDF", { exact: true })
-        .setInputFiles({
-          name: "benchmark-long-supplier-name-invoice.pdf",
-          mimeType: "application/pdf",
-          buffer: fixturePdf(),
-        });
+      await form.getByLabel("Original PDF", { exact: true }).setInputFiles({
+        name: "benchmark-long-supplier-name-invoice.pdf",
+        mimeType: "application/pdf",
+        buffer: fixturePdf(),
+      });
       const expected = {
         invoice_number: "INV-QA-101",
         invoice_date: "2026-09-22",
@@ -187,6 +185,19 @@ for (const theme of ["light", "dark"]) {
       await expect(
         section.getByRole("button", { name: /Delete sample/ }),
       ).toBeVisible();
+      await page.goto("/app/rules");
+      await page
+        .getByRole("button", { name: "Extraction checks", exact: true })
+        .click();
+      const rulesEvidence = page.getByRole("region", {
+        name: "Extraction quality checks",
+      });
+      await expect(
+        rulesEvidence.getByRole("button", { name: /Delete sample/ }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(width + 1);
     });
   }
 }
