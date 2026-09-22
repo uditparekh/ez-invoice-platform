@@ -375,7 +375,7 @@ export function MasterSnapshotPanel() {
         </p>
       )}
       <p className="text-sm leading-6 text-ink-secondary">
-        On the client’s PC, install connector 0.6.0, open the correct Tally
+        On the client’s PC, install connector 0.7.0, open the correct Tally
         company, click <strong>Stop</strong>, then{" "}
         <strong>Sync Tally masters</strong>. When it finishes, refresh here.
         Restart polling separately when ready. Snapshots older than 24 hours

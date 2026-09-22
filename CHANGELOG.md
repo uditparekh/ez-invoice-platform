@@ -4,6 +4,18 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### pkg36B — company-bound posting reconciliation (connector 0.7.0)
+
+- Freeze company identity and a durable voucher reference in new approvals.
+- Journal reservations before remote writes, require single-use execution
+  permits, and hold new claims while any previous live attempt is unresolved.
+- Add explicit read-only recovery with independently checked voucher evidence,
+  atomic completion, replay safety and event-backed reconciliation in History.
+- Keep missing, conflicting, legacy and unsupported outcomes on hold; never
+  automatically repost. Publish the matching installer and fallback kit together.
+- See docs/PKG36B-RELEASE.md for upgrade/reapproval steps and the outstanding
+  physical Windows/Tally acceptance gate.
+
 ### pkg36A — read-only Tally master discovery (connector 0.6.0)
 
 - Export company identity, ledgers, stock items, units, godowns and voucher types

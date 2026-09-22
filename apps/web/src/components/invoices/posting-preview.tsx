@@ -31,6 +31,7 @@ type Preview = {
   supported: boolean;
   message?: string;
   state?: string;
+  invoice_status?: string;
   requires_reapproval?: boolean;
   plan?: {
     version?: number;
@@ -38,6 +39,8 @@ type Preview = {
     client_profile_id: string;
     client_profile_name: string;
     company: string;
+    company_guid?: string;
+    posting_reference?: string;
     voucher_type: string;
     voucher_date: string;
     posting_mode: string;
@@ -163,6 +166,12 @@ export function PostingPreview({
         ) : (
           plan && (
             <>
+              {data.invoice_status === "posting" && (
+                <p className="rounded-xl bg-gold-soft p-3 text-sm text-gold-ink">
+                  If this attempt is not completing, stop the Windows connector and select Reconcile postings.
+                  That check never creates another voucher. Keep uncertain outcomes on hold; do not manually re-enter them.
+                </p>
+              )}
               {data.requires_reapproval && (
                 <p className="rounded-xl bg-gold-soft p-3 text-sm text-gold-ink">
                   This entry needs a new approval. Validate the current invoice,
@@ -172,11 +181,13 @@ export function PostingPreview({
               <dl className="grid min-w-0 gap-4 sm:grid-cols-2">
                 {[
                   ["Tally company", plan.company],
+                  ["Company identity", plan.company_guid || "Sync Tally masters before approval"],
                   ["Profile", plan.client_profile_name],
                   ["Voucher", `${plan.voucher_type} · ${plan.invoice_number}`],
                   ["Posting mode", plan.posting_mode],
                   ["Voucher date", plan.voucher_date],
                   ["Invoice total", formatCurrency(plan.total, plan.currency)],
+                  ["Recovery reference", plan.posting_reference || "Legacy plan · reapproval required before posting"],
                 ].map(([label, value]) => (
                   <div key={label} className="min-w-0">
                     <dt className="text-xs text-ink-muted">{label}</dt>

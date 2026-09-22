@@ -740,6 +740,7 @@ class TallyConnectorClaimRequest(BaseModel):
     connector_host: str = Field(default="", max_length=200)
     connector_version: str = Field(default="", max_length=40)
     tally_detected: Optional[bool] = None
+    reconciliation_protocol: int = Field(default=0, ge=0, le=1)
 
     @field_validator("workspace_id")
     @classmethod
@@ -770,12 +771,15 @@ class TallyConnectorClaimResponse(BaseModel):
     success: bool = True
     workspace_id: str
     jobs: List[TallyConnectorJob] = Field(default_factory=list)
+    recovery_required: bool = False
+    message: str = ""
 
 
 class TallyConnectorResultItem(BaseModel):
     posting_id: str = Field(min_length=1)
     invoice_id: str = Field(min_length=1)
     success: bool
+    outcome_uncertain: bool = False
     message: str = Field(default="", max_length=2000)
     external_id: Optional[str] = None
     raw: Dict[str, Any] = Field(default_factory=dict)

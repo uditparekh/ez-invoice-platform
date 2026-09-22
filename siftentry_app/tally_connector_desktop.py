@@ -21,6 +21,7 @@ try:
         save_config,
         test_connection,
         sync_masters,
+        reconcile_postings,
         connection_config_error,
         APP_VERSION,
         OutboxUnreadable,
@@ -36,6 +37,7 @@ except ImportError:
         save_config,
         test_connection,
         sync_masters,
+        reconcile_postings,
         connection_config_error,
         APP_VERSION,
         OutboxUnreadable,
@@ -210,7 +212,8 @@ class TallyConnectorWindow:
         actions = [("Save settings", lambda: self.save_settings(notify=True)),
                    ("Test connection", self.test_tally), ("Poll once", self.poll_once_now),
                    ("Start connector", self.start), ("Stop", self.stop),
-                   ("Sync Tally masters", self.sync_tally_masters)]
+                   ("Sync Tally masters", self.sync_tally_masters),
+                   ("Reconcile postings", self.reconcile_pending)]
         for index, (label, action) in enumerate(actions):
             self._button(controls, label, action, primary=label == "Start connector").grid(
                 row=index // 3, column=index % 3, sticky="ew", padx=4, pady=4)
@@ -223,7 +226,7 @@ class TallyConnectorWindow:
             padx=18,
             pady=8,
         )
-        self.running_badge.grid(row=2, column=0, columnspan=3, sticky="ew", padx=4)
+        self.running_badge.grid(row=3, column=0, columnspan=3, sticky="ew", padx=4)
 
         log_outer, log_frame = self._panel(outer)
         log_outer.pack(fill="both", expand=True)
@@ -455,6 +458,25 @@ class TallyConnectorWindow:
             self.events.put({"type": "masters", "status": {"success": False, "message":
                 "Master sync failed unexpectedly. The last good snapshot is preserved. Contact support."}})
 
+    def reconcile_pending(self) -> None:
+        if self._is_busy():
+            self._append_log("Stop the connector and wait for the current operation before reconciliation.")
+            return
+        if not self.save_settings():
+            return
+        self._append_log("Looking up existing vouchers in the original company. This never imports or retries a voucher.")
+        self.worker = threading.Thread(target=self._reconcile_worker, args=(self.config,), daemon=True)
+        self.worker.start()
+
+    def _reconcile_worker(self, config: ConnectorConfig) -> None:
+        try:
+            with self.poll_lock:
+                result = reconcile_postings(config)
+            self.events.put({"type": "recovery", "status": result})
+        except Exception:
+            self.events.put({"type": "recovery", "status": {"success": False, "message":
+                "Recovery could not complete. Preserve recovery files and contact support; do not repost."}})
+
     def _run_check(self, config: ConnectorConfig, diagnostic: bool = False) -> None:
         try:
             with self.poll_lock:
@@ -525,6 +547,8 @@ class TallyConnectorWindow:
                     self.company_status.set("Company identity checked for this snapshot")
                 self.master_status.set("Snapshot saved · mappings need review" if result.get("success") else "Sync failed · see message")
                 self._append_log(result.get("message", "Master sync finished."))
+            elif event.get("type") == "recovery":
+                self._append_log(event["status"].get("message", "Recovery check finished."))
         self.root.after(250, self._drain_events)
 
     def _apply_poll_status(self, status: Dict[str, Any]) -> None:

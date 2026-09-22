@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const allowedPaths = new Set(["diagnostics", "heartbeat", "jobs/claim", "jobs/results", "masters/begin", "masters/submit"]);
+const allowedPaths = new Set(["diagnostics", "heartbeat", "jobs/claim", "jobs/results", "jobs/begin", "jobs/recovery", "jobs/reconcile", "masters/begin", "masters/submit"]);
 const maxBytes = 4 * 1024 * 1024;
 
 function error(message: string, status: number) {

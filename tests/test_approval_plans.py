@@ -156,7 +156,7 @@ def test_token_rotation_and_cosmetic_edit_do_not_invalidate(tmp_path):
         assert repo.get_invoice(invoice).status == "approved"
         result = client.post(
             "/api/v1/connectors/tally/jobs/claim",
-            json={"workspace_id": "neel-prod"},
+            json={"workspace_id": "neel-prod", "reconciliation_protocol": 1},
             headers={"Authorization": "Bearer rotated-secret"},
         )
         assert len(result.json()["jobs"]) == 1
@@ -339,7 +339,7 @@ def test_all_tally_modes_preview_without_mutating_source(tmp_path, mode):
         settings = repo.get_client_profile(profile)
         settings.settings.posting_mode = mode
         before = deepcopy(item.raw_payload)
-        plan = build_plan(item, settings)
+        plan = build_plan(item, settings, "company-guid")
         assert not plan["blocking_issues"]
         assert item.raw_payload == before
         assert plan["ledgers"]

@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .adapters import default_adapters
 from .approval_plans import ApprovalConflict, build_plan, invoice_fingerprint, profile_fingerprint
+from .posting_reconciliation import RecoveryRequest, ExecutionRequest, RecoveryEvidence
 from .tally_masters import MasterUpload, MasterConfirmation
 from .ai_parser import AiExtractorConfig, is_ai_parser_mode
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
@@ -1407,6 +1408,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         def actor_name(actor_id: str) -> str:
             if not actor_id:
                 return "System"
+            if actor_id.startswith("tally-connector:"):
+                return "Tally connector"
             user = repository.get_user(actor_id)
             return (user.full_name or user.email) if user else "Removed user"
 
@@ -1433,14 +1436,15 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             )
         for posting in repository.list_postings_for_invoice(invoice_id, limit=50):
             label = "Dry run" if posting.dry_run else "Posting"
-            outcome = "succeeded" if posting.success else "failed"
+            outcome = "awaiting confirmation" if posting.status == "started" else "succeeded" if posting.success else "failed"
+            reconciled = posting.success and posting.raw.get("reconciliation", {}).get("state") == "matched"
             events.append(
                 {
                     "id": posting.id,
-                    "type": "posting_success" if posting.success else "posting_failure",
-                    "at": posting.created_at.isoformat(),
+                    "type": "posting_pending" if posting.status == "started" else "posting_success" if posting.success else "posting_failure",
+                    "at": posting.updated_at.isoformat(),
                     "actor": actor_name(posting.actor_id),
-                    "title": f"{label} to {posting.target} {outcome}",
+                    "title": "Existing Tally voucher reconciled · no repost" if reconciled else f"{label} to {posting.target} {outcome}",
                     "detail": (posting.message or "")[:300],
                 }
             )
@@ -1612,12 +1616,15 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         frozen = _repo(request).get_approval_plan(invoice_id)
         if invoice.status in {"posting", "posted"} and frozen:
             return {"supported": True, "state": "approved", "requires_reapproval": False,
+                    "invoice_status": invoice.status,
                     "plan": frozen, "previous_version": frozen["version"]}
         profile = _approval_profile(request, invoice, body.client_profile_id, current_user)
         if not profile:
             return {"supported": False, "message": "Frozen accounting-entry previews are currently available for Tally profiles."}
-        current = build_plan(invoice, profile)
-        matches = bool(frozen and frozen["client_profile_id"] == profile.id
+        snapshot = _repo(request).get_master_snapshot(profile)["snapshot"]
+        current = build_plan(invoice, profile, snapshot["company"]["guid"] if snapshot else "")
+        matches = bool(frozen and frozen.get("schema_version") == 2 and frozen["client_profile_id"] == profile.id
+                       and frozen.get("company_guid") == current.get("company_guid")
                        and frozen["invoice_fingerprint"] == invoice_fingerprint(invoice)
                        and frozen["profile_fingerprint"] == profile_fingerprint(profile))
         use_frozen = invoice.status == "approved" and matches
@@ -2118,6 +2125,14 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             target=PostingTarget.TALLY,
             limit=body.limit,
         )
+        if not body.dry_run and _repo(request).connector_recovery_jobs(profile):
+            return TallyConnectorClaimResponse(workspace_id=body.workspace_id, recovery_required=True,
+                message="A previous posting is unresolved. Stop and use Reconcile postings in connector 0.7.0; do not repost.")
+        if invoices and not body.dry_run and body.reconciliation_protocol != 1:
+            raise HTTPException(status_code=409, detail="Update to connector 0.7.0 before live posting.")
+        if invoices and not body.dry_run and not _repo(request).get_master_snapshot(profile)["snapshot"]:
+            return TallyConnectorClaimResponse(success=False, workspace_id=body.workspace_id,
+                message="Stop and Sync Tally masters for this company before live posting. No invoices were claimed.")
         jobs: List[TallyConnectorJob] = []
         for invoice in invoices:
             # Atomic ownership: of two overlapping polls (background + "Poll
@@ -2152,6 +2167,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         return TallyConnectorClaimResponse(
             workspace_id=body.workspace_id,
             jobs=jobs,
+            message="Pending entries may need reapproval after a company identity or plan-version change." if invoices and not jobs else "",
         )
 
     @app.post(
@@ -2174,6 +2190,9 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         postings: List[PostingResult] = []
         errors: List[str] = []
         for item in body.results:
+            if item.outcome_uncertain:
+                errors.append("Uncertain outcomes must be reconciled, not recorded as failed.")
+                continue
             posting = _repo(request).get_posting(item.posting_id)
             if not posting:
                 errors.append(f"Posting {item.posting_id} was not found.")
@@ -2194,17 +2213,25 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 "posting_plan": posting.request_payload.get("posting_plan", {}),
                 "workspace_id": body.workspace_id,
             }
+            if (not posting.dry_run and posting.request_payload.get("posting_plan", {}).get("schema_version") == 2
+                    and not posting.raw.get("execution")):
+                errors.append("Posting has no execution permit. Keep it on hold and contact support.")
+                continue
+            safe_raw = {key: value for key, value in item.raw.items() if key not in {"execution", "reconciliation"}}
             completed, _won = _repo(request).complete_posting_atomic(
                 posting.id,
                 success=item.success,
                 message=item.message or ("Posted to Tally" if item.success else "Tally posting failed."),
                 external_id=item.external_id,
                 issues=[] if item.success else [{"code": "tally_connector", "message": item.message}],
-                raw=item.raw,
+                raw={**posting.raw, **safe_raw},
                 response_payload=response_payload,
             )
             if completed is None:
                 errors.append(f"Posting {item.posting_id} was not found.")
+                continue
+            if bool(completed.success) != item.success:
+                errors.append("Conflicting terminal result preserved for support review; do not repost.")
                 continue
             # The repository commits invoice + posting + audit together.
             postings.append(completed)
@@ -2216,6 +2243,30 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             postings=postings,
             errors=errors,
         )
+
+    @app.post("/api/v1/connectors/tally/jobs/recovery", tags=["connectors"])
+    def connector_recovery(request: Request, body: RecoveryRequest,
+                           authorization: Optional[str] = Header(default=None),
+                           x_siftentry_connector_token: Optional[str] = Header(default=None)):
+        profile = _require_tally_connector_profile(request, body.workspace_id, authorization, x_siftentry_connector_token)
+        return {"success": True, "jobs": [{"posting_id": p.id, "invoice_id": p.invoice_id,
+            "posting_plan": p.request_payload.get("posting_plan", {}), "execution": p.raw.get("execution", {}),
+            "reconciled": bool(p.success and p.raw.get("reconciliation", {}).get("state") == "matched")}
+            for p in _repo(request).connector_recovery_jobs(profile, body.posting_ids)]}
+
+    @app.post("/api/v1/connectors/tally/jobs/begin", tags=["connectors"])
+    def connector_begin(request: Request, body: ExecutionRequest,
+                        authorization: Optional[str] = Header(default=None),
+                        x_siftentry_connector_token: Optional[str] = Header(default=None)):
+        profile = _require_tally_connector_profile(request, body.workspace_id, authorization, x_siftentry_connector_token)
+        return _repo(request).begin_connector_execution(profile, body.posting_id)
+
+    @app.post("/api/v1/connectors/tally/jobs/reconcile", tags=["connectors"])
+    def connector_reconcile(request: Request, body: RecoveryEvidence,
+                            authorization: Optional[str] = Header(default=None),
+                            x_siftentry_connector_token: Optional[str] = Header(default=None)):
+        profile = _require_tally_connector_profile(request, body.workspace_id, authorization, x_siftentry_connector_token)
+        return _repo(request).reconcile_connector_posting(profile, body)
 
     @app.post("/api/v1/connectors/tally/masters/begin", tags=["connectors"])
     def begin_tally_master_sync(

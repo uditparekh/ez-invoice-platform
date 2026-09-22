@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import uuid
 from decimal import Decimal
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -17,7 +18,7 @@ from .adapters import _profiled_legacy_payload, _tally_settings_from_profile
 from .models import ClientProfile, Invoice
 from ..tally_integration import build_tally_xml, _tally_preflight_issues
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class ApprovalConflict(ValueError):
@@ -105,7 +106,7 @@ def _allocation(node: ET.Element) -> dict:
     }
 
 
-def build_plan(invoice: Invoice, profile: ClientProfile) -> dict:
+def build_plan(invoice: Invoice, profile: ClientProfile, company_guid: str = "") -> dict:
     numbers = [invoice.total, invoice.subtotal, invoice.tax_total]
     for line in invoice.lines:
         numbers.extend(
@@ -125,6 +126,8 @@ def build_plan(invoice: Invoice, profile: ClientProfile) -> dict:
     payload = _profiled_legacy_payload(invoice, profile)
     issues = _tally_preflight_issues(payload, config["settings"])
     blocking = [issue["message"] for issue in issues if issue.get("blocking", True)]
+    if not company_guid:
+        blocking.append("Sync Tally masters for this company before approval so its identity can be frozen with the entry.")
     if not profile.settings.company_name.strip():
         blocking.append("Set the exact Tally company name before approval.")
     if invoice.currency.upper() != profile.settings.default_currency.upper():
@@ -143,6 +146,14 @@ def build_plan(invoice: Invoice, profile: ClientProfile) -> dict:
         raise ApprovalConflict(
             "Could not build a Tally voucher. Check the posting rules."
         )
+    # Stable across retries and reapprovals for this invoice, not its number.
+    reference = str(uuid.uuid5(uuid.NAMESPACE_URL, f"siftentry:{invoice.organization_id}:{invoice.id}"))
+    voucher.set("REMOTEID", reference)
+    narration = voucher.find("NARRATION")
+    if narration is None:
+        narration = ET.SubElement(voucher, "NARRATION")
+    narration.text = (narration.text or "") + f" [SiftEntry:{reference}]"
+    xml = ET.tostring(root, encoding="unicode")
     ledgers = [
         _entry(node)
         for node in voucher.findall("ALLLEDGERENTRIES.LIST")
@@ -181,6 +192,7 @@ def build_plan(invoice: Invoice, profile: ClientProfile) -> dict:
         )
     plan = {
         "schema_version": SCHEMA_VERSION,
+        "posting_reference": reference,
         "target": "tally",
         "invoice_id": invoice.id,
         "organization_id": invoice.organization_id,
@@ -189,6 +201,7 @@ def build_plan(invoice: Invoice, profile: ClientProfile) -> dict:
         "invoice_fingerprint": invoice_fingerprint(invoice),
         "profile_fingerprint": profile_fingerprint(profile),
         "company": config["settings"]["company"],
+        "company_guid": company_guid,
         "workspace_id": config["workspace_id"],
         "tally_url": config["settings"]["url"],
         "invoice_number": voucher.findtext("VOUCHERNUMBER", ""),

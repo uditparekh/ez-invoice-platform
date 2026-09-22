@@ -394,6 +394,12 @@ function PostingDetail({
               External reference: {result.external_id}
             </p>
           )}
+          {result.status === "started" && result.target === "tally" && !result.dry_run && (
+            <p className="mt-3 rounded-lg bg-gold-soft p-3 text-gold-ink">
+              Outcome not confirmed. Stop the Windows connector and select Reconcile postings.
+              No new voucher is created by that check. Keep inconclusive results on hold and contact support.
+            </p>
+          )}
           <details className="mt-3">
             <summary className="cursor-pointer">
               Recorded system response
@@ -403,6 +409,7 @@ function PostingDetail({
             </pre>
           </details>
           {result.status === "failed" &&
+            result.target !== "tally" &&
             role &&
             ["owner", "admin", "accountant"].includes(role) && (
               <div className="mt-4">

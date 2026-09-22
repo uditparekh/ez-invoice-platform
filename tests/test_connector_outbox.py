@@ -5,8 +5,16 @@ SiftEntry fails, and a later poll must retry ONLY the acknowledgement — never
 re-post the voucher — even across a process restart.
 """
 from pathlib import Path
+import pytest
 
 from siftentry_app import tally_connector_runtime as rt
+
+
+@pytest.fixture(autouse=True)
+def execution_permit(monkeypatch):
+    # These tests isolate durable storage/ack sequencing. Real permits and
+    # company verification have independent reconciliation acceptance tests.
+    monkeypatch.setattr(rt, "prepare_execution", lambda config, job: {"company": {"name": "NEEL", "guid": "test-guid"}})
 
 
 def _config(tmp_path: Path) -> rt.ConnectorConfig:
@@ -126,7 +134,8 @@ def test_interrupted_batch_keeps_earlier_results_on_disk(tmp_path: Path, monkeyp
         pass
 
     outbox = rt.read_outbox(rt.default_outbox_path(config.config_path))
-    assert [item["posting_id"] for item in outbox] == ["p1"]
+    assert [item["posting_id"] for item in outbox] == ["p1", "p2"]
+    assert outbox[1]["outcome_uncertain"] is True
     assert counters["submits"] == 0  # never reached the ack step; that's fine — it's on disk
 
     # Restart with the cloud working: job 1 is acknowledged, not re-posted.
@@ -135,7 +144,8 @@ def test_interrupted_batch_keeps_earlier_results_on_disk(tmp_path: Path, monkeyp
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not re-post")))
     rt.poll_once(_config(tmp_path))
     assert counters["submits"] == 1
-    assert rt.read_outbox(rt.default_outbox_path(config.config_path)) == []
+    remaining = rt.read_outbox(rt.default_outbox_path(config.config_path))
+    assert [item["posting_id"] for item in remaining] == ["p2"]
 
 
 def test_pending_ack_is_sent_even_when_tally_is_closed(tmp_path: Path, monkeypatch):

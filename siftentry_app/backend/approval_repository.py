@@ -63,7 +63,8 @@ class ApprovalRepository:
                 raise ApprovalConflict(
                     "Validate the current invoice before approving its posting plan."
                 )
-            plan = build_plan(invoice, profile)
+            snapshot = self._master_view(connection, profile)["snapshot"]
+            plan = build_plan(invoice, profile, snapshot["company"]["guid"] if snapshot else "")
             if plan["preview_hash"] != preview_hash:
                 raise ApprovalConflict(
                     "Invoice or posting rules changed. Reload and review the new entry before approving."
@@ -119,8 +120,11 @@ class ApprovalRepository:
         if not row or not profile or not plan or row["status"] != "approved":
             return None
         invoice = self._invoice_from_row(connection, row)
+        snapshot = self._master_view(connection, profile)["snapshot"]
         if (
-            plan["schema_version"] != 1
+            plan["schema_version"] != 2
+            or not snapshot
+            or plan.get("company_guid") != snapshot["company"]["guid"]
             or plan["client_profile_id"] != profile_id
             or plan["organization_id"] != invoice.organization_id
             or profile.organization_id != invoice.organization_id

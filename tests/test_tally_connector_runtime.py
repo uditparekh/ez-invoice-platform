@@ -45,7 +45,8 @@ def test_post_xml_to_tally_accepts_dry_run_without_requests():
     assert result["message"] == "Dry run accepted"
 
 
-def test_poll_once_does_not_claim_jobs_when_tally_is_offline(monkeypatch):
+def test_poll_once_does_not_claim_jobs_when_tally_is_offline(monkeypatch, tmp_path):
+    monkeypatch.setattr(runtime, "send_cloud_heartbeat", lambda *a, **k: {"success": True})
     claimed = {"called": False}
 
     def fake_tally_connection(tally_url: str):
@@ -63,6 +64,7 @@ def test_poll_once_does_not_claim_jobs_when_tally_is_offline(monkeypatch):
             cloud_url="https://app.siftentry.com",
             workspace_id="neel-prod",
             token="secret",
+            config_path=str(tmp_path / "connector_config.json"),
             tally_url="http://localhost:9000",
         )
     )
@@ -73,7 +75,7 @@ def test_poll_once_does_not_claim_jobs_when_tally_is_offline(monkeypatch):
     assert claimed["called"] is False
 
 
-def test_poll_once_posts_claimed_jobs_and_submits_results(monkeypatch):
+def test_poll_once_posts_claimed_jobs_and_submits_results(monkeypatch, tmp_path):
     submitted = {"payload": None}
 
     def fake_tally_connection(tally_url: str):
@@ -106,6 +108,7 @@ def test_poll_once_posts_claimed_jobs_and_submits_results(monkeypatch):
             cloud_url="https://app.siftentry.com",
             workspace_id="neel-prod",
             token="secret",
+            config_path=str(tmp_path / "connector_config.json"),
             tally_url="http://localhost:9000",
         )
     )
@@ -117,3 +120,18 @@ def test_poll_once_posts_claimed_jobs_and_submits_results(monkeypatch):
     assert result["submitted"] == 1
     assert result["last_posted_invoice"] == "INV-1"
     assert submitted["payload"][0]["posting_id"] == "posting-1"
+
+
+def test_interrupted_dry_run_does_not_create_uncertain_live_intent(monkeypatch, tmp_path):
+    import pytest
+    config = ConnectorConfig(cloud_url="https://example.invalid", token="test-token",
+                             dry_run=True, config_path=str(tmp_path / "connector_config.json"))
+    monkeypatch.setattr(runtime, "claim_cloud_jobs", lambda _: {"success": True, "jobs": [{
+        "posting_id": "dry", "invoice_id": "invoice", "dry_run": True, "xml": "<ENVELOPE/>"}]})
+    def interrupted(*args, **kwargs):
+        assert runtime.read_outbox(runtime.default_outbox_path(config.config_path)) == []
+        raise KeyboardInterrupt()
+    monkeypatch.setattr(runtime, "post_xml_to_tally", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        runtime.poll_once(config)
+    assert runtime.read_outbox(runtime.default_outbox_path(config.config_path)) == []

@@ -2533,6 +2533,13 @@ function PostingActivity({
                 <p className="break-words font-semibold text-ink-secondary">
                   {posting.message}
                 </p>
+                {posting.status === "started" && posting.target === "tally" && !posting.dry_run && (
+                  <p className="mt-2 rounded-lg bg-gold-soft p-3 text-sm text-gold-ink">
+                    If this attempt is not completing, stop the Windows connector and select Reconcile postings.
+                    It checks the original company for an existing voucher without posting again.
+                    Do not manually re-enter or retry an uncertain voucher.
+                  </p>
+                )}
                 <p className="mt-1 text-xs font-medium text-ink-muted">
                   {posting.external_id
                     ? `External ID ${posting.external_id}`
@@ -2544,7 +2551,7 @@ function PostingActivity({
                 <time className="text-xs font-medium text-ink-muted">
                   {formatTimestamp(posting.updated_at)}
                 </time>
-                {posting.status === "failed" && (
+                {posting.status === "failed" && posting.target !== "tally" && (
                   <button
                     type="button"
                     disabled={isRetrying}

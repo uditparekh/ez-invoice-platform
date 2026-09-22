@@ -138,7 +138,7 @@ export function ProfileConnectionStatus({
                 "Accounting masters",
                 masters.fresh
                   ? "Recent snapshot · review in Posting rules"
-                  : "Unverified · sync from connector 0.6.0",
+                  : "Unverified · sync from connector 0.7.0",
               ],
             ].map(([label, value]) => (
               <div

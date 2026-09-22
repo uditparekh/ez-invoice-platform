@@ -9,6 +9,7 @@ from . import db
 from .reporting import ReportingRepository
 from .approval_repository import ApprovalRepository
 from .tally_masters import MasterRepository
+from .posting_reconciliation import ReconciliationRepository
 from .approval_plans import ApprovalConflict, profile_fingerprint
 import threading
 import uuid
@@ -122,7 +123,7 @@ class InvoiceFileRecord:
         )
 
 
-class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepository):
+class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepository, ReconciliationRepository):
     def __init__(self, database_path: Path, database_url: str = ""):
         self.database_path = Path(database_path)
         self.database_url = (database_url or "").strip()
@@ -2161,6 +2162,11 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
                 if approved is None:
                     return None
                 plan, claim_revision = approved
+                if not dry_run and connection.execute(
+                    "SELECT id FROM posting_attempts WHERE client_profile_id = ? AND target = 'tally' AND dry_run = 0 AND status = 'started' LIMIT 1",
+                    (client_profile_id,),
+                ).fetchone():
+                    return None
                 posting.request_payload = {**posting.request_payload, "posting_plan": plan}
             if require_approval and not dry_run:
                 cursor = connection.execute(
@@ -2296,7 +2302,7 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
                 connection,
                 current.organization_id,
                 current.invoice_id,
-                "posting.completed" if success else "posting.failed",
+                "posting.reconciled" if success and (raw or {}).get("reconciliation", {}).get("state") == "matched" else "posting.completed" if success else "posting.failed",
                 {
                     "posting_id": posting_id,
                     "target": _enum_value(current.target),

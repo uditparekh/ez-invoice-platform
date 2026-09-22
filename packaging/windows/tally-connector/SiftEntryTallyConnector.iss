@@ -1,5 +1,5 @@
 #define AppName "SiftEntry Tally Connector"
-#define AppVersion "0.6.0"
+#define AppVersion "0.7.0"
 #define AppPublisher "SiftEntry"
 #define AppExeName "SiftEntry Tally Connector.exe"
 #define BuildRoot "."

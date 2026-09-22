@@ -1,4 +1,4 @@
-# SiftEntry Tally Connector 0.6.0: Client Install Guide
+# SiftEntry Tally Connector 0.7.0: Client Install Guide
 
 This connector lets SiftEntry post approved invoices into the TallyPrime company
 running on the same Windows computer. It does not expose TallyPrime to the
@@ -26,7 +26,7 @@ You need:
 
 ## Step 2: Install the Connector
 
-1. Download `SiftEntry-Tally-Connector-Setup-0.6.0.exe` from your SiftEntry Integrations → Tally page. The installer includes Python; no separate Python installation is needed.
+1. Download `SiftEntry-Tally-Connector-Setup-0.7.0.exe` from your SiftEntry Integrations → Tally page. The installer includes Python; no separate Python installation is needed.
 2. Keep `Start connector when I sign in` selected.
 3. Click `Install`.
 4. Launch `SiftEntry Tally Connector` when setup finishes.
@@ -91,7 +91,7 @@ it to TallyPrime, and records the result back to SiftEntry.
 | HTTP 404 | Use the exact base URL without `/app`. Contact support if it persists. |
 | HTTP 500/502/503 | Server/gateway failure. Send the visible message and time to support; do not change Tally settings. |
 | Company not found | Open the intended Tally company and check its exact name in the client profile. |
-| Outcome uncertain | Stop and contact support to check Tally's Day Book. Do not repost, approve a duplicate, clear a queue, or delete recovery files. |
+| Outcome uncertain | Stop, then select Reconcile postings. It only looks up existing vouchers. If the lookup is inconclusive, keep the hold and contact support. Never re-enter the voucher or delete recovery files. |
 | Ledger does not exist | Exact Tally ledger name in the client profile |
 | Stock item does not exist | Exact Tally stock item name in the client profile |
 
@@ -104,6 +104,32 @@ An HTTP response timeout does not prove Tally rejected a voucher. An inconclusiv
 lookup must never trigger a blind repost.
 
 ## First supervised acceptance
+
+### Recovering an interrupted posting
+
+1. Stop the connector and leave the original Tally company open.
+2. Select **Reconcile postings**. The connector checks the company GUID and
+   searches the durable reference frozen into the approved entry. It does not
+   import, alter, delete or retry a voucher.
+3. Only one non-cancelled, non-optional voucher with matching accounting and
+   inventory allocations can be acknowledged as posted. History records the
+   reconciliation separately from a normal posting.
+4. A missing voucher, duplicate match, edited entry, changed company, unsupported
+   export, or connection error stays on hold. **Not found does not mean safe to
+   retry.** Contact support with the visible message and posting reference, not
+   credentials. Older postings without a pinned company/reference also need
+   manual review. A claim interrupted before its single-use execution permit
+   was issued remains held; this release deliberately does not release it.
+5. Restart polling only when recovery has completed or support has resolved the
+   hold. Ordinary cloud acknowledgements continue to retry without reposting.
+
+New approvals freeze the company GUID as well as the accounting entry. Sync
+masters before approval. A changed company identity or a pre-0.7 approval plan
+requires validating, reviewing and approving again; existing in-flight plans
+are never rewritten. Master mapping freshness is still a separate 24-hour
+check: the execution guard compares the live company identity before posting.
+
+### Client acceptance checklist
 
 Test with no invoices first. Confirm a wrong token gives an actionable error,
 then restore the correct token. Close Tally and verify its check fails independently

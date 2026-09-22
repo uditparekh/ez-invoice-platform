@@ -50,6 +50,19 @@ for (const theme of ["light", "dark"]) {
       );
       expect(profileResponse.status()).toBe(201);
       const profile = await profileResponse.json();
+      const connectorHeaders = { Authorization: "Bearer qa-only-not-a-real-secret" };
+      const sync = await request.post(`${qaApi}/api/v1/connectors/tally/masters/begin`, {
+        headers: connectorHeaders, data: { workspace_id: `qa-${org}` },
+      });
+      expect(sync.status()).toBe(200);
+      const synced = await request.post(`${qaApi}/api/v1/connectors/tally/masters/submit`, {
+        headers: connectorHeaders, data: {
+          workspace_id: `qa-${org}`, ticket: (await sync.json()).ticket,
+          company: { name: profile.settings.company_name, guid: "qa-company-guid" },
+          masters: { ledgers: [], stock_items: [], units: [], godowns: [], voucher_types: [] },
+        },
+      });
+      expect(synced.status()).toBe(200);
       const imported = await request.post(`${qaApi}/api/v1/invoices/import`, {
         headers,
         data: {
@@ -187,6 +200,15 @@ for (const theme of ["light", "dark"]) {
         { headers, data: {} },
       );
       expect((await revised.json()).plan.version).toBe(2);
+      const claim = await request.post(`${qaApi}/api/v1/connectors/tally/jobs/claim`, {
+        headers: connectorHeaders, data: { workspace_id: `qa-${org}`, reconciliation_protocol: 1 },
+      });
+      expect(claim.status()).toBe(200);
+      expect((await claim.json()).jobs).toHaveLength(1);
+      await page.goto(`/app/review?invoice=${invoice}`);
+      await expect(page.getByText(/If this attempt is not completing/)).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+      await page.screenshot({ path: `test-results/pkg36b-recovery-${theme}-${width}.png`, fullPage: true });
       expect(errors).toEqual([]);
     });
   }

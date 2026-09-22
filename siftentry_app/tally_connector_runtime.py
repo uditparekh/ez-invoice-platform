@@ -21,9 +21,11 @@ from xml.etree import ElementTree as ET
 try:
     from .connector_credentials import valid_connector_token, TOKEN_FORMAT_MESSAGE
     from .tally_master_sync import read_snapshot, MasterSyncError
+    from .tally_reconciliation import company_identity, lookup_voucher, ReconciliationError
 except ImportError:  # direct script / frozen desktop entrypoint
     from connector_credentials import valid_connector_token, TOKEN_FORMAT_MESSAGE
     from tally_master_sync import read_snapshot, MasterSyncError
+    from tally_reconciliation import company_identity, lookup_voucher, ReconciliationError
 
 try:
     import requests
@@ -31,7 +33,7 @@ except ImportError:  # pragma: no cover
     requests = None
 
 
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.7.0"
 
 
 @dataclass(frozen=True)
@@ -122,6 +124,13 @@ def append_outbox(path: Path, results: List[Dict[str, Any]]) -> None:
             items.append(dict(result, queued_at=datetime.now().isoformat(timespec="seconds")))
             known.add(str(result.get("posting_id") or ""))
     write_outbox(path, items)
+
+
+def replace_outbox_result(path: Path, result: Dict[str, Any]) -> None:
+    pending = read_outbox(path)
+    if not any(item["posting_id"] == result["posting_id"] for item in pending):
+        raise OutboxUnreadable("Posting intent is missing. Preserve recovery files.")
+    write_outbox(path, [result if item["posting_id"] == result["posting_id"] else item for item in pending])
 
 
 def drain_outbox(config: "ConnectorConfig", path: Path) -> Dict[str, Any]:
@@ -368,6 +377,14 @@ def cloud_request(config: ConnectorConfig, path: str, payload: Dict[str, Any]) -
         message = messages.get(code, "SiftEntry returned a server error. Contact support with the HTTP status and time.")
         if 300 <= code < 400:
             message = "SiftEntry returned a redirect. Use the correct HTTPS base URL; credentials were not forwarded."
+        if code == 409 and path in {"/api/v1/connectors/tally/jobs/begin", "/api/v1/connectors/tally/jobs/claim", "/api/v1/connectors/tally/jobs/reconcile"}:
+            # These endpoint conflicts are fixed, secret-free server messages.
+            try:
+                detail = response.json().get("detail")
+                if isinstance(detail, str) and len(detail) <= 1000 and config.token not in detail:
+                    message = detail
+            except (ValueError, AttributeError):
+                pass
         return {"success": False, "message": f"{message} (HTTP {code})", "status_code": code}
     try:
         data = response.json()
@@ -463,9 +480,66 @@ def claim_cloud_jobs(config: ConnectorConfig) -> Dict[str, Any]:
     result = cloud_request(config, "/api/v1/connectors/tally/jobs/claim", {
         "workspace_id": config.workspace_id, "limit": config.claim_limit,
         "dry_run": config.dry_run, **connector_metadata(tally_detected=True),
+        "reconciliation_protocol": 1,
     })
     result.setdefault("jobs", [])
     return result
+
+
+def prepare_execution(config, job):
+    """The single-use cloud permit is saved before the first possible Tally write."""
+    result = cloud_request(config, "/api/v1/connectors/tally/jobs/begin",
+                           {"workspace_id": config.workspace_id, "posting_id": job["posting_id"]})
+    if not result.get("success"):
+        raise ReconciliationError(result.get("message") or "Execution permit unavailable; posting remains on hold.")
+    company = result.get("execution", {}).get("company")
+    plan = job.get("posting_plan", {})
+    if not company or company.get("name") != plan.get("company"):
+        raise ReconciliationError("Cloud did not pin the approved Tally company. Posting remains on hold.")
+    if company_identity(job.get("tally_url") or config.tally_url, company["name"]) != company:
+        raise ReconciliationError("Tally company does not match the synced company identity. Posting remains on hold.")
+    return result["execution"]
+
+
+def reconcile_postings(config: ConnectorConfig) -> Dict[str, Any]:
+    """Explicit lookup only. Never claims, imports, or releases an absent voucher."""
+    path = default_outbox_path(config.config_path)
+    try:
+        with _poll_file_lock(path):
+            drained = drain_outbox(config, path)
+            if not drained.get("success") and not drained.get("uncertain"):
+                return {"success": False, "message": "Cloud acknowledgement must finish before recovery. No vouchers were imported."}
+            response = cloud_request(config, "/api/v1/connectors/tally/jobs/recovery", {
+                "workspace_id": config.workspace_id, "posting_ids": [p["posting_id"] for p in read_outbox(path)]})
+            if not response.get("success"):
+                return response
+            matched, held = 0, []
+            for job in response.get("jobs", []):
+                if job.get("reconciled"):
+                    write_outbox(path, [p for p in read_outbox(path) if p["posting_id"] != job["posting_id"]])
+                    matched += 1
+                    continue
+                plan = job.get("posting_plan", {})
+                body = {"workspace_id": config.workspace_id, "posting_id": job["posting_id"]}
+                try:
+                    proof = lookup_voucher(plan.get("tally_url") or config.tally_url, plan,
+                                           job.get("execution", {}).get("company"))
+                    body.update(company=proof["company"], voucher_xml=proof["voucher_xml"])
+                except ReconciliationError as exc:
+                    body["message"] = str(exc)
+                saved = cloud_request(config, "/api/v1/connectors/tally/jobs/reconcile", body)
+                if saved.get("success") and saved.get("state") == "matched":
+                    write_outbox(path, [p for p in read_outbox(path) if p["posting_id"] != job["posting_id"]])
+                    matched += 1
+                else:
+                    held.append(body.get("message") or saved.get("message") or "Recovery requires manual review.")
+            remaining = len(read_outbox(path))
+            return {"success": not held and remaining == 0, "matched": matched,
+                    "message": f"Verified {matched} existing voucher(s). No vouchers were imported. " +
+                    (" | ".join(dict.fromkeys(held)) if held else
+                     "Local recovery evidence still needs support review." if remaining else "Recovery check complete.")}
+    except (OSError, OutboxUnreadable) as exc:
+        return {"success": False, "message": f"Recovery storage is busy or unreadable. Preserve files and contact support: {exc}"}
 
 
 def submit_cloud_results(config: ConnectorConfig, results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -597,22 +671,39 @@ def _poll_once_locked(config: ConnectorConfig) -> Dict[str, Any]:
     write_outbox(outbox_path, [])
     claimed = claim_cloud_jobs(config)
     jobs = claimed.get("jobs") or []
+    if claimed.get("recovery_required"):
+        return {"success": False, "connected_to_siftentry": True, "tally_detected": True,
+                "claimed": 0, "submitted": 0, "failed_jobs": 0, "message": claimed.get("message")}
     results: List[Dict[str, Any]] = []
     last_invoice = ""
+    # Journal every reservation before any remote write, including jobs that
+    # were not attempted when the process stopped in an earlier batch item.
+    append_outbox(outbox_path, [{"posting_id": str(job.get("posting_id") or ""),
+        "invoice_id": str(job.get("invoice_id") or ""), "success": False, "outcome_uncertain": True,
+        "connector_workspace_id": config.workspace_id, "connector_cloud_url": config.cloud_url.rstrip("/"),
+        "posting_plan": job.get("posting_plan", {}), "message": "Write-ahead intent; outcome not confirmed."}
+        for job in jobs if not job.get("dry_run")])
     for job in jobs:
         tally_url = str(job.get("tally_url") or config.tally_url)
-        result = post_xml_to_tally(
-            tally_url,
-            invoice_id=str(job.get("invoice_id") or ""),
-            xml=str(job.get("xml") or ""),
-            dry_run=bool(job.get("dry_run")),
-        )
+        execution = {}
+        try:
+            if not job.get("dry_run"):
+                execution = prepare_execution(config, job)
+            result = post_xml_to_tally(tally_url, invoice_id=str(job.get("invoice_id") or ""),
+                                      xml=str(job.get("xml") or ""), dry_run=bool(job.get("dry_run")))
+        except ReconciliationError as exc:
+            result = {"invoice_id": str(job.get("invoice_id") or ""), "success": False,
+                      "outcome_uncertain": True, "message": str(exc)}
         result["posting_id"] = str(job.get("posting_id") or "")
         result["connector_workspace_id"] = config.workspace_id
         result["connector_cloud_url"] = config.cloud_url.rstrip("/")
         # Persist THIS result before touching the next job. An interruption
         # during job N must not lose the outcome of job N-1.
-        append_outbox(outbox_path, [result])
+        result["raw"] = {**result.get("raw", {}), "execution": execution}
+        if job.get("dry_run"):
+            append_outbox(outbox_path, [result])
+        else:
+            replace_outbox_result(outbox_path, result)
         results.append(result)
         last_invoice = str(job.get("invoice_number") or job.get("invoice_id") or last_invoice)
         if result.get("outcome_uncertain"):
@@ -622,7 +713,7 @@ def _poll_once_locked(config: ConnectorConfig) -> Dict[str, Any]:
             return {"success": False, "connected_to_siftentry": True, "tally_detected": True,
                     "claimed": len(jobs), "submitted": 0, "failed_jobs": 0,
                     "awaiting_ack": drained.get("pending", 1), "message":
-                    "Outcome uncertain. Posting is paused. Contact support to reconcile the batch; do not re-enter vouchers."}
+                    result.get("message", "Outcome uncertain.") + " Stop and use Reconcile postings; do not re-enter vouchers."}
 
     submitted: Dict[str, Any] = {"success": True, "accepted": 0}
     awaiting_ack = 0
@@ -649,6 +740,8 @@ def _poll_once_locked(config: ConnectorConfig) -> Dict[str, Any]:
         )
     elif results:
         message = str(submitted.get("message") or f"Submitted {submitted.get('accepted', len(results))} result(s).")
+    elif claimed.get("message"):
+        message = claimed["message"]
     return {
         "success": success,
         "connected_to_siftentry": bool(claimed.get("success")),

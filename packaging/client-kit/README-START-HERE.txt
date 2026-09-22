@@ -1,4 +1,9 @@
-SIFTENTRY TALLY CONNECTOR 0.6.0 — SCRIPT KIT SETUP GUIDE
+SIFTENTRY TALLY CONNECTOR 0.7.0 — SCRIPT KIT SETUP GUIDE
+
+Recovery: Stop, then select Reconcile postings. This checks existing vouchers
+only; it never imports or retries. Missing, conflicting or unsupported results
+remain on hold. Do not delete recovery files or re-enter vouchers. See the
+included CLIENT_INSTALL_GUIDE.md for the 0.7.0 upgrade and acceptance checklist.
 ========================================
 
 This small program connects your TallyPrime to SiftEntry. When an invoice

@@ -13,6 +13,13 @@ Streamlit demo into the Next.js + FastAPI SaaS foundation.
 
 ## Local Development
 
+Latest connector safety release: [pkg36B](PKG36B-RELEASE.md), installer 0.7.0.
+Sync the exact company's masters before approving new invoices. Older unclaimed
+plans need a fresh preview and reapproval. For an uncertain posting, Stop →
+Reconcile postings on the client's PC; never clear recovery files or manually
+re-enter a voucher to fix a connection problem. Client acceptance on an isolated
+Tally test company is required before relying on automatic matching in live books.
+
 Run the API:
 
 ```bash
@@ -58,7 +65,7 @@ Each profile stores:
 Recommended flow:
 
 1. Create or import a profile from the Integrations page.
-2. For Tally, stop connector 0.6.0 and run **Sync Tally masters** with the correct
+2. For Tally, stop connector 0.7.0 and run **Sync Tally masters** with the correct
    company open. In Client profiles → Posting rules, refresh the snapshot, check
    company/GUID, select exact names, save and explicitly confirm mappings.
    Name existence is not accounting correctness; review supplier ledgers and

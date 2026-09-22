@@ -1157,6 +1157,8 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
         assert profile_response.status_code == 201
         profile_id = profile_response.json()["id"]
 
+        from tests.test_tally_master_api import begin, upload, submit
+        assert submit(client, upload(begin(client))).status_code == 200
         invoice = import_sample_invoice(client, tokens, org_id)
         invoice_id = invoice["id"]
         assert client.post(f"/api/v1/invoices/{invoice_id}/validate", headers=headers).status_code == 200
@@ -1170,7 +1172,7 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
 
         claimed = client.post(
             "/api/v1/connectors/tally/jobs/claim",
-            json={"workspace_id": "neel-prod", "limit": 5},
+            json={"workspace_id": "neel-prod", "limit": 5, "reconciliation_protocol": 1},
             headers={"Authorization": "Bearer connector-secret"},
         )
         assert claimed.status_code == 200
@@ -1184,12 +1186,13 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
 
         duplicate_claim = client.post(
             "/api/v1/connectors/tally/jobs/claim",
-            json={"workspace_id": "neel-prod", "limit": 5},
+            json={"workspace_id": "neel-prod", "limit": 5, "reconciliation_protocol": 1},
             headers={"Authorization": "Bearer connector-secret"},
         )
         assert duplicate_claim.status_code == 200
         assert duplicate_claim.json()["jobs"] == []
 
+        _begin_test_execution(client, job)
         completed = client.post(
             "/api/v1/connectors/tally/jobs/results",
             json={
@@ -2014,16 +2017,32 @@ def _connector_profile_and_invoice(client, tokens, org_id):
         headers=headers,
     )
     assert created.status_code == 201
+    from tests.test_tally_master_api import begin, upload, submit
+    assert submit(client, upload(begin(client))).status_code == 200
     invoice = import_sample_invoice(client, tokens, org_id)
     return created.json()["id"], invoice["id"], headers
 
 
 def _claim(client):
-    return client.post(
+    response = client.post(
         "/api/v1/connectors/tally/jobs/claim",
-        json={"workspace_id": "neel-prod", "limit": 5},
+        json={"workspace_id": "neel-prod", "limit": 5, "reconciliation_protocol": 1},
         headers=CONNECTOR_HEADERS,
     )
+    # Existing posting-result tests simulate a fully initialized modern connector.
+    # Protocol/permit edge cases use raw requests in test_posting_reconciliation_api.
+    for job in response.json().get("jobs", []):
+        if not job["dry_run"]:
+            _begin_test_execution(client, job)
+    return response
+
+
+def _begin_test_execution(client, job):
+    from tests.test_tally_master_api import begin, upload, submit
+    assert submit(client, upload(begin(client))).status_code == 200
+    result = client.post("/api/v1/connectors/tally/jobs/begin", headers=CONNECTOR_HEADERS,
+                         json={"workspace_id": "neel-prod", "posting_id": job["posting_id"]})
+    assert result.status_code == 200, result.text
 
 
 def _submit_result(client, job, success: bool, message: str):

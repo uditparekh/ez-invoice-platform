@@ -9,6 +9,13 @@ test("native connector gateway works without a browser session", async ({ reques
     expect(response.headers()["cache-control"]).toBe("no-store");
     expect((await response.json()).detail).toContain("token");
   }
+  for (const path of ["jobs/begin", "jobs/recovery", "jobs/reconcile"]) {
+    const response = await request.post(`/api/v1/connectors/tally/${path}`, {
+      data: { workspace_id: "qa-no-credentials", ...(path === "jobs/recovery" ? {} : { posting_id: "qa-posting" }) },
+    });
+    expect(response.status()).toBe(401);
+    expect(response.headers()["cache-control"]).toBe("no-store");
+  }
 });
 
 test("gateway rejects arbitrary routes, methods and malformed bodies", async ({ request }) => {

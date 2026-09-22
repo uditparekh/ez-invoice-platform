@@ -82,6 +82,7 @@ def test_network_exception_does_not_expose_header(tmp_path, monkeypatch):
 
 
 def test_uncertain_tally_result_is_never_acknowledged_as_failure_or_reposted(tmp_path, monkeypatch):
+    monkeypatch.setattr(rt, "prepare_execution", lambda *_: {})
     cfg = config(tmp_path)
     monkeypatch.setattr(rt, "test_tally_connection", lambda _: {"success": True})
     monkeypatch.setattr(rt, "claim_cloud_jobs", lambda _: {"success": True, "jobs": [
