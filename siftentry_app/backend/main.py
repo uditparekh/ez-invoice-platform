@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .adapters import default_adapters
 from .approval_plans import ApprovalConflict, build_plan, invoice_fingerprint, profile_fingerprint
+from .tally_masters import MasterUpload, MasterConfirmation
 from .ai_parser import AiExtractorConfig, is_ai_parser_mode
 from .auth import get_current_user, issue_tokens, rotate_refresh_token
 from .demo_seed import ensure_public_demo_workspace
@@ -2216,6 +2217,35 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             errors=errors,
         )
 
+    @app.post("/api/v1/connectors/tally/masters/begin", tags=["connectors"])
+    def begin_tally_master_sync(
+        request: Request, body: TallyConnectorHeartbeatRequest,
+        authorization: Optional[str] = Header(default=None),
+        x_siftentry_connector_token: Optional[str] = Header(default=None),
+    ) -> Dict[str, Any]:
+        profile = _require_tally_connector_profile(request, body.workspace_id, authorization, x_siftentry_connector_token)
+        return _repo(request).begin_master_sync(profile)
+
+    @app.post("/api/v1/connectors/tally/masters/submit", tags=["connectors"])
+    def submit_tally_master_sync(
+        request: Request, body: MasterUpload,
+        authorization: Optional[str] = Header(default=None),
+        x_siftentry_connector_token: Optional[str] = Header(default=None),
+    ) -> Dict[str, Any]:
+        profile = _require_tally_connector_profile(request, body.workspace_id, authorization, x_siftentry_connector_token)
+        return _repo(request).save_master_snapshot(profile, body)
+
+    @app.get("/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/tally-masters", tags=["client-profiles"])
+    def get_tally_masters(request: Request, organization_id: str, profile_id: str, current_user: CurrentUser) -> Dict[str, Any]:
+        profile = _require_client_profile(request, organization_id, profile_id, current_user, READ_ROLES)
+        return _repo(request).get_master_snapshot(profile)
+
+    @app.post("/api/v1/organizations/{organization_id}/client-profiles/{profile_id}/tally-masters/confirm", tags=["client-profiles"])
+    def confirm_tally_mappings(request: Request, organization_id: str, profile_id: str,
+                               body: MasterConfirmation, current_user: CurrentUser) -> Dict[str, Any]:
+        profile = _require_client_profile(request, organization_id, profile_id, current_user, EDIT_ROLES)
+        return _repo(request).confirm_master_mappings(profile.id, body, current_user.id)
+
     @app.post("/api/v1/connectors/tally/diagnostics", tags=["connectors"])
     def tally_connector_diagnostics(
         request: Request,
@@ -2227,12 +2257,13 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         profile = _require_tally_connector_profile(
             request, body.workspace_id, authorization, x_siftentry_connector_token,
         )
+        masters = _repo(request).get_master_snapshot(profile)
         return {
             "success": True,
             "message": "Cloud authentication passed. No invoices were claimed or posted.",
             "company_name": profile.settings.company_name,
-            "master_readiness": "not_verified",
-            "master_message": "Master names and mappings are not verified; master sync is not available yet.",
+            "master_readiness": masters["state"],
+            "master_message": "Recent master snapshot available; review mappings in Client profiles." if masters["state"] == "fresh" else "Masters are not currently verified. Stop polling and use Sync Tally masters.",
         }
 
     @app.post(

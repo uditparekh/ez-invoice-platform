@@ -4,6 +4,20 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### pkg36A — read-only Tally master discovery (connector 0.6.0)
+
+- Export company identity, ledgers, stock items, units, godowns and voucher types
+  without claiming invoices, importing data or touching recovery files.
+- Save complete company-bound snapshots through expiring single-use sync
+  sessions; reject stale/overlapping uploads and preserve the last good snapshot.
+- Search synced names in profile and item-mapping fields. Show company, GUID,
+  last-check time, missing names and an explicit accountant confirmation, separate
+  from name existence. Expire verification after 24 hours or relevant changes.
+- Preserve approval plans and posting behavior. No automatic master creation,
+  reconciliation, retries, approval or multi-company routing is introduced.
+- Update the Windows installer, fallback kit and onboarding guide together.
+  See docs/PKG36A-RELEASE.md, including required real Windows/Tally acceptance.
+
 ### pkg35C — posting previews and frozen Tally approval plans
 
 - Show the actual Tally entry before approval; require a reviewed preview hash

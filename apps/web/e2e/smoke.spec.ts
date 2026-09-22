@@ -1,15 +1,18 @@
 import { expect, test } from "@playwright/test";
+import { qaOwner, qaEmail, qaPassword } from "./qa-auth";
 
-/** Login → Home → command palette → shortcuts overlay.
- *  Credentials default to the `make bootstrap` demo owner. */
-const EMAIL = process.env.SIFT_E2E_EMAIL ?? "udit@example.com";
-const PASSWORD = process.env.SIFT_E2E_PASSWORD ?? "local-demo-password-123";
+/** Local/CI smoke tests share the isolated QA fixture with the regression suite. */
+const EMAIL = qaEmail;
+const PASSWORD = qaPassword;
+test.beforeEach(async ({ request }) => {
+  await qaOwner(request);
+});
 
 test("login, land on Home, open palette and shortcuts", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel(/email/i).fill(EMAIL);
   await page.getByLabel(/password/i).fill(PASSWORD);
-  await page.getByRole("button", { name: /sign in|log in/i }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
 
   await page.waitForURL(/\/app/, { timeout: 20_000 });
   await expect(page.getByText(/command center|home/i).first()).toBeVisible();
@@ -33,7 +36,7 @@ test("invoices queue renders with saved views strip", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel(/email/i).fill(EMAIL);
   await page.getByLabel(/password/i).fill(PASSWORD);
-  await page.getByRole("button", { name: /sign in|log in/i }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.waitForURL(/\/app/, { timeout: 20_000 });
 
   await page.goto("/app/invoices");

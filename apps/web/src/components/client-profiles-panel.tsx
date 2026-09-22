@@ -37,6 +37,12 @@ import {
 
 import { useAuth } from "@/components/auth-provider";
 import { ProfileConnectionStatus } from "@/components/profile-connection-status";
+import {
+  TallyMasterProvider,
+  MasterSnapshotPanel,
+  useMasterNames,
+  type MasterKind,
+} from "@/components/tally-master-provider";
 import { ContentCard } from "@/components/dashboard/content-card";
 import { Button } from "@/components/ui/button";
 import { useClientProfiles } from "@/hooks/use-client-profiles";
@@ -993,910 +999,942 @@ function ProfileEditor({
   }
 
   return (
-    <ContentCard
-      title={title}
-      subtitle={subtitle}
-      action={
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={newProfile} disabled={!canEdit || saving}>
-            <Plus size={14} />
-            New profile
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!canEdit || saving}
-            onClick={() => importInputRef.current?.click()}
-          >
-            <Upload size={14} />
-            Import JSON
-          </Button>
-          <Button size="sm" variant="secondary" onClick={exportProfile}>
-            <Download size={14} />
-            Export JSON
-          </Button>
-          {(!accountingSystem || accountingSystem === "tally") && (
+    <TallyMasterProvider
+      profile={selectedProfile}
+      draft={draft}
+      dirty={isDirty}
+      canEdit={canEdit}
+    >
+      <ContentCard
+        title={title}
+        subtitle={subtitle}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={newProfile}
+              disabled={!canEdit || saving}
+            >
+              <Plus size={14} />
+              New profile
+            </Button>
             <Button
               size="sm"
               variant="secondary"
               disabled={!canEdit || saving}
-              onClick={useIndiaGstItemTemplate}
+              onClick={() => importInputRef.current?.click()}
             >
-              <CopyPlus size={14} />
-              India GST template
+              <Upload size={14} />
+              Import JSON
             </Button>
-          )}
-        </div>
-      }
-    >
-      <input
-        ref={importInputRef}
-        type="file"
-        accept="application/json"
-        className="hidden"
-        onChange={(event) => void importProfile(event)}
-      />
-      <div className="space-y-5" data-profile-editor>
-        <div
-          className={cn(
-            "grid gap-5 transition-[grid-template-columns] duration-300 ease-in-out",
-            libraryCollapsed
-              ? "xl:grid-cols-[64px_minmax(0,1fr)]"
-              : "xl:grid-cols-[320px_minmax(0,1fr)]",
-          )}
-        >
-          <aside
-            className={cn(
-              "overflow-hidden rounded-2xl border border-line bg-canvas transition-[padding] duration-300",
-              libraryCollapsed ? "p-2 xl:px-2 xl:py-3" : "p-4",
+            <Button size="sm" variant="secondary" onClick={exportProfile}>
+              <Download size={14} />
+              Export JSON
+            </Button>
+            {(!accountingSystem || accountingSystem === "tally") && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!canEdit || saving}
+                onClick={useIndiaGstItemTemplate}
+              >
+                <CopyPlus size={14} />
+                India GST template
+              </Button>
             )}
-            aria-label="Profile library"
+          </div>
+        }
+      >
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(event) => void importProfile(event)}
+        />
+        <div className="space-y-5" data-profile-editor>
+          <div
+            className={cn(
+              "grid gap-5 transition-[grid-template-columns] duration-300 ease-in-out",
+              libraryCollapsed
+                ? "xl:grid-cols-[64px_minmax(0,1fr)]"
+                : "xl:grid-cols-[320px_minmax(0,1fr)]",
+            )}
           >
-            {/* Header row: always visible. On desktop it holds the collapse toggle;
-                below xl the same toggle collapses the list vertically. */}
-            <div
+            <aside
               className={cn(
-                "flex items-start gap-3",
-                libraryCollapsed
-                  ? "justify-between xl:flex-col xl:items-center"
-                  : "justify-between",
+                "overflow-hidden rounded-2xl border border-line bg-canvas transition-[padding] duration-300",
+                libraryCollapsed ? "p-2 xl:px-2 xl:py-3" : "p-4",
               )}
+              aria-label="Profile library"
             >
-              {!libraryCollapsed && (
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
-                    Profile library
-                  </p>
-                  <h3 className="mt-1 text-base font-semibold text-ink">
-                    Workspace setups
-                  </h3>
-                </div>
-              )}
+              {/* Header row: always visible. On desktop it holds the collapse toggle;
+                below xl the same toggle collapses the list vertically. */}
               <div
                 className={cn(
-                  "flex items-center gap-2",
-                  libraryCollapsed && "xl:flex-col",
+                  "flex items-start gap-3",
+                  libraryCollapsed
+                    ? "justify-between xl:flex-col xl:items-center"
+                    : "justify-between",
                 )}
               >
-                <span
-                  className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink-secondary"
-                  title={`${filteredProfiles.length} profile${filteredProfiles.length === 1 ? "" : "s"}`}
+                {!libraryCollapsed && (
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                      Profile library
+                    </p>
+                    <h3 className="mt-1 text-base font-semibold text-ink">
+                      Workspace setups
+                    </h3>
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    "flex items-center gap-2",
+                    libraryCollapsed && "xl:flex-col",
+                  )}
                 >
-                  {filteredProfiles.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => toggleLibrary()}
-                  aria-expanded={!libraryCollapsed}
-                  aria-controls="profile-library-list"
-                  title={
-                    libraryCollapsed
-                      ? "Expand profile library"
-                      : "Collapse profile library"
-                  }
-                  className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-surface text-ink-secondary transition-colors hover:border-accent hover:text-accent-ink"
-                >
-                  <span className="hidden xl:block">
-                    {libraryCollapsed ? (
-                      <PanelLeftOpen size={16} />
-                    ) : (
-                      <PanelLeftClose size={16} />
-                    )}
-                  </span>
-                  <span className="xl:hidden">
-                    {libraryCollapsed ? (
-                      <ChevronDown size={16} />
-                    ) : (
-                      <ChevronUp size={16} />
-                    )}
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {libraryCollapsed ? (
-              /* Rail: switch profiles without expanding. Hidden below xl, where
-                 collapsed simply means "list hidden". */
-              <div className="mt-3 hidden flex-col items-center gap-2 xl:flex">
-                {filteredProfiles.map((profile) => (
-                  <button
-                    key={profile.id}
-                    type="button"
-                    onClick={() => selectProfile(profile)}
-                    title={`${profile.name} · ${systemLabel(profile.accounting_system)}`}
-                    aria-label={`Open profile ${profile.name}`}
-                    aria-current={
-                      selectedId === profile.id ? "true" : undefined
-                    }
-                    className={cn(
-                      "grid size-10 place-items-center rounded-xl border text-xs font-semibold uppercase transition-colors",
-                      selectedId === profile.id
-                        ? "border-accent bg-accent-soft text-accent-ink"
-                        : "border-line bg-surface text-ink-secondary hover:border-accent hover:text-accent-ink",
-                    )}
+                  <span
+                    className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink-secondary"
+                    title={`${filteredProfiles.length} profile${filteredProfiles.length === 1 ? "" : "s"}`}
                   >
-                    {profile.accounting_system.slice(0, 2)}
+                    {filteredProfiles.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleLibrary()}
+                    aria-expanded={!libraryCollapsed}
+                    aria-controls="profile-library-list"
+                    title={
+                      libraryCollapsed
+                        ? "Expand profile library"
+                        : "Collapse profile library"
+                    }
+                    className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-surface text-ink-secondary transition-colors hover:border-accent hover:text-accent-ink"
+                  >
+                    <span className="hidden xl:block">
+                      {libraryCollapsed ? (
+                        <PanelLeftOpen size={16} />
+                      ) : (
+                        <PanelLeftClose size={16} />
+                      )}
+                    </span>
+                    <span className="xl:hidden">
+                      {libraryCollapsed ? (
+                        <ChevronDown size={16} />
+                      ) : (
+                        <ChevronUp size={16} />
+                      )}
+                    </span>
                   </button>
-                ))}
+                </div>
               </div>
-            ) : (
-              <div id="profile-library-list">
-                <label className="mt-4 flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink-secondary">
-                  <Search size={16} className="shrink-0 text-ink-muted" />
-                  <input
-                    value={profileSearch}
-                    onChange={(event) => setProfileSearch(event.target.value)}
-                    placeholder="Search profiles"
-                    className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-muted"
-                  />
-                </label>
 
-                <div className="mt-4 space-y-3">
-                  {loading ? (
-                    <div className="rounded-2xl border border-line bg-surface px-4 py-6 text-sm font-medium text-ink-secondary">
-                      <LoaderCircle
-                        className="mr-2 inline animate-spin"
-                        size={16}
-                      />
-                      Loading profiles
-                    </div>
-                  ) : filteredProfiles.length ? (
-                    filteredProfiles.map((profile) => (
-                      <button
-                        key={profile.id}
-                        type="button"
-                        onClick={() => selectProfile(profile)}
-                        className={cn(
-                          "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
-                          selectedId === profile.id
-                            ? "border-accent bg-accent-soft"
-                            : "border-line bg-surface hover:border-accent hover:bg-surface-subtle",
-                        )}
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-xs font-semibold uppercase text-accent-ink">
-                            {profile.accounting_system.slice(0, 2)}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-ink">
-                              {profile.name}
-                            </span>
-                            <span className="mt-1 block truncate text-xs font-medium text-ink-muted">
-                              {systemLabel(profile.accounting_system)} /{" "}
-                              {profile.settings.company_name ||
-                                "Company not set"}
-                            </span>
-                            <span className="mt-2 flex flex-wrap gap-1.5">
-                              <MiniChip>
-                                {profile.settings.default_currency || "USD"}
-                              </MiniChip>
-                              <MiniChip>
-                                {postingModeLabel(
-                                  profile.settings.posting_mode,
-                                )}
-                              </MiniChip>
-                              {profile.is_default && (
-                                <MiniChip tone="accent">Default</MiniChip>
-                              )}
-                            </span>
-                          </span>
-                          {profile.is_default && (
-                            <Star
-                              size={16}
-                              className="shrink-0 fill-accent text-accent-ink"
-                            />
+              {libraryCollapsed ? (
+                /* Rail: switch profiles without expanding. Hidden below xl, where
+                 collapsed simply means "list hidden". */
+                <div className="mt-3 hidden flex-col items-center gap-2 xl:flex">
+                  {filteredProfiles.map((profile) => (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      onClick={() => selectProfile(profile)}
+                      title={`${profile.name} · ${systemLabel(profile.accounting_system)}`}
+                      aria-label={`Open profile ${profile.name}`}
+                      aria-current={
+                        selectedId === profile.id ? "true" : undefined
+                      }
+                      className={cn(
+                        "grid size-10 place-items-center rounded-xl border text-xs font-semibold uppercase transition-colors",
+                        selectedId === profile.id
+                          ? "border-accent bg-accent-soft text-accent-ink"
+                          : "border-line bg-surface text-ink-secondary hover:border-accent hover:text-accent-ink",
+                      )}
+                    >
+                      {profile.accounting_system.slice(0, 2)}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div id="profile-library-list">
+                  <label className="mt-4 flex h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink-secondary">
+                    <Search size={16} className="shrink-0 text-ink-muted" />
+                    <input
+                      value={profileSearch}
+                      onChange={(event) => setProfileSearch(event.target.value)}
+                      placeholder="Search profiles"
+                      className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-muted"
+                    />
+                  </label>
+
+                  <div className="mt-4 space-y-3">
+                    {loading ? (
+                      <div className="rounded-2xl border border-line bg-surface px-4 py-6 text-sm font-medium text-ink-secondary">
+                        <LoaderCircle
+                          className="mr-2 inline animate-spin"
+                          size={16}
+                        />
+                        Loading profiles
+                      </div>
+                    ) : filteredProfiles.length ? (
+                      filteredProfiles.map((profile) => (
+                        <button
+                          key={profile.id}
+                          type="button"
+                          onClick={() => selectProfile(profile)}
+                          className={cn(
+                            "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                            selectedId === profile.id
+                              ? "border-accent bg-accent-soft"
+                              : "border-line bg-surface hover:border-accent hover:bg-surface-subtle",
                           )}
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-line-strong bg-surface px-4 py-6 text-sm font-semibold leading-6 text-ink-secondary">
-                      {profileSearch
-                        ? "No profiles match that search."
-                        : "No profiles saved yet. Use the India GST template or start with a blank profile."}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-xs font-semibold uppercase text-accent-ink">
+                              {profile.accounting_system.slice(0, 2)}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-ink">
+                                {profile.name}
+                              </span>
+                              <span className="mt-1 block truncate text-xs font-medium text-ink-muted">
+                                {systemLabel(profile.accounting_system)} /{" "}
+                                {profile.settings.company_name ||
+                                  "Company not set"}
+                              </span>
+                              <span className="mt-2 flex flex-wrap gap-1.5">
+                                <MiniChip>
+                                  {profile.settings.default_currency || "USD"}
+                                </MiniChip>
+                                <MiniChip>
+                                  {postingModeLabel(
+                                    profile.settings.posting_mode,
+                                  )}
+                                </MiniChip>
+                                {profile.is_default && (
+                                  <MiniChip tone="accent">Default</MiniChip>
+                                )}
+                              </span>
+                            </span>
+                            {profile.is_default && (
+                              <Star
+                                size={16}
+                                className="shrink-0 fill-accent text-accent-ink"
+                              />
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-line-strong bg-surface px-4 py-6 text-sm font-semibold leading-6 text-ink-secondary">
+                        {profileSearch
+                          ? "No profiles match that search."
+                          : "No profiles saved yet. Use the India GST template or start with a blank profile."}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </aside>
+
+            <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-canvas">
+              <div className="flex flex-col gap-4 border-b border-line bg-surface px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                    {selectedProfile ? "Editing profile" : "New profile"}
+                  </p>
+                  <h3 className="mt-1 break-words text-xl font-semibold text-ink">
+                    {draft.name || "Untitled client setup"}
+                  </h3>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Pill icon={<ShieldCheck size={13} />}>
+                      {onboardingStatusLabel(onboardingStatus)}
+                    </Pill>
+                    <Pill icon={<Landmark size={13} />}>
+                      {systemLabel(draftSystem)}
+                    </Pill>
+                    <Pill icon={<Globe2 size={13} />}>
+                      {draft.settings.country_name || "Country not set"}
+                    </Pill>
+                    <Pill icon={<Layers3 size={13} />}>
+                      {draft.settings.default_currency || "USD"}
+                    </Pill>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProfile && !selectedProfile.is_default && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={makeDefault}
+                      disabled={!canManage || isDirty || saving}
+                    >
+                      <BadgeCheck size={14} />
+                      Set default
+                    </Button>
+                  )}
+                  {selectedProfile && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={removeProfile}
+                      disabled={!canManage || saving}
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={saveProfile}
+                    disabled={!canEdit || saving || trainingUploading}
+                  >
+                    {saving ? (
+                      <LoaderCircle size={14} className="animate-spin" />
+                    ) : (
+                      <Save size={14} />
+                    )}
+                    {onboardingStatus === "active"
+                      ? "Save changes"
+                      : "Save draft"}
+                  </Button>
+                </div>
+              </div>
+
+              {(notice || error) && (
+                <div
+                  className={cn(
+                    "mx-5 mt-5 rounded-xl border px-4 py-3 text-sm font-medium",
+                    notice === "Client profile saved." ||
+                      notice === "Default profile updated." ||
+                      notice === "Client profile deleted."
+                      ? "border-success/30 bg-success-soft text-success"
+                      : "border-gold/30 bg-gold-soft text-gold",
+                  )}
+                >
+                  <span role="status" aria-live="polite">
+                    {notice || error}
+                  </span>
+                </div>
+              )}
+
+              <nav
+                aria-label="Profile sections"
+                className="border-b border-line bg-surface p-3 sm:p-4"
+              >
+                <div
+                  role="tablist"
+                  aria-label="Client profile setup"
+                  className="grid grid-cols-2 gap-2 lg:grid-cols-5"
+                >
+                  {profileSections.map((section, index) => (
+                    <button
+                      key={section.id}
+                      type="button"
+                      role="tab"
+                      id={`${editorId}-tab-${section.id}`}
+                      aria-controls={`${editorId}-panel-${section.id}`}
+                      aria-selected={activeSection === section.id}
+                      tabIndex={activeSection === section.id ? 0 : -1}
+                      onClick={() => setActiveSection(section.id)}
+                      onKeyDown={(event) => {
+                        const next =
+                          event.key === "Home"
+                            ? 0
+                            : event.key === "End"
+                              ? profileSections.length - 1
+                              : event.key === "ArrowRight"
+                                ? (index + 1) % profileSections.length
+                                : event.key === "ArrowLeft"
+                                  ? (index + profileSections.length - 1) %
+                                    profileSections.length
+                                  : -1;
+                        if (next < 0) return;
+                        event.preventDefault();
+                        setActiveSection(profileSections[next].id);
+                        document
+                          .getElementById(
+                            `${editorId}-tab-${profileSections[next].id}`,
+                          )
+                          ?.focus();
+                      }}
+                      className={cn(
+                        "min-h-12 rounded-xl border px-3 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                        activeSection === section.id
+                          ? "border-accent/40 bg-accent-soft text-accent-ink"
+                          : "border-transparent text-ink-secondary hover:bg-canvas",
+                      )}
+                    >
+                      <span className="mb-0.5 block text-xs opacity-70">
+                        0{index + 1}
+                      </span>
+                      {section.label}
+                    </button>
+                  ))}
+                </div>
+              </nav>
+              <fieldset
+                disabled={!canEdit || loading || saving || trainingUploading}
+                className="min-w-0"
+              >
+                <legend className="sr-only">
+                  Client profile configuration
+                </legend>
+                <div
+                  className="space-y-5 p-3 sm:p-5"
+                  role="tabpanel"
+                  id={`${editorId}-panel-company`}
+                  aria-labelledby={`${editorId}-tab-company`}
+                  hidden={activeSection !== "company"}
+                >
+                  <div className="rounded-2xl border border-line bg-surface p-4">
+                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                          Company
+                        </p>
+                        <h4 className="mt-1 text-lg font-semibold text-ink">
+                          Identity & accounting destination
+                        </h4>
+                      </div>
+                      <span className="w-fit rounded-full border border-line bg-canvas px-3 py-1 text-xs font-semibold text-ink-secondary">
+                        {draft.settings.default_currency || "USD"} /{" "}
+                        {draft.settings.country_code || "US"}
+                      </span>
+                    </div>
+                    <FormGrid>
+                      <TextField
+                        label="Profile name"
+                        wide
+                        value={draft.name}
+                        onChange={(value) => updateDraft("name", value)}
+                        placeholder="Client + workflow name"
+                      />
+                      {showSystemField && !accountingSystem && (
+                        <SelectField
+                          label="Accounting system"
+                          value={draft.accounting_system}
+                          options={accountingSystems}
+                          onChange={(value) => {
+                            const nextSystem = value as AccountingSystem;
+                            if (
+                              selectedProfile &&
+                              nextSystem !== draft.accounting_system &&
+                              !window.confirm(
+                                "Change accounting destination? Connection settings and entry type will reset for the new system. Other saved values stay in this form; review them before saving.",
+                              )
+                            )
+                              return;
+                            const nextDefaults =
+                              blankProfile(nextSystem).settings;
+                            setDraft((current) => ({
+                              ...current,
+                              accounting_system: nextSystem,
+                              settings: {
+                                ...current.settings,
+                                connection_settings:
+                                  nextDefaults.connection_settings,
+                                posting_mode: nextDefaults.posting_mode,
+                                voucher_type: nextDefaults.voucher_type,
+                              },
+                            }));
+                          }}
+                        />
+                      )}
+                      <TextField
+                        label="Company name"
+                        wide
+                        unverified={draftSystem === "tally"}
+                        value={draft.settings.company_name}
+                        onChange={(value) =>
+                          updateSettings("company_name", value)
+                        }
+                        placeholder="Exact Tally or ERP company"
+                      />
+                      <TextField
+                        label="Description"
+                        value={draft.description}
+                        onChange={(value) => updateDraft("description", value)}
+                        placeholder="When this profile should be used"
+                        wide
+                      />
+                    </FormGrid>
+                  </div>
+
+                  <SettingsPanel
+                    title="Country, currency & tax"
+                    detail="Defaults for this company. These are configuration values, not evidence extracted from an invoice."
+                    defaultOpen
+                  >
+                    <FormGrid>
+                      <SelectField
+                        label="Country profile"
+                        value={draft.settings.country_code}
+                        options={countryOptions}
+                        onChange={applyCountryProfile}
+                      />
+                      <TextField
+                        label="Country name"
+                        value={draft.settings.country_name}
+                        onChange={(value) =>
+                          updateSettings("country_name", value)
+                        }
+                        placeholder="United States"
+                      />
+                      <TextField
+                        label="Default currency"
+                        value={draft.settings.default_currency}
+                        onChange={(value) =>
+                          updateSettings(
+                            "default_currency",
+                            value.toUpperCase(),
+                          )
+                        }
+                        placeholder="USD"
+                      />
+                      <SelectField
+                        label="Tax mode"
+                        value={draft.settings.tax_mode}
+                        options={taxModeOptions}
+                        onChange={(value) => {
+                          setDraft((current) => ({
+                            ...current,
+                            settings: {
+                              ...current.settings,
+                              tax_mode: value,
+                              tax_settings: {
+                                ...current.settings.tax_settings,
+                                tax_mode: value,
+                              },
+                            },
+                          }));
+                        }}
+                      />
+                      <TextField
+                        label="Tax ID label"
+                        value={draft.settings.tax_registration_label}
+                        onChange={(value) =>
+                          updateSettings("tax_registration_label", value)
+                        }
+                        placeholder="GSTIN, VAT, TRN"
+                      />
+                    </FormGrid>
+                  </SettingsPanel>
+
+                  {draft.is_default && (
+                    <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
+                      <CheckCircle2 size={16} />
+                      This profile will become the default for{" "}
+                      {systemLabel(draftSystem)}.
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-          </aside>
 
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-canvas">
-            <div className="flex flex-col gap-4 border-b border-line bg-surface px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
-                  {selectedProfile ? "Editing profile" : "New profile"}
-                </p>
-                <h3 className="mt-1 break-words text-xl font-semibold text-ink">
-                  {draft.name || "Untitled client setup"}
-                </h3>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Pill icon={<ShieldCheck size={13} />}>
-                    {onboardingStatusLabel(onboardingStatus)}
-                  </Pill>
-                  <Pill icon={<Landmark size={13} />}>
-                    {systemLabel(draftSystem)}
-                  </Pill>
-                  <Pill icon={<Globe2 size={13} />}>
-                    {draft.settings.country_name || "Country not set"}
-                  </Pill>
-                  <Pill icon={<Layers3 size={13} />}>
-                    {draft.settings.default_currency || "USD"}
-                  </Pill>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-ink-secondary">
+                    <input
+                      type="checkbox"
+                      checked={draft.is_default}
+                      onChange={(event) =>
+                        updateDraft("is_default", event.target.checked)
+                      }
+                      className="size-4 accent-[var(--accent)]"
+                    />
+                    Use as default for this accounting system
+                  </label>
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedProfile && !selectedProfile.is_default && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={makeDefault}
-                    disabled={!canManage || isDirty || saving}
+                <div
+                  className="space-y-5 p-3 sm:p-5"
+                  role="tabpanel"
+                  id={`${editorId}-panel-connection`}
+                  aria-labelledby={`${editorId}-tab-connection`}
+                  hidden={activeSection !== "connection"}
+                >
+                  <ProfileConnectionStatus
+                    profile={selectedProfile}
+                    system={draftSystem}
+                    dirty={isDirty}
+                  />
+                  <SettingsPanel
+                    title="Connection settings"
+                    detail="Save these values before entering the same workspace ID and token in the Windows connector."
+                    defaultOpen
                   >
-                    <BadgeCheck size={14} />
-                    Set default
-                  </Button>
-                )}
-                {selectedProfile && (
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={removeProfile}
-                    disabled={!canManage || saving}
+                    {renderConnectionFields(
+                      draftSystem,
+                      draft.settings.connection_settings ?? {},
+                      updateConnectionSetting,
+                      canManage,
+                    )}
+                  </SettingsPanel>
+                  <SettingsPanel
+                    title="Advanced environment"
+                    detail="Technical configuration. Keep existing values unless your integration requires a change."
                   >
-                    <Trash2 size={14} />
-                    Delete
-                  </Button>
-                )}
+                    <FormGrid>
+                      {" "}
+                      <TextField
+                        label="Environment"
+                        value={draft.settings.environment}
+                        onChange={(value) =>
+                          updateSettings("environment", value)
+                        }
+                        placeholder="production or sandbox"
+                      />
+                    </FormGrid>
+                  </SettingsPanel>
+                </div>
+                <div
+                  className="space-y-5 p-3 sm:p-5"
+                  role="tabpanel"
+                  id={`${editorId}-panel-posting`}
+                  aria-labelledby={`${editorId}-tab-posting`}
+                  hidden={activeSection !== "posting"}
+                >
+                  <SettingsPanel
+                    title="Entry type"
+                    detail="Invoices still require explicit approval. Changing these settings does not approve an invoice."
+                    defaultOpen
+                  >
+                    <FormGrid>
+                      <TextField
+                        label="Direction"
+                        value={draft.settings.direction}
+                        onChange={(value) => updateSettings("direction", value)}
+                        placeholder="inbound"
+                      />
+                      <SelectField
+                        label="Posting mode"
+                        value={draft.settings.posting_mode}
+                        options={postingModes}
+                        onChange={(value) =>
+                          updateSettings(
+                            "posting_mode",
+                            value as ProfilePostingMode,
+                          )
+                        }
+                      />
+                      <TextField
+                        label="Voucher type"
+                        masterKind="voucher_types"
+                        wide
+                        unverified={draftSystem === "tally"}
+                        value={draft.settings.voucher_type}
+                        onChange={(value) =>
+                          updateSettings("voucher_type", value)
+                        }
+                        placeholder="Purchase"
+                      />
+                    </FormGrid>
+                  </SettingsPanel>
+                  <SettingsPanel
+                    title="Ledgers & inventory"
+                    detail="The exact names from this client's books. Postings fail if a name here differs from the accounting system by even one character — copy names, don't type them."
+                  >
+                    <div className="space-y-4">
+                      {draftSystem === "tally" && (
+                        <p className="rounded-xl border border-gold/30 bg-gold-soft p-3 text-sm text-gold">
+                          Search synced names below, or enter a name manually.
+                          Found in Tally means it appears in the recent
+                          snapshot, not that its accounting use is correct.
+                        </p>
+                      )}
+                      <FieldGroup
+                        title="Where purchases post"
+                        detail="Every invoice debits the purchase ledger and credits the supplier. Tax is split out to its own ledgers."
+                      >
+                        <TextField
+                          label="Purchase ledger"
+                          masterKind="ledgers"
+                          wide
+                          unverified={draftSystem === "tally"}
+                          value={draft.settings.purchase_ledger}
+                          onChange={(value) =>
+                            updateSettings("purchase_ledger", value)
+                          }
+                          hint="Copy the exact ledger name from the accounting system."
+                        />
+                        <TextField
+                          label="Tax ledger"
+                          masterKind="ledgers"
+                          wide
+                          unverified={draftSystem === "tally"}
+                          value={draft.settings.tax_ledger}
+                          onChange={(value) =>
+                            updateSettings("tax_ledger", value)
+                          }
+                          hint="Used when tax is posted as one line, or as the IGST fallback."
+                        />
+                        <TextField
+                          label="Input IGST ledger"
+                          masterKind="ledgers"
+                          wide
+                          unverified={draftSystem === "tally"}
+                          value={String(
+                            draft.settings.tax_settings.igst_ledger ?? "",
+                          )}
+                          onChange={(value) =>
+                            updateTaxSetting("igst_ledger", value)
+                          }
+                          hint="Interstate GST. Leave blank to use the tax ledger."
+                        />
+                        <TextField
+                          label="Input CGST ledger"
+                          masterKind="ledgers"
+                          wide
+                          unverified={draftSystem === "tally"}
+                          value={String(
+                            draft.settings.tax_settings.cgst_ledger ?? "",
+                          )}
+                          onChange={(value) =>
+                            updateTaxSetting("cgst_ledger", value)
+                          }
+                          hint="Central half of intrastate GST."
+                        />
+                        <TextField
+                          label="Input SGST ledger"
+                          masterKind="ledgers"
+                          wide
+                          unverified={draftSystem === "tally"}
+                          value={String(
+                            draft.settings.tax_settings.sgst_ledger ?? "",
+                          )}
+                          onChange={(value) =>
+                            updateTaxSetting("sgst_ledger", value)
+                          }
+                          hint="State half of intrastate GST."
+                        />
+                        <TextField
+                          label="TCS ledger"
+                          masterKind="ledgers"
+                          wide
+                          unverified={draftSystem === "tally"}
+                          optional
+                          value={draft.settings.tcs_ledger}
+                          onChange={(value) =>
+                            updateSettings("tcs_ledger", value)
+                          }
+                          hint="Only if suppliers charge TCS on invoices."
+                        />
+                        <TextField
+                          label="Round-off ledger"
+                          masterKind="ledgers"
+                          wide
+                          unverified={draftSystem === "tally"}
+                          optional
+                          value={draft.settings.round_off_ledger}
+                          onChange={(value) =>
+                            updateSettings("round_off_ledger", value)
+                          }
+                          hint="Absorbs paise differences between line totals and the invoice total."
+                        />
+                      </FieldGroup>
+
+                      {isInventoryPostingMode(draft.settings.posting_mode) ? (
+                        <FieldGroup
+                          title="Default stock item"
+                          detail="Used for any invoice line that no item mapping matches. Stock moves in the accounting system under this item."
+                        >
+                          <TextField
+                            label="Stock item"
+                            masterKind="stock_items"
+                            wide
+                            unverified={draftSystem === "tally"}
+                            value={draft.settings.stock_item_name}
+                            onChange={(value) =>
+                              updateSettings("stock_item_name", value)
+                            }
+                            hint="Exact stock item name as it appears in the accounting system."
+                          />
+                          <TextField
+                            label="Unit (UOM)"
+                            masterKind="units"
+                            wide
+                            unverified={draftSystem === "tally"}
+                            value={draft.settings.stock_item_uom}
+                            onChange={(value) =>
+                              updateSettings("stock_item_uom", value)
+                            }
+                            hint="The unit symbol that stock item uses — for example Nos or KGS."
+                          />
+                          <TextField
+                            label="HSN/SAC"
+                            optional
+                            value={draft.settings.stock_item_hsn}
+                            onChange={(value) =>
+                              updateSettings("stock_item_hsn", value)
+                            }
+                            hint="Recommended for GST validation on India profiles."
+                          />
+                          <TextField
+                            label="Godown / location"
+                            masterKind="godowns"
+                            wide
+                            unverified={draftSystem === "tally"}
+                            optional
+                            value={draft.settings.godown_name}
+                            onChange={(value) =>
+                              updateSettings("godown_name", value)
+                            }
+                            hint="Only if the accounting system prompts for a godown during entry."
+                          />
+                        </FieldGroup>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-3 text-xs font-semibold leading-5 text-ink-secondary">
+                          Stock item settings are hidden because this profile
+                          posts ledger-only accounting vouchers. Switch the
+                          posting mode to an inventory-backed mode to configure
+                          stock items.
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-ink">
+                            Line mapping rules
+                          </p>
+                          <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
+                            {draft.settings.item_mappings.length
+                              ? `${draft.settings.item_mappings.length} saved rule${draft.settings.item_mappings.length === 1 ? "" : "s"}. Ledger and tax overrides can apply in any posting mode; stock allocations apply only in inventory modes.`
+                              : "Map invoice lines to accounting categories and ledgers. Inventory modes can also map stock items and units."}
+                          </p>
+                        </div>
+                        <Link
+                          href="/app/rules"
+                          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-accent-ink transition-colors hover:border-accent"
+                        >
+                          Manage item mappings
+                          <ArrowRight size={14} />
+                        </Link>
+                      </div>
+                    </div>
+                  </SettingsPanel>
+
+                  {draftSystem === "tally" && <MasterSnapshotPanel />}
+                  <TextAreaField
+                    label="Accounting review notes"
+                    value={trainingProfile.posting_expectations}
+                    onChange={(value) =>
+                      updateTrainingProfile({ posting_expectations: value })
+                    }
+                    hint="Document the intended entry for your reviewer. These notes do not override ledger fields or item mappings."
+                    wide
+                  />
+                </div>
+                <div
+                  className="space-y-5 p-3 sm:p-5"
+                  role="tabpanel"
+                  id={`${editorId}-panel-extraction`}
+                  aria-labelledby={`${editorId}-tab-extraction`}
+                  hidden={activeSection !== "extraction"}
+                >
+                  <SettingsPanel
+                    title="Document parsing"
+                    detail="How invoice content is read, separate from where the accounting entry posts."
+                    defaultOpen
+                  >
+                    <FormGrid>
+                      {" "}
+                      <SelectField
+                        label="Default parser"
+                        value={draft.settings.default_parser}
+                        options={parsers}
+                        onChange={(value) =>
+                          updateSettings("default_parser", value)
+                        }
+                      />
+                      <SelectField
+                        label="Invoice format"
+                        value={draft.settings.invoice_format}
+                        options={invoiceFormatOptions}
+                        onChange={(value) =>
+                          updateSettings("invoice_format", value)
+                        }
+                      />
+                    </FormGrid>
+                  </SettingsPanel>
+                  <TrainingProfileSection
+                    section="guidance"
+                    selectedProfile={selectedProfile}
+                    trainingProfile={trainingProfile}
+                    sampleFile={trainingSampleFile}
+                    sampleNotes={trainingSampleNotes}
+                    uploading={trainingUploading || saving}
+                    dirty={isDirty}
+                    onUpdate={updateTrainingProfile}
+                    onToggleField={toggleExpectedTrainingField}
+                    onFileChange={setTrainingSampleFile}
+                    onNotesChange={setTrainingSampleNotes}
+                    onUpload={() => void uploadTrainingSampleAction()}
+                  />
+                  <AiReadinessPanel
+                    aiStatus={aiStatus}
+                    aiStatusError={aiStatusError}
+                  />
+                </div>
+                <div
+                  className="space-y-5 p-3 sm:p-5"
+                  role="tabpanel"
+                  id={`${editorId}-panel-samples`}
+                  aria-labelledby={`${editorId}-tab-samples`}
+                  hidden={activeSection !== "samples"}
+                >
+                  <TrainingProfileSection
+                    section="samples"
+                    selectedProfile={selectedProfile}
+                    trainingProfile={trainingProfile}
+                    sampleFile={trainingSampleFile}
+                    sampleNotes={trainingSampleNotes}
+                    uploading={trainingUploading || saving}
+                    dirty={isDirty}
+                    onUpdate={updateTrainingProfile}
+                    onToggleField={toggleExpectedTrainingField}
+                    onFileChange={setTrainingSampleFile}
+                    onNotesChange={setTrainingSampleNotes}
+                    onUpload={() => void uploadTrainingSampleAction()}
+                  />
+                  <OnboardingApprovalPanel
+                    selectedProfile={selectedProfile}
+                    status={onboardingStatus}
+                    checklist={onboardingChecklist}
+                    saving={saving || trainingUploading || isDirty}
+                    canManage={canManage}
+                    dirty={isDirty}
+                    onRecommend={() => void generateRecommendations()}
+                    onSubmitReview={() => void submitForReview()}
+                    onActivate={() => void approveAndActivate()}
+                  />
+                </div>
+              </fieldset>
+              <div className="flex flex-col gap-3 border-t border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-ink-secondary">
+                  {!canEdit
+                    ? "Read-only access. Ask an owner or admin to update this profile."
+                    : isDirty
+                      ? "Unsaved changes · save before running setup actions."
+                      : selectedProfile
+                        ? "All changes saved. Invoice approval is still required."
+                        : "Save a draft before adding samples or activating."}
+                </p>
                 <Button
-                  size="sm"
-                  variant="primary"
                   onClick={saveProfile}
                   disabled={!canEdit || saving || trainingUploading}
+                  className="shrink-0"
                 >
                   {saving ? (
-                    <LoaderCircle size={14} className="animate-spin" />
+                    <LoaderCircle size={15} className="animate-spin" />
                   ) : (
-                    <Save size={14} />
+                    <Save size={15} />
                   )}
                   {onboardingStatus === "active"
                     ? "Save changes"
                     : "Save draft"}
                 </Button>
               </div>
-            </div>
-
-            {(notice || error) && (
-              <div
-                className={cn(
-                  "mx-5 mt-5 rounded-xl border px-4 py-3 text-sm font-medium",
-                  notice === "Client profile saved." ||
-                    notice === "Default profile updated." ||
-                    notice === "Client profile deleted."
-                    ? "border-success/30 bg-success-soft text-success"
-                    : "border-gold/30 bg-gold-soft text-gold",
-                )}
-              >
-                <span role="status" aria-live="polite">
-                  {notice || error}
-                </span>
-              </div>
-            )}
-
-            <nav
-              aria-label="Profile sections"
-              className="border-b border-line bg-surface p-3 sm:p-4"
-            >
-              <div
-                role="tablist"
-                aria-label="Client profile setup"
-                className="grid grid-cols-2 gap-2 lg:grid-cols-5"
-              >
-                {profileSections.map((section, index) => (
-                  <button
-                    key={section.id}
-                    type="button"
-                    role="tab"
-                    id={`${editorId}-tab-${section.id}`}
-                    aria-controls={`${editorId}-panel-${section.id}`}
-                    aria-selected={activeSection === section.id}
-                    tabIndex={activeSection === section.id ? 0 : -1}
-                    onClick={() => setActiveSection(section.id)}
-                    onKeyDown={(event) => {
-                      const next =
-                        event.key === "Home"
-                          ? 0
-                          : event.key === "End"
-                            ? profileSections.length - 1
-                            : event.key === "ArrowRight"
-                              ? (index + 1) % profileSections.length
-                              : event.key === "ArrowLeft"
-                                ? (index + profileSections.length - 1) %
-                                  profileSections.length
-                                : -1;
-                      if (next < 0) return;
-                      event.preventDefault();
-                      setActiveSection(profileSections[next].id);
-                      document
-                        .getElementById(
-                          `${editorId}-tab-${profileSections[next].id}`,
-                        )
-                        ?.focus();
-                    }}
-                    className={cn(
-                      "min-h-12 rounded-xl border px-3 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
-                      activeSection === section.id
-                        ? "border-accent/40 bg-accent-soft text-accent-ink"
-                        : "border-transparent text-ink-secondary hover:bg-canvas",
-                    )}
-                  >
-                    <span className="mb-0.5 block text-xs opacity-70">
-                      0{index + 1}
-                    </span>
-                    {section.label}
-                  </button>
-                ))}
-              </div>
-            </nav>
-            <fieldset
-              disabled={!canEdit || loading || saving || trainingUploading}
-              className="min-w-0"
-            >
-              <legend className="sr-only">Client profile configuration</legend>
-              <div
-                className="space-y-5 p-3 sm:p-5"
-                role="tabpanel"
-                id={`${editorId}-panel-company`}
-                aria-labelledby={`${editorId}-tab-company`}
-                hidden={activeSection !== "company"}
-              >
-                <div className="rounded-2xl border border-line bg-surface p-4">
-                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
-                        Company
-                      </p>
-                      <h4 className="mt-1 text-lg font-semibold text-ink">
-                        Identity & accounting destination
-                      </h4>
-                    </div>
-                    <span className="w-fit rounded-full border border-line bg-canvas px-3 py-1 text-xs font-semibold text-ink-secondary">
-                      {draft.settings.default_currency || "USD"} /{" "}
-                      {draft.settings.country_code || "US"}
-                    </span>
-                  </div>
-                  <FormGrid>
-                    <TextField
-                      label="Profile name"
-                      wide
-                      value={draft.name}
-                      onChange={(value) => updateDraft("name", value)}
-                      placeholder="Client + workflow name"
-                    />
-                    {showSystemField && !accountingSystem && (
-                      <SelectField
-                        label="Accounting system"
-                        value={draft.accounting_system}
-                        options={accountingSystems}
-                        onChange={(value) => {
-                          const nextSystem = value as AccountingSystem;
-                          if (
-                            selectedProfile &&
-                            nextSystem !== draft.accounting_system &&
-                            !window.confirm(
-                              "Change accounting destination? Connection settings and entry type will reset for the new system. Other saved values stay in this form; review them before saving.",
-                            )
-                          )
-                            return;
-                          const nextDefaults =
-                            blankProfile(nextSystem).settings;
-                          setDraft((current) => ({
-                            ...current,
-                            accounting_system: nextSystem,
-                            settings: {
-                              ...current.settings,
-                              connection_settings:
-                                nextDefaults.connection_settings,
-                              posting_mode: nextDefaults.posting_mode,
-                              voucher_type: nextDefaults.voucher_type,
-                            },
-                          }));
-                        }}
-                      />
-                    )}
-                    <TextField
-                      label="Company name"
-                      wide
-                      unverified={draftSystem === "tally"}
-                      value={draft.settings.company_name}
-                      onChange={(value) =>
-                        updateSettings("company_name", value)
-                      }
-                      placeholder="Exact Tally or ERP company"
-                    />
-                    <TextField
-                      label="Description"
-                      value={draft.description}
-                      onChange={(value) => updateDraft("description", value)}
-                      placeholder="When this profile should be used"
-                      wide
-                    />
-                  </FormGrid>
-                </div>
-
-                <SettingsPanel
-                  title="Country, currency & tax"
-                  detail="Defaults for this company. These are configuration values, not evidence extracted from an invoice."
-                  defaultOpen
-                >
-                  <FormGrid>
-                    <SelectField
-                      label="Country profile"
-                      value={draft.settings.country_code}
-                      options={countryOptions}
-                      onChange={applyCountryProfile}
-                    />
-                    <TextField
-                      label="Country name"
-                      value={draft.settings.country_name}
-                      onChange={(value) =>
-                        updateSettings("country_name", value)
-                      }
-                      placeholder="United States"
-                    />
-                    <TextField
-                      label="Default currency"
-                      value={draft.settings.default_currency}
-                      onChange={(value) =>
-                        updateSettings("default_currency", value.toUpperCase())
-                      }
-                      placeholder="USD"
-                    />
-                    <SelectField
-                      label="Tax mode"
-                      value={draft.settings.tax_mode}
-                      options={taxModeOptions}
-                      onChange={(value) => {
-                        setDraft((current) => ({
-                          ...current,
-                          settings: {
-                            ...current.settings,
-                            tax_mode: value,
-                            tax_settings: {
-                              ...current.settings.tax_settings,
-                              tax_mode: value,
-                            },
-                          },
-                        }));
-                      }}
-                    />
-                    <TextField
-                      label="Tax ID label"
-                      value={draft.settings.tax_registration_label}
-                      onChange={(value) =>
-                        updateSettings("tax_registration_label", value)
-                      }
-                      placeholder="GSTIN, VAT, TRN"
-                    />
-                  </FormGrid>
-                </SettingsPanel>
-
-                {draft.is_default && (
-                  <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
-                    <CheckCircle2 size={16} />
-                    This profile will become the default for{" "}
-                    {systemLabel(draftSystem)}.
-                  </div>
-                )}
-
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-ink-secondary">
-                  <input
-                    type="checkbox"
-                    checked={draft.is_default}
-                    onChange={(event) =>
-                      updateDraft("is_default", event.target.checked)
-                    }
-                    className="size-4 accent-[var(--accent)]"
-                  />
-                  Use as default for this accounting system
-                </label>
-              </div>
-              <div
-                className="space-y-5 p-3 sm:p-5"
-                role="tabpanel"
-                id={`${editorId}-panel-connection`}
-                aria-labelledby={`${editorId}-tab-connection`}
-                hidden={activeSection !== "connection"}
-              >
-                <ProfileConnectionStatus
-                  profile={selectedProfile}
-                  system={draftSystem}
-                  dirty={isDirty}
-                />
-                <SettingsPanel
-                  title="Connection settings"
-                  detail="Save these values before entering the same workspace ID and token in the Windows connector."
-                  defaultOpen
-                >
-                  {renderConnectionFields(
-                    draftSystem,
-                    draft.settings.connection_settings ?? {},
-                    updateConnectionSetting,
-                    canManage,
-                  )}
-                </SettingsPanel>
-                <SettingsPanel
-                  title="Advanced environment"
-                  detail="Technical configuration. Keep existing values unless your integration requires a change."
-                >
-                  <FormGrid>
-                    {" "}
-                    <TextField
-                      label="Environment"
-                      value={draft.settings.environment}
-                      onChange={(value) => updateSettings("environment", value)}
-                      placeholder="production or sandbox"
-                    />
-                  </FormGrid>
-                </SettingsPanel>
-              </div>
-              <div
-                className="space-y-5 p-3 sm:p-5"
-                role="tabpanel"
-                id={`${editorId}-panel-posting`}
-                aria-labelledby={`${editorId}-tab-posting`}
-                hidden={activeSection !== "posting"}
-              >
-                <SettingsPanel
-                  title="Entry type"
-                  detail="Invoices still require explicit approval. Changing these settings does not approve an invoice."
-                  defaultOpen
-                >
-                  <FormGrid>
-                    <TextField
-                      label="Direction"
-                      value={draft.settings.direction}
-                      onChange={(value) => updateSettings("direction", value)}
-                      placeholder="inbound"
-                    />
-                    <SelectField
-                      label="Posting mode"
-                      value={draft.settings.posting_mode}
-                      options={postingModes}
-                      onChange={(value) =>
-                        updateSettings(
-                          "posting_mode",
-                          value as ProfilePostingMode,
-                        )
-                      }
-                    />
-                    <TextField
-                      label="Voucher type"
-                      wide
-                      unverified={draftSystem === "tally"}
-                      value={draft.settings.voucher_type}
-                      onChange={(value) =>
-                        updateSettings("voucher_type", value)
-                      }
-                      placeholder="Purchase"
-                    />
-                  </FormGrid>
-                </SettingsPanel>
-                <SettingsPanel
-                  title="Ledgers & inventory"
-                  detail="The exact names from this client's books. Postings fail if a name here differs from the accounting system by even one character — copy names, don't type them."
-                >
-                  <div className="space-y-4">
-                    {draftSystem === "tally" && (
-                      <p className="rounded-xl border border-gold/30 bg-gold-soft p-3 text-sm text-gold">
-                        Manually entered Tally names are Unverified. Saving or
-                        activating a profile does not check that these names
-                        exist in Tally.
-                      </p>
-                    )}
-                    <FieldGroup
-                      title="Where purchases post"
-                      detail="Every invoice debits the purchase ledger and credits the supplier. Tax is split out to its own ledgers."
-                    >
-                      <TextField
-                        label="Purchase ledger"
-                        wide
-                        unverified={draftSystem === "tally"}
-                        value={draft.settings.purchase_ledger}
-                        onChange={(value) =>
-                          updateSettings("purchase_ledger", value)
-                        }
-                        hint="Copy the exact ledger name from the accounting system."
-                      />
-                      <TextField
-                        label="Tax ledger"
-                        wide
-                        unverified={draftSystem === "tally"}
-                        value={draft.settings.tax_ledger}
-                        onChange={(value) =>
-                          updateSettings("tax_ledger", value)
-                        }
-                        hint="Used when tax is posted as one line, or as the IGST fallback."
-                      />
-                      <TextField
-                        label="Input IGST ledger"
-                        wide
-                        unverified={draftSystem === "tally"}
-                        value={String(
-                          draft.settings.tax_settings.igst_ledger ?? "",
-                        )}
-                        onChange={(value) =>
-                          updateTaxSetting("igst_ledger", value)
-                        }
-                        hint="Interstate GST. Leave blank to use the tax ledger."
-                      />
-                      <TextField
-                        label="Input CGST ledger"
-                        wide
-                        unverified={draftSystem === "tally"}
-                        value={String(
-                          draft.settings.tax_settings.cgst_ledger ?? "",
-                        )}
-                        onChange={(value) =>
-                          updateTaxSetting("cgst_ledger", value)
-                        }
-                        hint="Central half of intrastate GST."
-                      />
-                      <TextField
-                        label="Input SGST ledger"
-                        wide
-                        unverified={draftSystem === "tally"}
-                        value={String(
-                          draft.settings.tax_settings.sgst_ledger ?? "",
-                        )}
-                        onChange={(value) =>
-                          updateTaxSetting("sgst_ledger", value)
-                        }
-                        hint="State half of intrastate GST."
-                      />
-                      <TextField
-                        label="TCS ledger"
-                        wide
-                        unverified={draftSystem === "tally"}
-                        optional
-                        value={draft.settings.tcs_ledger}
-                        onChange={(value) =>
-                          updateSettings("tcs_ledger", value)
-                        }
-                        hint="Only if suppliers charge TCS on invoices."
-                      />
-                      <TextField
-                        label="Round-off ledger"
-                        wide
-                        unverified={draftSystem === "tally"}
-                        optional
-                        value={draft.settings.round_off_ledger}
-                        onChange={(value) =>
-                          updateSettings("round_off_ledger", value)
-                        }
-                        hint="Absorbs paise differences between line totals and the invoice total."
-                      />
-                    </FieldGroup>
-
-                    {isInventoryPostingMode(draft.settings.posting_mode) ? (
-                      <FieldGroup
-                        title="Default stock item"
-                        detail="Used for any invoice line that no item mapping matches. Stock moves in the accounting system under this item."
-                      >
-                        <TextField
-                          label="Stock item"
-                          wide
-                          unverified={draftSystem === "tally"}
-                          value={draft.settings.stock_item_name}
-                          onChange={(value) =>
-                            updateSettings("stock_item_name", value)
-                          }
-                          hint="Exact stock item name as it appears in the accounting system."
-                        />
-                        <TextField
-                          label="Unit (UOM)"
-                          wide
-                          unverified={draftSystem === "tally"}
-                          value={draft.settings.stock_item_uom}
-                          onChange={(value) =>
-                            updateSettings("stock_item_uom", value)
-                          }
-                          hint="The unit symbol that stock item uses — for example Nos or KGS."
-                        />
-                        <TextField
-                          label="HSN/SAC"
-                          optional
-                          value={draft.settings.stock_item_hsn}
-                          onChange={(value) =>
-                            updateSettings("stock_item_hsn", value)
-                          }
-                          hint="Recommended for GST validation on India profiles."
-                        />
-                        <TextField
-                          label="Godown / location"
-                          wide
-                          unverified={draftSystem === "tally"}
-                          optional
-                          value={draft.settings.godown_name}
-                          onChange={(value) =>
-                            updateSettings("godown_name", value)
-                          }
-                          hint="Only if the accounting system prompts for a godown during entry."
-                        />
-                      </FieldGroup>
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-3 text-xs font-semibold leading-5 text-ink-secondary">
-                        Stock item settings are hidden because this profile
-                        posts ledger-only accounting vouchers. Switch the
-                        posting mode to an inventory-backed mode to configure
-                        stock items.
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-ink">
-                          Line mapping rules
-                        </p>
-                        <p className="mt-1 text-xs font-semibold leading-5 text-ink-secondary">
-                          {draft.settings.item_mappings.length
-                            ? `${draft.settings.item_mappings.length} saved rule${draft.settings.item_mappings.length === 1 ? "" : "s"}. Ledger and tax overrides can apply in any posting mode; stock allocations apply only in inventory modes.`
-                            : "Map invoice lines to accounting categories and ledgers. Inventory modes can also map stock items and units."}
-                        </p>
-                      </div>
-                      <Link
-                        href="/app/rules"
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-accent-ink transition-colors hover:border-accent"
-                      >
-                        Manage item mappings
-                        <ArrowRight size={14} />
-                      </Link>
-                    </div>
-                  </div>
-                </SettingsPanel>
-
-                <TextAreaField
-                  label="Accounting review notes"
-                  value={trainingProfile.posting_expectations}
-                  onChange={(value) =>
-                    updateTrainingProfile({ posting_expectations: value })
-                  }
-                  hint="Document the intended entry for your reviewer. These notes do not override ledger fields or item mappings."
-                  wide
-                />
-              </div>
-              <div
-                className="space-y-5 p-3 sm:p-5"
-                role="tabpanel"
-                id={`${editorId}-panel-extraction`}
-                aria-labelledby={`${editorId}-tab-extraction`}
-                hidden={activeSection !== "extraction"}
-              >
-                <SettingsPanel
-                  title="Document parsing"
-                  detail="How invoice content is read, separate from where the accounting entry posts."
-                  defaultOpen
-                >
-                  <FormGrid>
-                    {" "}
-                    <SelectField
-                      label="Default parser"
-                      value={draft.settings.default_parser}
-                      options={parsers}
-                      onChange={(value) =>
-                        updateSettings("default_parser", value)
-                      }
-                    />
-                    <SelectField
-                      label="Invoice format"
-                      value={draft.settings.invoice_format}
-                      options={invoiceFormatOptions}
-                      onChange={(value) =>
-                        updateSettings("invoice_format", value)
-                      }
-                    />
-                  </FormGrid>
-                </SettingsPanel>
-                <TrainingProfileSection
-                  section="guidance"
-                  selectedProfile={selectedProfile}
-                  trainingProfile={trainingProfile}
-                  sampleFile={trainingSampleFile}
-                  sampleNotes={trainingSampleNotes}
-                  uploading={trainingUploading || saving}
-                  dirty={isDirty}
-                  onUpdate={updateTrainingProfile}
-                  onToggleField={toggleExpectedTrainingField}
-                  onFileChange={setTrainingSampleFile}
-                  onNotesChange={setTrainingSampleNotes}
-                  onUpload={() => void uploadTrainingSampleAction()}
-                />
-                <AiReadinessPanel
-                  aiStatus={aiStatus}
-                  aiStatusError={aiStatusError}
-                />
-              </div>
-              <div
-                className="space-y-5 p-3 sm:p-5"
-                role="tabpanel"
-                id={`${editorId}-panel-samples`}
-                aria-labelledby={`${editorId}-tab-samples`}
-                hidden={activeSection !== "samples"}
-              >
-                <TrainingProfileSection
-                  section="samples"
-                  selectedProfile={selectedProfile}
-                  trainingProfile={trainingProfile}
-                  sampleFile={trainingSampleFile}
-                  sampleNotes={trainingSampleNotes}
-                  uploading={trainingUploading || saving}
-                  dirty={isDirty}
-                  onUpdate={updateTrainingProfile}
-                  onToggleField={toggleExpectedTrainingField}
-                  onFileChange={setTrainingSampleFile}
-                  onNotesChange={setTrainingSampleNotes}
-                  onUpload={() => void uploadTrainingSampleAction()}
-                />
-                <OnboardingApprovalPanel
-                  selectedProfile={selectedProfile}
-                  status={onboardingStatus}
-                  checklist={onboardingChecklist}
-                  saving={saving || trainingUploading || isDirty}
-                  canManage={canManage}
-                  dirty={isDirty}
-                  onRecommend={() => void generateRecommendations()}
-                  onSubmitReview={() => void submitForReview()}
-                  onActivate={() => void approveAndActivate()}
-                />
-              </div>
-            </fieldset>
-            <div className="flex flex-col gap-3 border-t border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-ink-secondary">
-                {!canEdit
-                  ? "Read-only access. Ask an owner or admin to update this profile."
-                  : isDirty
-                    ? "Unsaved changes · save before running setup actions."
-                    : selectedProfile
-                      ? "All changes saved. Invoice approval is still required."
-                      : "Save a draft before adding samples or activating."}
-              </p>
-              <Button
-                onClick={saveProfile}
-                disabled={!canEdit || saving || trainingUploading}
-                className="shrink-0"
-              >
-                {saving ? (
-                  <LoaderCircle size={15} className="animate-spin" />
-                ) : (
-                  <Save size={15} />
-                )}
-                {onboardingStatus === "active" ? "Save changes" : "Save draft"}
-              </Button>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
-      </div>
-    </ContentCard>
+      </ContentCard>
+    </TallyMasterProvider>
   );
 }
 
@@ -2966,7 +3004,9 @@ function TextField({
   wide = false,
   unverified = false,
   type = "text",
+  masterKind,
 }: {
+  masterKind?: MasterKind;
   unverified?: boolean;
   type?: "text" | "password";
   label: string;
@@ -2979,13 +3019,31 @@ function TextField({
   optional?: boolean;
   wide?: boolean;
 }) {
+  const optionsId = useId();
+  const { rows, confirmed } = useMasterNames(
+    unverified ? masterKind : undefined,
+  );
+  const found = rows.some((row) => row.name === value);
   return (
     <label className={cn("block min-w-0", wide && "col-span-full")}>
       <span className="text-xs font-semibold uppercase text-ink-muted">
         {label}
-        {unverified && (
-          <span className="ml-2 inline-block rounded-md bg-gold-soft px-2 py-0.5 text-xs font-medium normal-case text-gold">
-            Unverified
+        {unverified && value.trim() && (
+          <span
+            className={cn(
+              "ml-2 inline-block rounded-md px-2 py-0.5 text-xs font-medium normal-case",
+              found
+                ? confirmed
+                  ? "bg-success-soft text-success"
+                  : "bg-accent-soft text-accent-ink"
+                : "bg-gold-soft text-gold",
+            )}
+          >
+            {found
+              ? confirmed
+                ? "Mapping confirmed"
+                : "Found in Tally"
+              : "Unverified"}
           </span>
         )}
         {optional && (
@@ -2997,12 +3055,27 @@ function TextField({
       <input
         type={type}
         aria-label={label}
+        list={rows.length ? optionsId : undefined}
         autoComplete={type === "password" ? "new-password" : undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm font-medium text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-accent"
       />
+      {rows.length > 0 && (
+        <datalist id={optionsId}>
+          {rows
+            .filter((row) =>
+              row.name.toLocaleLowerCase().includes(value.toLocaleLowerCase()),
+            )
+            .slice(0, 100)
+            .map((row) => (
+              <option key={row.name} value={row.name}>
+                {row.parent || row.base_units}
+              </option>
+            ))}
+        </datalist>
+      )}
       {hint && (
         <span className="mt-1.5 block text-xs font-semibold leading-5 text-ink-muted">
           {hint}

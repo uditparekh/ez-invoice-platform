@@ -1,4 +1,4 @@
-SIFTENTRY TALLY CONNECTOR 0.5.0 — SCRIPT KIT SETUP GUIDE
+SIFTENTRY TALLY CONNECTOR 0.6.0 — SCRIPT KIT SETUP GUIDE
 ========================================
 
 This small program connects your TallyPrime to SiftEntry. When an invoice
@@ -68,10 +68,14 @@ Then click, in order:
     1. Save settings
     2. Test connection (safe with zero invoices; never claims or posts)
     3. Confirm cloud, Tally XML, and company checks.
-    4. Start connector only after the client profile/mappings are confirmed.
+    4. While stopped, click Sync Tally masters. Keep the correct company open.
+    5. In Client profiles > Posting rules, Refresh snapshot, review exact names,
+       save any changes, and explicitly confirm the intended mappings.
+    6. Start connector only after the client profile/mappings are confirmed.
 
-Master readiness says Not verified until master sync is available. This is
-not a failed login. Poll once CAN post approved invoices; it is not a test.
+Found in Tally means a name exists in a recent read-only snapshot; it does not
+prove the accounting mapping is correct. Sync again after 24 hours or changes
+in Tally. Poll once CAN post approved invoices; it is not a connection test.
 See CLIENT_INSTALL_GUIDE.md for diagnostics and upgrade/recovery instructions.
 
 WHAT GOOD LOOKS LIKE: the window shows "Connected to SiftEntry" and

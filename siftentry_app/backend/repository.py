@@ -8,6 +8,7 @@ import sqlite3
 from . import db
 from .reporting import ReportingRepository
 from .approval_repository import ApprovalRepository
+from .tally_masters import MasterRepository
 from .approval_plans import ApprovalConflict, profile_fingerprint
 import threading
 import uuid
@@ -121,7 +122,7 @@ class InvoiceFileRecord:
         )
 
 
-class InvoiceRepository(ApprovalRepository, ReportingRepository):
+class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepository):
     def __init__(self, database_path: Path, database_url: str = ""):
         self.database_path = Path(database_path)
         self.database_url = (database_url or "").strip()
@@ -143,6 +144,15 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository):
                 connection.execute("SELECT pg_advisory_xact_lock(356035)")
             connection.executescript(
                 """
+                CREATE TABLE IF NOT EXISTS tally_master_sync (
+                    profile_id TEXT PRIMARY KEY,
+                    ticket TEXT NOT NULL,
+                    profile_revision TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    snapshot_json TEXT NOT NULL DEFAULT '',
+                    confirmation_json TEXT NOT NULL DEFAULT ''
+                );
+
                 CREATE TABLE IF NOT EXISTS organizations (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -1228,6 +1238,7 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository):
         with self._connect() as connection:
             self._locked_profile(connection, profile_id)
             self._invalidate_profile_approvals(connection, profile_id, actor_id)
+            connection.execute("DELETE FROM tally_master_sync WHERE profile_id = ?", (profile_id,))
             connection.execute("DELETE FROM client_profiles WHERE id = ?", (profile_id,))
             self._insert_audit(
                 connection,

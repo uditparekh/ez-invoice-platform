@@ -27,6 +27,7 @@ CONNECTOR_MODULES = [
     "tally_connector_desktop.py",
     "tally_connector_agent.py",
     "tally_connector_runtime.py",
+    "tally_master_sync.py",
 ]
 
 KIT_FILES = [

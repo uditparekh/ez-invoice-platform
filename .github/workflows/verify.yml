@@ -2,7 +2,7 @@ name: Platform verification
 
 on:
   push:
-    branches: [main, 'codex/pkg34-complete', 'codex/calm-finance-release', 'codex/pkg35a-connector-reliability', 'codex/pkg35b-client-profile', 'codex/pkg35c-frozen-approval']
+    branches: [main, 'codex/pkg34-complete', 'codex/calm-finance-release', 'codex/pkg35a-connector-reliability', 'codex/pkg35b-client-profile', 'codex/pkg35c-frozen-approval', 'codex/pkg36-master-sync']
   pull_request:
 
 permissions:
@@ -67,7 +67,7 @@ jobs:
           curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:8000/health
           curl --retry 30 --retry-connrefused --retry-delay 1 --fail http://localhost:3000/login -o /dev/null
       - name: Light, dark, mobile and reporting regressions
-        run: pnpm e2e e2e/reporting-design.spec.ts e2e/connector-gateway.spec.ts e2e/client-profile-layout.spec.ts e2e/approval-plans.spec.ts --workers=1 --max-failures=1
+        run: pnpm e2e --workers=1 --max-failures=1
       - uses: actions/upload-artifact@v4
         if: always()
         with:

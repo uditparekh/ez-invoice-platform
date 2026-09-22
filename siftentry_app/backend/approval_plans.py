@@ -201,7 +201,7 @@ def build_plan(invoice: Invoice, profile: ClientProfile) -> dict:
         "inventory": inventory,
         "blocking_issues": list(dict.fromkeys(blocking)),
         "warnings": [
-            "Tally names are manually configured, not verified against company masters.",
+            "Check the profile's latest Tally master snapshot. A name's presence does not prove its accounting mapping is correct.",
             "Confirm that the profile currency matches the Tally company's base currency. This entry does not include an exchange rate.",
         ],
         "xml": xml,

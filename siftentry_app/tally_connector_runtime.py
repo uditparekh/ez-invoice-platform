@@ -20,8 +20,10 @@ from xml.etree import ElementTree as ET
 
 try:
     from .connector_credentials import valid_connector_token, TOKEN_FORMAT_MESSAGE
+    from .tally_master_sync import read_snapshot, MasterSyncError
 except ImportError:  # direct script / frozen desktop entrypoint
     from connector_credentials import valid_connector_token, TOKEN_FORMAT_MESSAGE
+    from tally_master_sync import read_snapshot, MasterSyncError
 
 try:
     import requests
@@ -29,7 +31,7 @@ except ImportError:  # pragma: no cover
     requests = None
 
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.6.0"
 
 
 @dataclass(frozen=True)
@@ -357,6 +359,7 @@ def cloud_request(config: ConnectorConfig, path: str, payload: Dict[str, Any]) -
         401: "Workspace ID or connector token was not accepted. Check the saved profile and copy its token again.",
         403: "Connector access is not permitted. Ask the workspace administrator.",
         404: "Connector endpoint was not found. Check the SiftEntry base URL and server deployment.",
+        409: "The request is stale or conflicts with current settings. For master discovery, run Sync Tally masters again. Do not repost invoices to resolve this.",
         413: "Connector result is too large. Contact support; do not re-enter vouchers.",
         422: "Connector settings or request format were rejected. Check the Workspace ID and update the connector.",
         429: "SiftEntry is busy. Wait before testing again.",
@@ -395,16 +398,32 @@ def test_connection(config: ConnectorConfig) -> Dict[str, Any]:
         checks["company"] = {"state": "passed" if found else "failed", "message":
             f"Configured company is available: {company}" if found else
             "Configured company was not found. Open the correct company in Tally and verify the profile company name."}
-    checks["masters"] = {"state": "not_verified", "message":
-        "Master names and accounting mappings are not verified. Master sync is not available yet."}
+    checks["masters"] = {"state": cloud.get("master_readiness", "not_verified"), "message":
+        cloud.get("master_message", "Master names and accounting mappings are not verified.")}
     connected = bool(cloud.get("success"))
     failures = [check["message"] for check in checks.values() if check["state"] == "failed"]
     return {"success": not failures, "connected_to_siftentry": connected,
             "tally_detected": bool(tally.get("success")), "checks": checks,
             "message": " | ".join(failures) if failures else
-            "Connection checks passed. Masters remain unverified. No invoices were claimed or posted.",
+            "Connection checks passed. Review master readiness separately. No invoices were claimed or posted.",
             "claimed": 0, "submitted": 0, "failed_jobs": 0,
             "updated_at": datetime.now().isoformat(timespec="seconds")}
+
+
+def sync_masters(config: ConnectorConfig) -> Dict[str, Any]:
+    """Explicit discovery only. Never reads the outbox, claims, or posts invoices."""
+    begin = cloud_request(config, "/api/v1/connectors/tally/masters/begin",
+                          {"workspace_id": config.workspace_id, **connector_metadata()})
+    if not begin.get("success"):
+        return begin
+    if not begin.get("ticket") or not begin.get("company_name"):
+        return {"success": False, "message": "Cloud did not provide a company-bound sync session. Update the server and try again."}
+    try:
+        snapshot = read_snapshot(config.tally_url, str(begin["company_name"]))
+    except MasterSyncError as exc:
+        return {"success": False, "message": str(exc)}
+    return cloud_request(config, "/api/v1/connectors/tally/masters/submit",
+                         {"workspace_id": config.workspace_id, "ticket": begin["ticket"], **snapshot})
 
 
 def read_tally_companies(tally_url: str) -> Dict[str, Any]:

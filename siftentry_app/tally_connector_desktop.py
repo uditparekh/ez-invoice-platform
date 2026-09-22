@@ -20,6 +20,7 @@ try:
         poll_once,
         save_config,
         test_connection,
+        sync_masters,
         connection_config_error,
         APP_VERSION,
         OutboxUnreadable,
@@ -34,6 +35,7 @@ except ImportError:
         poll_once,
         save_config,
         test_connection,
+        sync_masters,
         connection_config_error,
         APP_VERSION,
         OutboxUnreadable,
@@ -207,7 +209,8 @@ class TallyConnectorWindow:
             controls.columnconfigure(column, weight=1)
         actions = [("Save settings", lambda: self.save_settings(notify=True)),
                    ("Test connection", self.test_tally), ("Poll once", self.poll_once_now),
-                   ("Start connector", self.start), ("Stop", self.stop)]
+                   ("Start connector", self.start), ("Stop", self.stop),
+                   ("Sync Tally masters", self.sync_tally_masters)]
         for index, (label, action) in enumerate(actions):
             self._button(controls, label, action, primary=label == "Start connector").grid(
                 row=index // 3, column=index % 3, sticky="ew", padx=4, pady=4)
@@ -220,7 +223,7 @@ class TallyConnectorWindow:
             padx=18,
             pady=8,
         )
-        self.running_badge.grid(row=1, column=2, sticky="ew", padx=4)
+        self.running_badge.grid(row=2, column=0, columnspan=3, sticky="ew", padx=4)
 
         log_outer, log_frame = self._panel(outer)
         log_outer.pack(fill="both", expand=True)
@@ -433,6 +436,25 @@ class TallyConnectorWindow:
     def _test_tally_worker(self, config: ConnectorConfig) -> None:
         self._run_check(config, diagnostic=True)
 
+    def sync_tally_masters(self) -> None:
+        if self._is_busy():
+            self._append_log("Stop the connector and wait for the current poll before syncing masters.")
+            return
+        if not self.save_settings():
+            return
+        self._append_log("Reading company and masters only. No invoices will be claimed or posted. This can take a few minutes.")
+        self.worker = threading.Thread(target=self._sync_masters_worker, args=(self.config,), daemon=True)
+        self.worker.start()
+
+    def _sync_masters_worker(self, config: ConnectorConfig) -> None:
+        try:
+            with self.poll_lock:
+                result = sync_masters(config)
+            self.events.put({"type": "masters", "status": result})
+        except Exception:
+            self.events.put({"type": "masters", "status": {"success": False, "message":
+                "Master sync failed unexpectedly. The last good snapshot is preserved. Contact support."}})
+
     def _run_check(self, config: ConnectorConfig, diagnostic: bool = False) -> None:
         try:
             with self.poll_lock:
@@ -495,6 +517,10 @@ class TallyConnectorWindow:
                 self._append_log(event["message"])
             elif event.get("type") == "poll":
                 self._apply_poll_status(event["status"])
+            elif event.get("type") == "masters":
+                result = event["status"]
+                self.master_status.set("Snapshot saved · mappings need review" if result.get("success") else "Sync failed · see message")
+                self._append_log(result.get("message", "Master sync finished."))
         self.root.after(250, self._drain_events)
 
     def _apply_poll_status(self, status: Dict[str, Any]) -> None:

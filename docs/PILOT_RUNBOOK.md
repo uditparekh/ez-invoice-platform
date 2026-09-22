@@ -58,7 +58,12 @@ Each profile stores:
 Recommended flow:
 
 1. Create or import a profile from the Integrations page.
-2. Confirm exact ERP names with the client.
+2. For Tally, stop connector 0.6.0 and run **Sync Tally masters** with the correct
+   company open. In Client profiles → Posting rules, refresh the snapshot, check
+   company/GUID, select exact names, save and explicitly confirm mappings.
+   Name existence is not accounting correctness; review supplier ledgers and
+   invoice-specific allocations in each posting preview. Other ERPs still need
+   manual name checks. See [pkg36A release contract](PKG36A-RELEASE.md).
 3. Mark the profile as default for that accounting system.
 4. Upload invoices.
 5. Let profile recommendation select the best profile, or manually choose one.

@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
+import { useMasterNames } from "@/components/tally-master-provider";
 import type {
   AccountingSystem,
   ClientProfile,
@@ -24,6 +25,7 @@ export function ProfileConnectionStatus({
   dirty: boolean;
 }) {
   const { activeOrganizationId } = useAuth();
+  const masters = useMasterNames("ledgers");
   const [state, setState] = useState<{
     key: string;
     status?: TallyConnectorProfileStatus;
@@ -134,7 +136,9 @@ export function ProfileConnectionStatus({
               ],
               [
                 "Accounting masters",
-                "Unverified · master sync not available yet",
+                masters.fresh
+                  ? "Recent snapshot · review in Posting rules"
+                  : "Unverified · sync from connector 0.6.0",
               ],
             ].map(([label, value]) => (
               <div

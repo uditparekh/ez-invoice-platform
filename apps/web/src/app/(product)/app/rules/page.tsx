@@ -12,10 +12,15 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import {
+  TallyMasterProvider,
+  useMasterNames,
+  type MasterKind,
+} from "@/components/tally-master-provider";
 import { ContentCard } from "@/components/dashboard/content-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { LoadingState } from "@/components/dashboard/loading-state";
@@ -218,7 +223,15 @@ function MappingTab({
   }
 
   return (
-    <>
+    <TallyMasterProvider
+      profile={profile}
+      draft={{
+        ...profile,
+        settings: { ...profile.settings, item_mappings: rows },
+      }}
+      dirty={dirty}
+      canEdit={false}
+    >
       <section className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
         <LedgerFact
           label="Purchase ledger"
@@ -414,6 +427,7 @@ function MappingTab({
                       />
                       <MapCell
                         value={row.target_item_name}
+                        masterKind="stock_items"
                         placeholder="Stock item name"
                         onChange={(value) =>
                           update(index, { target_item_name: value })
@@ -421,6 +435,7 @@ function MappingTab({
                       />
                       <MapCell
                         value={row.target_uom}
+                        masterKind="units"
                         placeholder="KGS"
                         onChange={(value) =>
                           update(index, { target_uom: value })
@@ -428,6 +443,7 @@ function MappingTab({
                       />
                       <MapCell
                         value={row.purchase_ledger}
+                        masterKind="ledgers"
                         placeholder="Purchase A/C"
                         onChange={(value) =>
                           update(index, { purchase_ledger: value })
@@ -435,6 +451,7 @@ function MappingTab({
                       />
                       <MapCell
                         value={row.tax_ledger}
+                        masterKind="ledgers"
                         placeholder="IGST A/C"
                         onChange={(value) =>
                           update(index, { tax_ledger: value })
@@ -476,7 +493,7 @@ function MappingTab({
           </p>
         )}
       </ContentCard>
-    </>
+    </TallyMasterProvider>
   );
 }
 
@@ -1067,12 +1084,23 @@ function MapField({
   onChange: (value: string) => void;
   strong?: boolean;
 }) {
+  const kind = (
+    {
+      "Target item": "stock_items",
+      UOM: "units",
+      "Purchase ledger": "ledgers",
+      "Tax ledger": "ledgers",
+    } as Record<string, MasterKind>
+  )[label];
+  const { rows, fresh } = useMasterNames(kind);
+  const optionsId = useId();
   return (
     <label className="block">
       <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
         {label}
       </span>
       <input
+        list={rows.length ? optionsId : undefined}
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
@@ -1081,6 +1109,25 @@ function MapField({
           strong ? "font-semibold text-ink" : "font-medium text-ink-secondary",
         )}
       />
+      {kind && fresh && (
+        <span className="mt-1 block text-xs text-ink-muted">
+          {rows.some((row) => row.name === value)
+            ? "Found in Tally"
+            : "Unverified"}
+        </span>
+      )}
+      {rows.length > 0 && (
+        <datalist id={optionsId}>
+          {rows
+            .filter((row) =>
+              row.name.toLocaleLowerCase().includes(value.toLocaleLowerCase()),
+            )
+            .slice(0, 100)
+            .map((row) => (
+              <option key={row.name} value={row.name} />
+            ))}
+        </datalist>
+      )}
     </label>
   );
 }
@@ -1090,15 +1137,25 @@ function MapCell({
   placeholder,
   onChange,
   strong = false,
+  masterKind,
 }: {
+  masterKind?: MasterKind;
   value: string;
   placeholder: string;
   onChange: (value: string) => void;
   strong?: boolean;
 }) {
+  const { rows, fresh } = useMasterNames(masterKind);
+  const optionsId = useId();
   return (
     <td className="py-2 pr-2">
       <input
+        list={rows.length ? optionsId : undefined}
+        aria-label={
+          masterKind
+            ? `${masterKind.replaceAll("_", " ")} mapping`
+            : placeholder
+        }
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
@@ -1107,6 +1164,25 @@ function MapCell({
           strong ? "font-semibold text-ink" : "font-medium text-ink-secondary",
         )}
       />
+      {masterKind && fresh && (
+        <span className="block px-2 text-xs text-ink-muted">
+          {rows.some((row) => row.name === value)
+            ? "Found in Tally"
+            : "Unverified"}
+        </span>
+      )}
+      {rows.length > 0 && (
+        <datalist id={optionsId}>
+          {rows
+            .filter((row) =>
+              row.name.toLocaleLowerCase().includes(value.toLocaleLowerCase()),
+            )
+            .slice(0, 100)
+            .map((row) => (
+              <option key={row.name} value={row.name} />
+            ))}
+        </datalist>
+      )}
     </td>
   );
 }

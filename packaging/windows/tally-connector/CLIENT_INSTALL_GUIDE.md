@@ -1,4 +1,4 @@
-# SiftEntry Tally Connector 0.5.0: Client Install Guide
+# SiftEntry Tally Connector 0.6.0: Client Install Guide
 
 This connector lets SiftEntry post approved invoices into the TallyPrime company
 running on the same Windows computer. It does not expose TallyPrime to the
@@ -26,7 +26,7 @@ You need:
 
 ## Step 2: Install the Connector
 
-1. Download `SiftEntry-Tally-Connector-Setup-0.5.0.exe` from your SiftEntry Integrations → Tally page. The installer includes Python; no separate Python installation is needed.
+1. Download `SiftEntry-Tally-Connector-Setup-0.6.0.exe` from your SiftEntry Integrations → Tally page. The installer includes Python; no separate Python installation is needed.
 2. Keep `Start connector when I sign in` selected.
 3. Click `Install`.
 4. Launch `SiftEntry Tally Connector` when setup finishes.
@@ -47,9 +47,16 @@ Then click:
 1. `Save settings`
 2. `Test connection` — safe with zero invoices; it never claims or posts anything.
 3. Check cloud authentication, Tally XML reachability, and the configured company.
-   Master readiness currently says **Not verified**: this version does not sync or
-   verify ledger/stock mappings. Your SiftEntry contact must check exact names.
-4. `Start connector` only after setup is confirmed and you are ready for approved
+4. While stopped, click `Sync Tally masters`. This only reads company identity,
+   ledger names, stock items, units, godowns and voucher types. It never claims
+   or posts invoices and does not touch recovery files. Keep the company open
+   until the completion message appears. It may take a few minutes.
+5. In SiftEntry → Client profiles → Posting rules, click `Refresh snapshot`.
+   Check the company name/GUID and last successful sync. Search the exact names
+   in the fields, save, and have your accountant explicitly confirm the saved
+   mappings. **Found in Tally** is not proof that a ledger is the right one.
+   Supplier ledgers and invoice-specific allocations still need invoice review.
+6. `Start connector` only after setup is confirmed and you are ready for approved
    invoices to post. `Poll once` is a posting action, not a connection test.
 
 If upgrading an existing connection using the Railway URL, keep that URL until
@@ -65,7 +72,9 @@ The status window should show:
 - Cloud: `Connected` (authentication passed).
 - Tally: `Online` (XML export responded).
 - Company: the company configured in your profile is available in Tally.
-- Masters: `Not verified` until master sync is released. This is not a failed login.
+- Masters: a recent snapshot after sync. Snapshots older than 24 hours need
+  another sync before confirming mappings; a failure preserves the last good
+  snapshot. This is a read-only snapshot, not continuous synchronization.
 - `Running` only after Start connector. The website status updates during normal
   polling; Test connection alone deliberately does not change its heartbeat.
 
