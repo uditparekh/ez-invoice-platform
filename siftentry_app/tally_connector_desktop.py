@@ -519,6 +519,10 @@ class TallyConnectorWindow:
                 self._apply_poll_status(event["status"])
             elif event.get("type") == "masters":
                 result = event["status"]
+                if result.get("success"):
+                    self.siftentry_status.set("Connected")
+                    self.tally_status.set("Online")
+                    self.company_status.set("Company identity checked for this snapshot")
                 self.master_status.set("Snapshot saved · mappings need review" if result.get("success") else "Sync failed · see message")
                 self._append_log(result.get("message", "Master sync finished."))
         self.root.after(250, self._drain_events)
@@ -589,6 +593,11 @@ def main() -> None:
             window.worker = SimpleNamespace(is_alive=lambda: True)
             window.poll_once_now()
             assert any("background polling" in message for message in messages)
+            window.events.put({"type": "masters", "status": {"success": True, "message": "Snapshot saved"}})
+            window._drain_events()
+            assert window.siftentry_status.get() == "Connected"
+            assert window.tally_status.get() == "Online"
+            assert "Snapshot saved" in window.master_status.get()
             root.update_idletasks()
             # Check the layout at small work areas and high Windows DPI.
             # All essential actions and the feedback strip stay on-screen.
