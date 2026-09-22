@@ -16,6 +16,9 @@ test("login, land on Home, open palette and shortcuts", async ({ page }) => {
 
   await page.waitForURL(/\/app/, { timeout: 20_000 });
   await expect(page.getByText(/command center|home/i).first()).toBeVisible();
+  // The route's static Home text can appear before client effects register
+  // keyboard listeners. Wait for the authenticated shell, not an arbitrary delay.
+  await expect(page.getByText("Design QA", { exact: true }).first()).toBeVisible();
 
   // ⌘K command palette
   await page.keyboard.press("ControlOrMeta+k");
