@@ -142,12 +142,16 @@ test("historical demo samples have an honest explanation and an actual-date acti
   const queries: string[] = [];
   await page.route("**/api/organizations/*/analytics?*", async (route) => {
     queries.push(new URL(route.request().url()).search);
-    const response = await route.fetch();
-    const data = await response.json();
     await route.fulfill({
       json: {
-        ...data,
+        start: new URL(route.request().url()).searchParams.get("start"),
+        end: new URL(route.request().url()).searchParams.get("end"),
         received_count: 0,
+        posting_outcomes: {},
+        queue: { posted: 2 },
+        currencies: [],
+        suppliers: [],
+        daily: [],
         available_range: { start: "2026-01-10", end: "2026-01-12" },
       },
     });
@@ -164,6 +168,10 @@ test("historical demo samples have an honest explanation and an actual-date acti
       ),
     )
     .toBe(true);
+  await expect(
+    page.getByText(/Selected period.*2026-01-10.*2026-01-12/),
+  ).toBeVisible();
+  await expect(page.getByText("Loading workspace overview")).toHaveCount(0);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);

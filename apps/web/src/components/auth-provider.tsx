@@ -182,7 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         );
         // Transient failure (5xx, network): keep whatever session we already
         // have. Only a definitive 401/403 (resolved to null above) signs out.
-        // With no session yet, the login redirect still happens via loading=false.
+        // With no session yet, the readiness screen offers an explicit retry.
       })
       .finally(() => {
         if (active) setLoading(false);
