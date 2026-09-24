@@ -105,7 +105,7 @@ test("return navigation keeps exact-period reports visible while revalidating", 
     page.getByText("Invoices received", { exact: true }),
   ).toBeVisible();
   const refresh = barrier();
-  await page.route("**/analytics?*", async (route) => {
+  await page.route("**/api/organizations/*/analytics?*", async (route) => {
     await refresh.promise;
     await route.continue();
   });
@@ -140,7 +140,7 @@ test("historical demo samples have an honest explanation and an actual-date acti
   await page.setViewportSize({ width: 320, height: 800 });
   await page.request.post("/api/auth/demo");
   const queries: string[] = [];
-  await page.route("**/analytics?*", async (route) => {
+  await page.route("**/api/organizations/*/analytics?*", async (route) => {
     queries.push(new URL(route.request().url()).search);
     const response = await route.fetch();
     const data = await response.json();
@@ -197,7 +197,7 @@ test("report cache never crosses workspace boundaries", async ({
   );
   await page.route("**/api/invoices?*", (route) => route.fulfill({ json: [] }));
   const other = barrier();
-  await page.route("**/analytics?*", async (route) => {
+  await page.route("**/api/organizations/*/analytics?*", async (route) => {
     const isOther = route.request().url().includes("/b/");
     if (isOther) await other.promise;
     await route.fulfill({
