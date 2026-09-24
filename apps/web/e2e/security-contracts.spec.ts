@@ -27,18 +27,28 @@ test("demo viewers cannot generate connector credentials", async ({
   await page.goto("/login");
   await page.getByRole("button", { name: "Explore demo workspace" }).click();
   await page.waitForURL("**/app");
-  // Use the browser's authenticated cookie context (including Secure cookies
-  // on loopback), not Playwright's standalone HTTP request cookie jar.
-  const session = await page.request.get("/api/auth/me");
-  expect(session.status()).toBe(200);
-  const user = await session.json();
-  const membership = user.memberships[0];
-  expect(membership.role).toBe("viewer");
-  const org = membership.organization_id;
-  const denied = await page.request.post(
-    `/api/organizations/${org}/connector-token`,
-  );
-  expect(denied.status()).toBe(403);
+  // Chromium accepts Secure cookies on loopback. Playwright's HTTP client
+  // does not send them over HTTP, even when sharing a browser context.
+  const result = await page.evaluate(async () => {
+    const session = await fetch("/api/auth/me");
+    if (!session.ok) return { sessionStatus: session.status };
+    const user = await session.json();
+    const membership = user.memberships[0];
+    const denied = await fetch(
+      `/api/organizations/${membership.organization_id}/connector-token`,
+      { method: "POST" },
+    );
+    return {
+      sessionStatus: session.status,
+      role: membership.role,
+      deniedStatus: denied.status,
+    };
+  });
+  expect(result).toEqual({
+    sessionStatus: 200,
+    role: "viewer",
+    deniedStatus: 403,
+  });
 });
 
 for (const theme of ["Light", "Dark"]) {
