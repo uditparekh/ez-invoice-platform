@@ -19,6 +19,9 @@ test("public reset responses never contain recovery credentials; web security he
   expect(login.headers()["content-security-policy"]).toContain(
     "frame-ancestors 'self'",
   );
+  expect(login.headers()["content-security-policy"]).toContain(
+    "object-src 'self'",
+  );
 });
 
 test("demo viewers cannot generate connector credentials", async ({

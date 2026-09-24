@@ -11,7 +11,9 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
+            // The review screens use native PDF objects backed by our
+            // authenticated document route. External objects remain blocked.
+            value: "frame-ancestors 'self'; object-src 'self'; base-uri 'self'",
           },
           {
             key: "Permissions-Policy",

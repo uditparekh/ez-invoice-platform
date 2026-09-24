@@ -40,7 +40,10 @@ an independent penetration test. No production exploit tests were performed.
   not send stored credential digests to a user-configured destination. Hosted
   Tally posting continues through the Windows pull connector and frozen plans.
 - API responses are no-store; both tiers set nosniff and referrer/frame policies.
-  The web CSP restricts framing, object embedding and base URLs. This is deliberately
+  The web CSP restricts framing, object embedding and base URLs to the same origin.
+  Same-origin objects are needed for native PDF previews served through the
+  authenticated document route; external embedded objects remain blocked.
+  This is deliberately
   not a full nonce-based script CSP. PDF responses have a fixed PDF MIME type;
   upload reads are bounded and main invoice uploads check the PDF signature.
 - PDF parser versions are pinned. A full transitive dependency lock and ongoing
