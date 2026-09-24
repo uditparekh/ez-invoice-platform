@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
 } from "react";
@@ -13,6 +14,14 @@ import {
 import { clearWorkspaceInvoiceCache } from "@/lib/invoice-cache";
 import { clearPreviewInvoices } from "@/lib/preview-invoices";
 import type { AuthenticatedUser } from "@/lib/types";
+import { clearAuthHandoff, readAuthHandoff } from "@/lib/auth-handoff";
+import { BrandMark } from "@/components/brand-mark";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+export interface CachedReport {
+  data: unknown;
+  fetchedAt: number;
+}
 
 interface AuthContextValue {
   user: AuthenticatedUser | null;
@@ -21,6 +30,7 @@ interface AuthContextValue {
   refresh: () => Promise<void>;
   selectOrganization: (organizationId: string) => void;
   logout: (options?: LogoutOptions) => Promise<void>;
+  reportCache: Map<string, CachedReport>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -84,9 +94,14 @@ async function fetchAuthenticatedUser() {
 }
 
 function preferredOrganizationId(user: AuthenticatedUser) {
-  const savedOrganization =
-    window.localStorage.getItem("siftentry-active-organization") ??
-    window.localStorage.getItem("ez-active-organization");
+  let savedOrganization: string | null = null;
+  try {
+    savedOrganization =
+      window.localStorage.getItem("siftentry-active-organization") ??
+      window.localStorage.getItem("ez-active-organization");
+  } catch {
+    /* Private/storage-disabled browsers can use the first membership. */
+  }
   return user.memberships.some(
     (membership) => membership.organization_id === savedOrganization,
   )
@@ -97,25 +112,45 @@ function preferredOrganizationId(user: AuthenticatedUser) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [initialUser] = useState(readAuthHandoff);
+  const [user, setUser] = useState<AuthenticatedUser | null>(initialUser);
   const [activeOrganizationId, setActiveOrganizationId] = useState<
     string | null
-  >(null);
-  const [loading, setLoading] = useState(true);
+  >(() => (initialUser ? preferredOrganizationId(initialUser) : null));
+  const [loading, setLoading] = useState(!initialUser);
+  const [sessionError, setSessionError] = useState("");
+  const [reportCache] = useState(() => new Map<string, CachedReport>());
   const [idleWarningOpen, setIdleWarningOpen] = useState(false);
 
   const applyUser = useCallback((nextUser: AuthenticatedUser) => {
+    setSessionError("");
     writeLastActivityAt();
     setUser(nextUser);
     setActiveOrganizationId(preferredOrganizationId(nextUser));
   }, []);
 
   const clearUser = useCallback(() => {
+    clearAuthHandoff();
+    reportCache.clear();
+    clearWorkspaceInvoiceCache();
     setUser(null);
     setActiveOrganizationId(null);
     setIdleWarningOpen(false);
     if (pathname !== "/login") router.replace("/login");
-  }, [pathname, router]);
+  }, [pathname, router, reportCache]);
+
+  useLayoutEffect(() => {
+    if (!initialUser) return;
+    // Next's automatic scroll targeting can skip a sticky header and align the
+    // following content beneath it. A fresh sign-in starts at the document top.
+    // Do not reset scroll on ordinary navigation, reload, or browser Back.
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    const frame = requestAnimationFrame(() =>
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
+    );
+    clearAuthHandoff();
+    return () => cancelAnimationFrame(frame);
+  }, [initialUser]);
 
   const refresh = useCallback(async () => {
     try {
@@ -123,6 +158,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (nextUser) applyUser(nextUser);
       else clearUser();
     } catch {
+      setSessionError(
+        "We couldn’t load your workspace. Check your connection and try again.",
+      );
       // Transient failure: keep the session we already have. The next
       // navigation or refresh will try again.
     } finally {
@@ -139,9 +177,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         else clearUser();
       })
       .catch(() => {
+        setSessionError(
+          "We couldn’t load your workspace. Check your connection and try again.",
+        );
         // Transient failure (5xx, network): keep whatever session we already
         // have. Only a definitive 401/403 (resolved to null above) signs out.
-        // With no session yet, the login redirect still happens via loading=false.
+        // With no session yet, the readiness screen offers an explicit retry.
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -167,6 +208,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Even if the network is unavailable, clear this browser session.
       }
       clearWorkspaceInvoiceCache();
+      clearAuthHandoff();
+      reportCache.clear();
       clearPreviewInvoices();
       setUser(null);
       setActiveOrganizationId(null);
@@ -176,7 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.replace(destination);
       router.refresh();
     },
-    [router],
+    [router, reportCache],
   );
 
   useEffect(() => {
@@ -235,13 +278,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refresh,
       selectOrganization,
       logout,
+      reportCache,
     }),
-    [user, activeOrganizationId, loading, refresh, selectOrganization, logout],
+    [
+      user,
+      activeOrganizationId,
+      loading,
+      refresh,
+      selectOrganization,
+      logout,
+      reportCache,
+    ],
   );
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {user && activeOrganizationId ? (
+        children
+      ) : (
+        <main className="min-h-dvh bg-canvas px-4 py-6 text-ink">
+          <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
+            <BrandMark />
+            <ThemeToggle />
+          </div>
+          <section
+            role="status"
+            aria-live="polite"
+            className="mx-auto mt-20 max-w-md rounded-2xl border border-line bg-surface p-6"
+          >
+            <h1 className="text-xl font-semibold">
+              {sessionError
+                ? "Workspace unavailable"
+                : loading
+                  ? "Opening your workspace"
+                  : user
+                    ? "No workspace assigned"
+                    : "Returning to sign in"}
+            </h1>
+            <p className="mt-3 text-sm text-ink-secondary">
+              {sessionError ||
+                (user && !loading
+                  ? "Ask your administrator to add you to a workspace."
+                  : "Checking your account and workspace access…")}
+            </p>
+            {sessionError && (
+              <button
+                className="mt-5 min-h-11 rounded-lg bg-accent px-4 text-sm font-medium text-white"
+                onClick={() => {
+                  setSessionError("");
+                  setLoading(true);
+                  void refresh();
+                }}
+              >
+                Try again
+              </button>
+            )}
+          </section>
+        </main>
+      )}
       {idleWarningOpen && user ? (
         <div
           role="status"

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ArrowRight, FileText, Upload } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { LoadingState } from "@/components/dashboard/loading-state";
+import { DemoReportNotice } from "@/components/dashboard/demo-report-notice";
 import {
   ReportError,
   ReportMetric,
@@ -22,7 +23,9 @@ import {
 
 export default function HomePage() {
   const { user, activeOrganizationId } = useAuth();
-  const [range] = useState(currentMonth);
+  const [range, setRange] = useState(currentMonth);
+  const isCurrentMonth =
+    range.start === currentMonth().start && range.end === currentMonth().end;
   const report = useWorkspaceReport<WorkspaceAnalytics>(
     "analytics",
     rangeQuery(range),
@@ -79,6 +82,12 @@ export default function HomePage() {
         }
       />
       <main className="report-main">
+        <DemoReportNotice data={data} onShowSamples={setRange} />
+        {data && report.refreshing && (
+          <p role="status" className="text-xs text-ink-secondary">
+            Updating report… Previous results remain visible.
+          </p>
+        )}
         {report.loading && <LoadingState label="Loading workspace overview" />}
         {report.error && (
           <ReportError message={report.error} retry={report.reload} />
@@ -87,7 +96,8 @@ export default function HomePage() {
           <>
             <div className="flex flex-wrap justify-between gap-2 text-sm text-ink-secondary">
               <span>
-                This month · {data.start} — {data.end} · UTC
+                {isCurrentMonth ? "This month" : "Selected period"} ·{" "}
+                {data.start} — {data.end} · UTC
               </span>
               <Link
                 href="/app/analytics"
@@ -101,12 +111,12 @@ export default function HomePage() {
               <ReportMetric
                 label="Invoices received"
                 value={data.received_count}
-                detail="This month"
+                detail={isCurrentMonth ? "This month" : "In selected period"}
               />
               <ReportMetric
                 label="Successful postings"
                 value={data.posting_outcomes.succeeded ?? 0}
-                detail="Live attempts completed this month"
+                detail="Live attempts completed in selected period"
               />
               <ReportMetric
                 label="Needs review"
@@ -158,8 +168,8 @@ export default function HomePage() {
                   <h2>Received value</h2>
                 </div>
                 <p className="text-sm leading-6 text-ink-secondary">
-                  Invoice values received this month, kept in their original
-                  currencies.
+                  Invoice values received in the selected period, kept in their
+                  original currencies.
                 </p>
                 <dl className="mt-4 divide-y divide-line">
                   {data.currencies.map((row) => (
@@ -175,7 +185,7 @@ export default function HomePage() {
                 </dl>
                 {!data.currencies.length && (
                   <p className="mt-6 text-sm text-ink-secondary">
-                    No invoices received this month.
+                    No invoices received in the selected period.
                   </p>
                 )}
                 <Link

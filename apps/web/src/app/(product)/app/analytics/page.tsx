@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, FileDown, BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { LoadingState } from "@/components/dashboard/loading-state";
+import { DemoReportNotice } from "@/components/dashboard/demo-report-notice";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
   ReportControls,
@@ -64,6 +65,12 @@ export default function InsightsPage() {
         }
       />
       <main className="report-main">
+        <DemoReportNotice data={data} onShowSamples={setRange} />
+        {data && report.refreshing && (
+          <p role="status" className="text-xs text-ink-secondary">
+            Updating report… Previous results remain visible.
+          </p>
+        )}
         <ReportControls
           range={range}
           onChange={setRange}
