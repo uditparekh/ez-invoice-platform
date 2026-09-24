@@ -133,8 +133,11 @@ function InvoiceDetail({
 }) {
   const confidence =
     invoice.confidence == null ? null : Math.round(invoice.confidence * 100);
+  // Persistence is not document retention: imported invoices and invoices whose
+  // PDFs expired still have real review/approval plans. Only explicit local
+  // preview/sample IDs are unsaved. Never use a filesystem path as a trust flag.
   const isPreviewOnly =
-    !invoice.source_path || invoice.id.startsWith("preview-");
+    invoice.id.startsWith("preview-") || invoice.id.startsWith("sample-");
   const postingTarget = useMemo(
     () => postingTargetForSystem(targetSystem),
     [targetSystem],
