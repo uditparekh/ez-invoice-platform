@@ -8,7 +8,10 @@ from .test_api import make_client, authorization
 
 def test_prepared_demo_uses_one_connection_and_never_reseeds(tmp_path):
     with make_client(tmp_path) as client:
-        tokens = client.post('/api/v1/auth/demo').json()
+        response = client.post('/api/v1/auth/demo')
+        assert 'demo_prepare;dur=' in response.headers['server-timing']
+        assert 'demo_session;dur=' in response.headers['server-timing']
+        tokens = response.json()
         repo = client.app.state.repository
         with patch.object(repo, '_connect', wraps=repo._connect) as connect, \
              patch.object(repo, 'list_invoices', side_effect=AssertionError('full invoice graph loaded')), \

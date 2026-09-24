@@ -61,10 +61,22 @@ class ReportingRepository:
                 (organization_id,),
             ).fetchall()
             outcomes = connection.execute(
-                "SELECT status, raw_json FROM posting_attempts WHERE organization_id = ? "
-                "AND dry_run = 0 AND status IN ('succeeded', 'failed') AND updated_at >= ? AND updated_at < ?",
+                "SELECT status, COUNT(*) AS count FROM posting_attempts WHERE organization_id = ? "
+                "AND dry_run = 0 AND status IN ('succeeded', 'failed') AND updated_at >= ? AND updated_at < ? GROUP BY status",
                 (organization_id, start, end),
             ).fetchall()
+            # Keep normal postings aggregated in SQL; do not transfer potentially
+            # large ERP response payloads for every invoice just to count them.
+            # The demo seed writes the literal JSON key "demo". LIKE only narrows
+            # candidates; parsing below decides whether a record is synthetic.
+            demo_candidates = connection.execute(
+                "SELECT status, raw_json FROM posting_attempts WHERE organization_id = ? "
+                "AND dry_run = 0 AND status IN ('succeeded', 'failed') "
+                "AND updated_at >= ? AND updated_at < ? AND raw_json LIKE ?",
+                (organization_id, start, end, '%"demo"%'),
+            ).fetchall()
+        outcome_counts = Counter({row['status']: row['count'] for row in outcomes})
+        outcome_counts.subtract(row['status'] for row in demo_candidates if _synthetic_posting(row['raw_json']))
         currencies = {}
         suppliers = {}
         daily = Counter()
@@ -101,8 +113,7 @@ class ReportingRepository:
                                  "end": max(row['last_received'] for row in queue)[:10]} if queue else None),
             # Legacy showcase records are marked posted but never hit an ERP.
             # Do not report their synthetic successes as live accounting work.
-            "posting_outcomes": dict(Counter(row['status'] for row in outcomes
-                                             if not _synthetic_posting(row['raw_json']))),
+            "posting_outcomes": {status: count for status, count in outcome_counts.items() if count > 0},
         }
 
     def workspace_events(self, organization_id: str, start: str, end: str, *,
