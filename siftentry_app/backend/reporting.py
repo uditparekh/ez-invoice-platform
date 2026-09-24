@@ -37,6 +37,14 @@ def safe_csv(rows: list[list]) -> str:
     return output.getvalue()
 
 
+def _synthetic_posting(raw_json: str) -> bool:
+    try:
+        payload = json.loads(raw_json or '{}')
+        return isinstance(payload, dict) and payload.get('demo') is True
+    except (ValueError, TypeError):
+        return False
+
+
 class ReportingRepository:
     def workspace_analytics(self, organization_id: str, start: str, end: str) -> dict:
         # Read lightweight records, not full invoices/line items. Decimal aggregation
@@ -48,12 +56,13 @@ class ReportingRepository:
                 (organization_id, start, end),
             ).fetchall()
             queue = connection.execute(
-                "SELECT status, COUNT(*) AS count FROM invoices WHERE organization_id = ? GROUP BY status",
+                "SELECT status, COUNT(*) AS count, MIN(created_at) AS first_received, MAX(created_at) AS last_received "
+                "FROM invoices WHERE organization_id = ? GROUP BY status",
                 (organization_id,),
             ).fetchall()
             outcomes = connection.execute(
-                "SELECT status, COUNT(*) AS count FROM posting_attempts WHERE organization_id = ? "
-                "AND dry_run = 0 AND status IN ('succeeded', 'failed') AND updated_at >= ? AND updated_at < ? GROUP BY status",
+                "SELECT status, raw_json FROM posting_attempts WHERE organization_id = ? "
+                "AND dry_run = 0 AND status IN ('succeeded', 'failed') AND updated_at >= ? AND updated_at < ?",
                 (organization_id, start, end),
             ).fetchall()
         currencies = {}
@@ -88,7 +97,12 @@ class ReportingRepository:
             "daily": [{"date": key, "count": daily[key]} for key in sorted(daily)],
             "cohort_statuses": dict(statuses),
             "queue": {row['status']: row['count'] for row in queue},
-            "posting_outcomes": {row['status']: row['count'] for row in outcomes},
+            "available_range": ({"start": min(row['first_received'] for row in queue)[:10],
+                                 "end": max(row['last_received'] for row in queue)[:10]} if queue else None),
+            # Legacy showcase records are marked posted but never hit an ERP.
+            # Do not report their synthetic successes as live accounting work.
+            "posting_outcomes": dict(Counter(row['status'] for row in outcomes
+                                             if not _synthetic_posting(row['raw_json']))),
         }
 
     def workspace_events(self, organization_id: str, start: str, end: str, *,

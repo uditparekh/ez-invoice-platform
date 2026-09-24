@@ -9,6 +9,8 @@ export async function POST() {
   });
   const payload = await upstream.json();
   const response = NextResponse.json(payload, { status: upstream.status });
+  const timing = upstream.headers.get("Server-Timing");
+  if (timing) response.headers.set("Server-Timing", timing);
 
   if (upstream.ok) setAuthCookies(response, payload as AuthTokens);
   return response;

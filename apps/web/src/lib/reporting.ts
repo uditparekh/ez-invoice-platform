@@ -22,6 +22,7 @@ export interface WorkspaceAnalytics {
   cohort_statuses: Record<string, number>;
   queue: Record<string, number>;
   posting_outcomes: Record<string, number>;
+  available_range?: ReportRange | null;
 }
 export interface WorkspaceEvent {
   id: string;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowUpRight, FileClock, FileDown } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { LoadingState } from "@/components/dashboard/loading-state";
+import { DemoReportNotice } from "@/components/dashboard/demo-report-notice";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
   ReportControls,
@@ -101,6 +102,12 @@ function HistoryWorkspace() {
         }
       />
       <main className="report-main">
+        <DemoReportNotice />
+        {data && report.refreshing && (
+          <p role="status" className="text-xs text-ink-secondary">
+            Updating history… Previous results remain visible.
+          </p>
+        )}
         <ReportControls
           range={range}
           onChange={(value) => {
@@ -394,12 +401,15 @@ function PostingDetail({
               External reference: {result.external_id}
             </p>
           )}
-          {result.status === "started" && result.target === "tally" && !result.dry_run && (
-            <p className="mt-3 rounded-lg bg-gold-soft p-3 text-gold-ink">
-              Outcome not confirmed. Stop the Windows connector and select Reconcile postings.
-              No new voucher is created by that check. Keep inconclusive results on hold and contact support.
-            </p>
-          )}
+          {result.status === "started" &&
+            result.target === "tally" &&
+            !result.dry_run && (
+              <p className="mt-3 rounded-lg bg-gold-soft p-3 text-gold-ink">
+                Outcome not confirmed. Stop the Windows connector and select
+                Reconcile postings. No new voucher is created by that check.
+                Keep inconclusive results on hold and contact support.
+              </p>
+            )}
           <details className="mt-3">
             <summary className="cursor-pointer">
               Recorded system response

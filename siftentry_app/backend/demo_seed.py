@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -214,9 +215,55 @@ def _demo_invoice_specs(organization_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def _prepared_demo_user(repository: InvoiceRepository) -> User | None:
+    """Verify persisted invariants on every entry, without loading invoice graphs.
+
+    No time-based auth cache: membership changes must take effect immediately.
+    Missing or legacy data still goes through the full isolation/repair path.
+    """
+    with repository._connect() as connection:
+        row = connection.execute(
+            """SELECT u.*, m.organization_id FROM users u
+            JOIN organization_memberships m ON m.user_id = u.id
+            JOIN organizations o ON o.id = m.organization_id
+            WHERE u.email = ? COLLATE NOCASE AND u.is_active = 1
+              AND m.role = 'viewer' AND o.default_currency = 'USD'
+              AND (SELECT COUNT(*) FROM organization_memberships x
+                   WHERE x.user_id = u.id) = 1
+              AND (SELECT COUNT(*) FROM organization_memberships x
+                   WHERE x.organization_id = o.id) = 1""",
+            (PUBLIC_DEMO_EMAIL,),
+        ).fetchone()
+        if row is None:
+            return None
+        samples = connection.execute(
+            """SELECT i.invoice_number, i.raw_payload_json, p.raw_json
+            FROM invoices i JOIN posting_attempts p ON p.invoice_id = i.id
+              AND p.organization_id = i.organization_id
+            WHERE i.organization_id = ? AND i.status = 'posted'
+              AND i.currency = 'USD' AND p.status = 'succeeded'
+              AND ((i.invoice_number = 'DEMO-QB-1001' AND p.external_id = 'SIFT-DEMO-QB-1001')
+                OR (i.invoice_number = 'DEMO-ZOHO-1002' AND p.external_id = 'SIFT-DEMO-ZOHO-1002'))""",
+            (row['organization_id'],),
+        ).fetchall()
+    try:
+        verified = {sample['invoice_number'] for sample in samples
+                    if json.loads(sample['raw_payload_json']).get('demo_seed_version') == 1
+                    and json.loads(sample['raw_payload_json']).get('demo') is True
+                    and json.loads(sample['raw_json']).get('demo') is True}
+    except (ValueError, TypeError, AttributeError):
+        return None
+    if verified != {'DEMO-QB-1001', 'DEMO-ZOHO-1002'}:
+        return None
+    return repository._user_from_row(row)
+
+
 def ensure_public_demo_workspace(repository: InvoiceRepository) -> User:
     """Prepare the existing isolated demo account and its showcase records."""
 
+    prepared = _prepared_demo_user(repository)
+    if prepared is not None:
+        return prepared
     user = repository.get_user_by_email(PUBLIC_DEMO_EMAIL)
     if user is None:
         user = repository.create_user(

@@ -7,8 +7,10 @@ import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { ApiErrorPayload } from "@/lib/types";
+import type { ApiErrorPayload, AuthTokens } from "@/lib/types";
 import { apiErrorMessage } from "@/lib/utils";
+import { clearWorkspaceInvoiceCache } from "@/lib/invoice-cache";
+import { setAuthHandoff } from "@/lib/auth-handoff";
 
 export function LoginForm() {
   const router = useRouter();
@@ -26,6 +28,16 @@ export function LoginForm() {
 
   function releaseRequest() {
     requestInFlight.current = false;
+  }
+
+  async function enterWorkspace(response: Response, destination: string) {
+    const payload = (await response.json()) as AuthTokens;
+    clearWorkspaceInvoiceCache();
+    setAuthHandoff(payload.user);
+    // Dismiss the software keyboard before changing the document's layout.
+    if (document.activeElement instanceof HTMLElement)
+      document.activeElement.blur();
+    router.replace(destination, { scroll: true });
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -69,16 +81,13 @@ export function LoginForm() {
         requested && requested.startsWith("/app") && !requested.startsWith("//")
           ? requested
           : "/app";
-      router.replace(destination);
-      router.refresh();
+      await enterWorkspace(response, destination);
       // Deliberately keep `submitting` true on success: this page unmounts
       // when navigation completes, and resetting the button early leaves the
       // user staring at an idle form while the app loads — the exact "laggy"
       // feeling this state exists to prevent.
     } catch {
-      setError(
-        "The SiftEntry API is unavailable. Start FastAPI and try again.",
-      );
+      setError("SiftEntry is temporarily unavailable. Please try again.");
       releaseRequest();
       setSubmitting(false);
     }
@@ -102,8 +111,7 @@ export function LoginForm() {
         setOpeningDemo(false);
         return;
       }
-      router.replace("/app");
-      router.refresh();
+      await enterWorkspace(response, "/app");
     } catch {
       setError("The SiftEntry demo is temporarily unavailable.");
       releaseRequest();
