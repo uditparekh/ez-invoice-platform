@@ -1,6 +1,8 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { createHmac } from "node:crypto";
+
+import { cookies, headers as incomingHeaders } from "next/headers";
 import { NextResponse } from "next/server";
 
 import type { AuthTokens } from "@/lib/types";
@@ -12,6 +14,31 @@ const API_BASE_URL =
   "http://127.0.0.1:8000";
 
 const secure = process.env.NODE_ENV === "production";
+
+// Gateway attestation: the API applies per-address authentication limits only
+// to addresses this tier signs. Only x-real-ip is attested: Vercel (or a
+// reverse proxy in front of `next start`) sets it from the TCP connection and
+// a browser cannot supply it. x-forwarded-for is deliberately not used: Next
+// keeps a client-supplied value when one is present. Without the shared secret,
+// or without x-real-ip, the API falls back to one budget per ingress hop.
+const GATEWAY_SECRET = process.env.EZ_WEB_GATEWAY_SHARED_SECRET ?? "";
+
+async function attestClientAddress(headers: Headers) {
+  if (GATEWAY_SECRET.length < 32) return;
+  let ip = "";
+  try {
+    ip = (await incomingHeaders()).get("x-real-ip")?.trim() ?? "";
+  } catch {
+    return; // Not inside a request scope: nothing observed, nothing attested.
+  }
+  if (!ip) return;
+  const seconds = Math.floor(Date.now() / 1000).toString();
+  const digest = createHmac("sha256", GATEWAY_SECRET)
+    .update(`${seconds}|${ip}`)
+    .digest("hex");
+  headers.set("X-Siftentry-Client-Ip", ip);
+  headers.set("X-Siftentry-Client-Signature", `${seconds}.${digest}`);
+}
 
 function cookieOptions(maxAge: number) {
   return {
@@ -47,6 +74,9 @@ async function apiRequest(
   accessToken?: string,
 ) {
   const headers = new Headers(init.headers);
+  headers.delete("X-Siftentry-Client-Ip");
+  headers.delete("X-Siftentry-Client-Signature");
+  await attestClientAddress(headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   if (
     init.body &&

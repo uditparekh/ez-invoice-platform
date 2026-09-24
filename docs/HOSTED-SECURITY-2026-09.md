@@ -49,6 +49,52 @@ an independent penetration test. No production exploit tests were performed.
 - PDF parser versions are pinned. A full transitive dependency lock and ongoing
   vulnerability scanning remain separate supply-chain work.
 
+## Follow-up: isolated authentication limits
+
+The first release's shared "peer" budget was keyed by the observed proxy address
+and covered every authentication route. Behind Railway and Vercel most traffic
+shares one observed address, so 600 requests a minute to the public demo route
+could exhaust login and refresh for everyone on that hop. This follow-up:
+
+- keys every budget by action: demo, login, refresh, reset and invitation
+  routes never share a bucket, and demo has a global ceiling of 300 a minute in
+  addition to its per-address limit;
+- trusts client addresses explicitly. The web tier signs the browser address
+  it observed in `x-real-ip`, which Vercel sets from the connection and a
+  browser cannot supply (`X-Siftentry-Client-Ip` + `X-Siftentry-Client-Signature`, HMAC
+  over `<unix seconds>|<ip>` with the shared secret, five-minute validity). A
+  request whose signature verifies receives a per-address budget. When the API
+  sits directly behind a known ingress, `EZ_API_TRUSTED_PROXY_IPS` allows the
+  rightmost non-proxy `X-Forwarded-For` entry from that peer instead. Every
+  other request keeps the shared budget of the hop it arrived through, so a
+  spoofed `X-Forwarded-For`, `X-Real-IP` or unsigned attestation header can
+  never buy capacity. Enabling uvicorn's forwarded-header handling is neither
+  required nor sufficient, and no direct API request can claim another address;
+- fails closed in hosted modes without a verified-address source, and reports
+  `client_address_trust` and `auth_limits_per_verified_address` in
+  `/health/deployment`;
+- removes connector credential digests from learning exports. Import drops any
+  credential a bundle carries, preserves the stored credential of an existing
+  profile (a restore never disconnects a running connector), and disables the
+  connector on profiles restored into a new workspace until an Owner/Admin
+  generates a fresh token.
+
+Deploy: set `EZ_API_GATEWAY_SHARED_SECRET` (32+ random characters) on the
+Railway API and worker and the same value as `EZ_WEB_GATEWAY_SHARED_SECRET` on
+Vercel, then deploy all three together. Until the web secret is set, traffic
+falls back to per-ingress budgets (the pre-release behaviour, now per action).
+
+Current limits per minute: verified address / shared ingress. login 30/600,
+refresh 120/1200, reset-request 10/300, reset-confirm 20/300, invite-accept
+20/300, change-password 20/300, connector-token 20/300, demo 30/120 plus a
+global demo ceiling of 300. Per-identity limits are unchanged.
+
+Regression evidence: `tests/test_auth_isolation.py` proves demo abuse cannot
+block login or refresh, spoofed headers share one budget, signed and
+trusted-proxy addresses get their own, hosted modes fail closed, exports carry
+no credential material, and export/import keeps an existing connector
+authenticating while a new workspace requires fresh setup.
+
 ## Deployment and recovery
 
 1. Run the SQLite and PostgreSQL backend suites, typecheck, lint, build and browser
