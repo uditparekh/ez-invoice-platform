@@ -249,7 +249,6 @@ test("long profile names, compact sections and mobile fields retain usable geome
     data: {
       organization_id: org,
       source_file: "ui-layout-large-value.pdf",
-      source_path: "/isolated-qa/ui-layout-large-value.pdf",
       parser: "QA",
       invoice_number: "LAYOUT-QA-104",
       invoice_date: "2026-09-21",
