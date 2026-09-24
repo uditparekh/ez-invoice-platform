@@ -22,12 +22,20 @@ test("public reset responses never contain recovery credentials; web security he
 });
 
 test("demo viewers cannot generate connector credentials", async ({
-  request,
+  page,
 }) => {
-  const demo = await request.post("/api/auth/demo");
-  expect(demo.status()).toBe(200);
-  const org = (await demo.json()).user.memberships[0].organization_id;
-  const denied = await request.post(
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Explore demo workspace" }).click();
+  await page.waitForURL("**/app");
+  // Use the browser's authenticated cookie context (including Secure cookies
+  // on loopback), not Playwright's standalone HTTP request cookie jar.
+  const session = await page.request.get("/api/auth/me");
+  expect(session.status()).toBe(200);
+  const user = await session.json();
+  const membership = user.memberships[0];
+  expect(membership.role).toBe("viewer");
+  const org = membership.organization_id;
+  const denied = await page.request.post(
     `/api/organizations/${org}/connector-token`,
   );
   expect(denied.status()).toBe(403);
