@@ -48,5 +48,6 @@ def test_profile_edit_round_trip_preserves_posting_settings_and_token(tmp_path, 
         assert result.status_code == 200
         saved_after = client.app.state.repository.get_client_profile(public["id"])
         assert saved_after.settings.model_dump() == saved_before.settings.model_dump()
-        assert saved_after.settings.connection_settings["connector_token"] == "connector-secret"
+        from siftentry_app.backend.connector_secrets import token_matches
+        assert token_matches("connector-secret-0123456789abcdef0123456789", saved_after.settings.connection_settings["connector_token"])
         assert saved_after.settings.training_profile.onboarding_status == "active"

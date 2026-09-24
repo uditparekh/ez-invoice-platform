@@ -31,7 +31,7 @@ def test_postgres_database_url_is_supported(monkeypatch, tmp_path: Path):
         "postgresql://user:pass@db.example.com:5432/siftentry",
     )
     monkeypatch.setenv("EZ_API_DATABASE_PATH", str(tmp_path / "fallback.db"))
-    monkeypatch.setenv("EZ_API_ENVIRONMENT", "pilot")
+    monkeypatch.setenv("EZ_API_ENVIRONMENT", "development")
 
     settings = ApiSettings.from_environment()
 

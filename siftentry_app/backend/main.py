@@ -111,7 +111,10 @@ from .security import (
     verify_password,
 )
 from .settings import DEFAULT_JWT_SECRET, ApiSettings
-from .storage import DocumentStorage, StoredDocument, build_document_storage
+from .storage import DocumentStorage, StoredDocument, LocalDocumentStorage, build_document_storage
+from .auth_limits import enforce_auth_budget, clear_successful_login_budget
+from .connector_secrets import is_token_hash, token_matches
+from .security import DUMMY_PASSWORD_HASH
 from .validation import validate_invoice
 
 
@@ -187,15 +190,18 @@ def _preserve_connector_token(
 def _guard_connector_credential_changes(request, current_user, organization_id, incoming, existing=None):
     """Profile editing must not grant the ability to impersonate a connector."""
     incoming, existing = incoming or {}, existing or {}
-    protected = ("connector_token", "workspace_id", "connector_enabled")
-    if any(key in incoming and incoming[key] != existing.get(key) for key in protected):
+    protected = ("connector_token", "workspace_id", "connector_enabled", "connector_url", "tally_connector_url", "tally_url", "url")
+    # Omitting a protected field from a replacement settings object is a change
+    # too; otherwise an editor could erase connector identity or its destination.
+    if any(incoming.get(key) != existing.get(key) for key in protected):
         _require_membership(request, current_user, organization_id, MANAGE_ROLES)
     # Permit unchanged legacy data to be edited, but never accept a new malformed
     # credential. Errors deliberately contain no part of either secret.
-    from siftentry_app.connector_credentials import valid_connector_token, TOKEN_FORMAT_MESSAGE
+    from siftentry_app.connector_credentials import valid_connector_token
     token = incoming.get("connector_token")
-    if token and token != existing.get("connector_token") and not valid_connector_token(token):
-        raise HTTPException(status_code=422, detail=TOKEN_FORMAT_MESSAGE)
+    if token and token != existing.get("connector_token"):
+        if not valid_connector_token(token) or len(token) < 32 or is_token_hash(token):
+            raise HTTPException(status_code=422, detail="Generate a new secure connector token (at least 32 ASCII characters).")
 
 
 def _connector_is_enabled(profile: ClientProfile) -> bool:
@@ -257,6 +263,7 @@ def _profile_export_payload(profile: ClientProfile) -> ClientProfileCreate:
 
 def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     resolved = settings or ApiSettings.from_environment()
+    resolved.validate_startup()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -283,6 +290,18 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        if resolved.environment not in {"development", "test"}:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        return response
 
     @app.api_route(
         "/health",
@@ -385,20 +404,23 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         tags=["authentication"],
     )
     def login(request: Request, body: LoginRequest) -> AuthTokens:
+        enforce_auth_budget(request, "login", body.email)
         repository = _repo(request)
         user = repository.get_user_by_email(body.email)
         password_hash = repository.get_password_hash(user.id) if user else None
+        password_valid = verify_password(body.password, password_hash or DUMMY_PASSWORD_HASH)
         if (
             not user
             or not user.is_active
             or not password_hash
-            or not verify_password(body.password, password_hash)
+            or not password_valid
         ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password.",
             )
         repository.mark_user_login(user.id)
+        clear_successful_login_budget(request, body.email)
         return issue_tokens(repository, user.id, request.app.state.settings)
 
     @app.post(
@@ -408,6 +430,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     )
     def public_demo_access(request: Request, response: Response) -> AuthTokens:
         """Open the isolated, viewer-only workspace containing synthetic data."""
+        enforce_auth_budget(request, "demo")
         repository = _repo(request)
         started = perf_counter()
         try:
@@ -433,6 +456,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         tags=["authentication"],
     )
     def refresh(request: Request, body: RefreshRequest) -> AuthTokens:
+        enforce_auth_budget(request, "refresh", body.refresh_token, limit=30)
         try:
             return rotate_refresh_token(
                 _repo(request),
@@ -482,6 +506,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         body: PasswordChangeRequest,
         current_user: CurrentUser,
     ) -> Response:
+        enforce_auth_budget(request, "change-password", current_user.id)
         repository = _repo(request)
         password_hash = repository.get_password_hash(current_user.id)
         if not password_hash or not verify_password(body.current_password, password_hash):
@@ -501,6 +526,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         request: Request,
         body: PasswordResetRequest,
     ) -> PasswordResetResponse:
+        enforce_auth_budget(request, "reset-request", body.email, limit=3, seconds=900)
         repository = _repo(request)
         settings = request.app.state.settings
         user = repository.get_user_by_email(body.email)
@@ -530,8 +556,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             ) from exc
         return PasswordResetResponse(
             message=message,
-            reset_token=token if settings.environment != "production" else None,
-            expires_at=expires_at if settings.environment != "production" else None,
+            reset_token=None,
+            expires_at=None,
         )
 
     @app.post(
@@ -543,6 +569,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         request: Request,
         body: PasswordResetConfirmRequest,
     ) -> AuthTokens:
+        enforce_auth_budget(request, "reset-confirm", body.token, limit=5)
         repository = _repo(request)
         reset = repository.get_password_reset_by_hash(
             hash_password_reset_token(body.token)
@@ -561,8 +588,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 detail="Password reset link is invalid or expired.",
             )
 
-        repository.update_password_hash(user.id, hash_password(body.new_password))
-        repository.mark_password_reset_used(reset.id)
+        if not repository.consume_password_reset(reset.id, user.id, hash_password(body.new_password)):
+            raise HTTPException(status_code=400, detail="Password reset link is invalid or expired.")
         repository.revoke_auth_sessions_for_user(user.id)
         repository.mark_user_login(user.id)
         return issue_tokens(repository, user.id, request.app.state.settings)
@@ -687,7 +714,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         return invitation.model_copy(
             update={
                 "invitation_token": (
-                    token if request.app.state.settings.environment != "production" else None
+                    None
                 )
             }
         )
@@ -701,6 +728,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         request: Request,
         body: InvitationAcceptRequest,
     ) -> AuthTokens:
+        enforce_auth_budget(request, "invite-accept", body.token, limit=5)
         repository = _repo(request)
         invitation = repository.get_invitation_by_hash(hash_invitation_token(body.token))
         now = datetime.now(timezone.utc)
@@ -904,15 +932,25 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         profile_id: str,
         current_user: CurrentUser,
     ) -> Dict[str, Any]:
-        """Owner/admin-only reveal of the connector token, for installing the connector."""
+        """Metadata only: stored credentials are no longer recoverable."""
         profile = _require_client_profile(
             request, organization_id, profile_id, current_user, MANAGE_ROLES
         )
         connection_settings = profile.settings.connection_settings or {}
         return {
             "workspace_id": str(connection_settings.get("workspace_id") or ""),
-            "connector_token": str(connection_settings.get("connector_token") or ""),
+            "connector_token": "",
+            "connector_token_set": bool(connection_settings.get("connector_token")),
+            "message": "Stored tokens cannot be revealed. Generate a replacement only when reinstalling or rotating credentials.",
         }
+
+    @app.post("/api/v1/organizations/{organization_id}/connector-token", tags=["client-profiles"])
+    def generate_connector_token(request: Request, organization_id: str, current_user: CurrentUser):
+        _require_membership(request, current_user, organization_id, MANAGE_ROLES)
+        enforce_auth_budget(request, "connector-token", current_user.id, limit=10)
+        # Returned once to the administrator; saved only as a hash when the
+        # profile is saved. Generation alone never interrupts a running connector.
+        return {"connector_token": secrets.token_urlsafe(32)}
 
     @app.patch(
         "/api/v1/organizations/{organization_id}/client-profiles/{profile_id}",
@@ -990,7 +1028,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         filename = Path(file.filename or "training-sample.pdf").name
         if not filename.lower().endswith(".pdf"):
             raise HTTPException(status_code=415, detail="Only PDF training samples are accepted.")
-        content = await file.read()
+        content = await file.read(request.app.state.settings.max_upload_bytes + 1)
         if not content:
             raise HTTPException(status_code=400, detail="The uploaded training sample is empty.")
         if len(content) > request.app.state.settings.max_upload_bytes:
@@ -1204,6 +1242,9 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         current_user: CurrentUser,
     ) -> Invoice:
         _require_membership(request, current_user, body.organization_id, EDIT_ROLES)
+        # Import is a structured-data API, never a server filesystem API.
+        if body.source_path:
+            raise HTTPException(status_code=422, detail="Upload documents through the upload endpoint; server paths are not accepted.")
         try:
             return _repo(request).create_invoice(body)
         except Exception as exc:
@@ -1228,8 +1269,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             request,
             organization_id=organization_id,
             filename=file.filename or "invoice.pdf",
-            content=await file.read(),
-            content_type=file.content_type or "application/pdf",
+            content=await file.read(request.app.state.settings.max_upload_bytes + 1),
+            content_type="application/pdf",
             parser_mode=parser_mode,
             persist=persist,
             client_profile_id=client_profile_id,
@@ -1467,6 +1508,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> Response:
         invoice = _require_invoice(request, invoice_id, current_user, READ_ROLES)
         document_file = _repo(request).get_active_invoice_file(invoice_id)
+        if document_file is None:
+            raise HTTPException(status_code=404, detail="Invoice document is not retained or is no longer available.")
         if document_file is not None and document_file.storage_backend == "supabase":
             try:
                 content = _storage(request).read(document_file)
@@ -1478,7 +1521,7 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
             filename = document_file.original_filename or invoice.source_file or "invoice.pdf"
             return Response(
                 content=content,
-                media_type=document_file.content_type or "application/pdf",
+                media_type="application/pdf",
                 headers={
                     "Content-Disposition": (
                         f"inline; filename*=UTF-8''{quote(filename, safe='')}"
@@ -1486,7 +1529,10 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 },
             )
 
-        source_path = Path(document_file.local_path) if document_file else Path(invoice.source_path)
+        try:
+            source_path = LocalDocumentStorage(request.app.state.settings.upload_directory).resolve_path(document_file)
+        except (ValueError, OSError):
+            raise HTTPException(status_code=404, detail="Invoice document is not retained or is no longer available.")
         if not str(source_path) or not source_path.exists() or not source_path.is_file():
             raise HTTPException(
                 status_code=404,
@@ -1551,21 +1597,9 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
     ) -> DeleteInvoicesResult:
         _require_membership(request, current_user, organization_id, MANAGE_ROLES)
         retained_files = _repo(request).list_organization_invoice_files(organization_id)
-        legacy_paths = [
-            invoice.source_path
-            for invoice in _repo(request).list_invoices(
-                organization_id=organization_id,
-                limit=100_000,
-                offset=0,
-            )
-            if invoice.source_path and not invoice.source_path.startswith("supabase://")
-        ]
         deleted = _repo(request).delete_organization_invoices(organization_id)
         for record in retained_files:
             _storage(request).delete(record)
-        if getattr(_storage(request), "backend", "local") == "local":
-            for stored_path in set(legacy_paths):
-                _storage(request).delete(Path(stored_path))
         return DeleteInvoicesResult(organization_id=organization_id, deleted=deleted)
 
     @app.post(
@@ -2452,6 +2486,9 @@ def _process_invoice_pdf_bytes(
         raise HTTPException(status_code=400, detail="The uploaded PDF is empty.")
     if len(content) > request.app.state.settings.max_upload_bytes:
         raise HTTPException(status_code=413, detail="The uploaded PDF exceeds the size limit.")
+    if not content.startswith(b"%PDF-"):
+        raise HTTPException(status_code=415, detail="The uploaded file is not a PDF.")
+    content_type = "application/pdf"
 
     client_profile = _resolve_parser_profile(
         request,
@@ -2677,8 +2714,7 @@ def _require_tally_connector_profile(
             connector_enabled
             and saved_workspace_id == workspace_id
             and saved_token
-            and valid_connector_token(saved_token)
-            and hmac.compare_digest(saved_token, supplied_token)
+            and token_matches(supplied_token, saved_token)
         ):
             return profile
     raise HTTPException(

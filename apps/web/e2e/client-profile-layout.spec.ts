@@ -57,7 +57,7 @@ for (const theme of ["light", "dark"]) {
             connection_settings: {
               connector_enabled: true,
               workspace_id: `qa-${theme}-${width}`,
-              connector_token: "qa-only-connector-secret",
+              connector_token: "qa-only-connector-secret-0123456789abcdef",
               tally_url: "http://localhost:9000",
               connector_url: "http://127.0.0.1:8765",
               custom_setting: "preserve",

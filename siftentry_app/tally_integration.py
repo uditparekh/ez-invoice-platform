@@ -152,7 +152,7 @@ def _save_settings(settings: Dict[str, Any]) -> bool:
 
 
 def _xml(value: Any) -> str:
-    return html.escape(str(value or ""), quote=False)
+    return html.escape(str(value or ""), quote=True)
 
 
 def _amount(value: Any) -> float:

@@ -235,7 +235,7 @@ def test_auth_roles_and_cross_workspace_isolation(tmp_path):
         assert client.get(
             url.replace(org, "another-org"), headers=headers
         ).status_code in (403, 404)
-        assert "connector-secret" not in client.get(url, headers=headers).text
+        assert "connector-secret-0123456789abcdef0123456789" not in client.get(url, headers=headers).text
 
 
 def test_concurrent_submits_have_one_winner(tmp_path):

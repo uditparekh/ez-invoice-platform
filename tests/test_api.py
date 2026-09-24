@@ -89,6 +89,17 @@ def authorization(tokens: dict) -> dict:
     return {"Authorization": "Bearer " + tokens["access_token"]}
 
 
+def emailed_token(client: TestClient, email: str | None = None) -> str:
+    """Tests consume the email side channel, never a public API token echo."""
+    import re
+    for message in reversed(client.app.state.email.outbox):
+        if email is None or message.to_email == email:
+            match = re.search(r"(?:reset-password|invite)\?token=([^\s]+)", message.text_body)
+            if match:
+                return match.group(1)
+    raise AssertionError("Expected an emailed token")
+
+
 def approve_with_preview(client, invoice_id, headers):
     preview = client.post(f"/api/v1/invoices/{invoice_id}/posting-preview", json={}, headers=headers)
     if preview.status_code != 200:
@@ -201,6 +212,10 @@ def test_authentication_and_invoice_workflow(tmp_path: Path):
             },
         )
         assert new_login.status_code == 200
+
+        assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+        tokens = new_login.json()
+        headers = authorization(tokens)
 
         invoice = import_sample_invoice(client, tokens, org_id)
         invoice_id = invoice["id"]
@@ -625,8 +640,9 @@ def test_password_reset_flow(tmp_path: Path):
         )
         assert requested.status_code == 200
         reset_payload = requested.json()
-        assert reset_payload["reset_token"]
-        assert reset_payload["expires_at"]
+        assert reset_payload["reset_token"] is None
+        assert reset_payload["expires_at"] is None
+        token = emailed_token(client)
         assert len(client.app.state.email.outbox) == 1
         assert client.app.state.email.outbox[0].to_email == "owner@example.com"
         assert "/reset-password?token=" in client.app.state.email.outbox[0].text_body
@@ -643,7 +659,7 @@ def test_password_reset_flow(tmp_path: Path):
         confirmed = client.post(
             "/api/v1/auth/password-reset/confirm",
             json={
-                "token": reset_payload["reset_token"],
+                "token": token,
                 "new_password": "reset-password-is-long",
             },
         )
@@ -653,7 +669,7 @@ def test_password_reset_flow(tmp_path: Path):
         reused = client.post(
             "/api/v1/auth/password-reset/confirm",
             json={
-                "token": reset_payload["reset_token"],
+                "token": token,
                 "new_password": "another-reset-password",
             },
         )
@@ -1147,7 +1163,7 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
                     "connection_settings": {
                         "connector_enabled": True,
                         "workspace_id": "neel-prod",
-                        "connector_token": "connector-secret",
+                        "connector_token": "connector-secret-0123456789abcdef0123456789",
                         "tally_url": "http://localhost:9000",
                     },
                 },
@@ -1173,7 +1189,7 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
         claimed = client.post(
             "/api/v1/connectors/tally/jobs/claim",
             json={"workspace_id": "neel-prod", "limit": 5, "reconciliation_protocol": 1},
-            headers={"Authorization": "Bearer connector-secret"},
+            headers={"Authorization": "Bearer connector-secret-0123456789abcdef0123456789"},
         )
         assert claimed.status_code == 200
         claim_payload = claimed.json()
@@ -1187,7 +1203,7 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
         duplicate_claim = client.post(
             "/api/v1/connectors/tally/jobs/claim",
             json={"workspace_id": "neel-prod", "limit": 5, "reconciliation_protocol": 1},
-            headers={"Authorization": "Bearer connector-secret"},
+            headers={"Authorization": "Bearer connector-secret-0123456789abcdef0123456789"},
         )
         assert duplicate_claim.status_code == 200
         assert duplicate_claim.json()["jobs"] == []
@@ -1208,7 +1224,7 @@ def test_tally_cloud_connector_claims_and_completes_jobs(tmp_path: Path):
                     }
                 ],
             },
-            headers={"X-SiftEntry-Connector-Token": "connector-secret"},
+            headers={"X-SiftEntry-Connector-Token": "connector-secret-0123456789abcdef0123456789"},
         )
         assert completed.status_code == 200
         result_payload = completed.json()
@@ -1250,7 +1266,7 @@ def test_tally_connector_heartbeat_and_status(tmp_path: Path):
                     "connection_settings": {
                         "connector_enabled": True,
                         "workspace_id": "neel-status",
-                        "connector_token": "status-secret",
+                        "connector_token": "status-secret-0123456789abcdef0123456789",
                         "tally_url": "http://localhost:9000",
                     },
                 },
@@ -1304,7 +1320,7 @@ def test_tally_connector_heartbeat_and_status(tmp_path: Path):
                 "connector_version": "0.3.0",
                 "tally_detected": False,
             },
-            headers={"Authorization": "Bearer status-secret"},
+            headers={"Authorization": "Bearer status-secret-0123456789abcdef0123456789"},
         )
         assert heartbeat.status_code == 200
         assert heartbeat.json()["success"] is True
@@ -1332,7 +1348,7 @@ def test_tally_connector_heartbeat_and_status(tmp_path: Path):
                 "connector_host": "ACCOUNTS-PC",
                 "connector_version": "0.3.0",
             },
-            headers={"Authorization": "Bearer status-secret"},
+            headers={"Authorization": "Bearer status-secret-0123456789abcdef0123456789"},
         )
         assert claimed.status_code == 200
 
@@ -1394,7 +1410,8 @@ def test_tenant_isolation_and_role_permissions(tmp_path: Path):
             headers=owner_headers,
         )
         assert invitation.status_code == 201
-        invitation_token = invitation.json()["invitation_token"]
+        assert invitation.json()["invitation_token"] is None
+        invitation_token = emailed_token(client, "viewer@example.com")
         assert invitation_token
         assert any(
             message.to_email == "viewer@example.com"
@@ -1488,7 +1505,7 @@ def test_tenant_isolation_and_role_permissions(tmp_path: Path):
         approver_tokens = client.post(
             "/api/v1/auth/invitations/accept",
             json={
-                "token": approver_invitation["invitation_token"],
+                "token": emailed_token(client, approver_invitation["email"]),
                 "password": "approver-password-is-long",
                 "full_name": "Approver",
             },
@@ -1516,7 +1533,7 @@ def test_tenant_isolation_and_role_permissions(tmp_path: Path):
         accountant_tokens = client.post(
             "/api/v1/auth/invitations/accept",
             json={
-                "token": accountant_invitation["invitation_token"],
+                "token": emailed_token(client, accountant_invitation["email"]),
                 "password": "accountant-password-is-long",
                 "full_name": "Accountant",
             },
@@ -1813,7 +1830,7 @@ def _tally_profile_body(name: str, connector_enabled: bool) -> dict:
             "connection_settings": {
                 "connector_enabled": connector_enabled,
                 "workspace_id": "neel-prod",
-                "connector_token": "connector-secret",
+                "connector_token": "connector-secret-0123456789abcdef0123456789",
                 "tally_url": "http://localhost:9000",
             },
         },
@@ -1924,7 +1941,7 @@ def _invite_and_accept(client, org_id: str, headers: dict, email: str, role: str
     accepted = client.post(
         "/api/v1/auth/invitations/accept",
         json={
-            "token": invitation.json()["invitation_token"],
+            "token": emailed_token(client, invitation.json()["email"]),
             "password": "member-password-is-long",
             "full_name": email.split("@")[0],
         },
@@ -2006,7 +2023,7 @@ def test_admin_cannot_promote_to_owner(tmp_path: Path):
 # pkg34 — posting safety acceptance tests (from the 2026-09-10 QA review)
 # ---------------------------------------------------------------------------
 
-CONNECTOR_HEADERS = {"Authorization": "Bearer connector-secret"}
+CONNECTOR_HEADERS = {"Authorization": "Bearer connector-secret-0123456789abcdef0123456789"}
 
 
 def _connector_profile_and_invoice(client, tokens, org_id):
@@ -2077,7 +2094,7 @@ def test_viewer_never_receives_connector_token(tmp_path: Path):
 
         listed = client.get(f"/api/v1/organizations/{org_id}/client-profiles", headers=viewer_headers)
         assert listed.status_code == 200
-        assert "connector-secret" not in listed.text
+        assert "connector-secret-0123456789abcdef0123456789" not in listed.text
         assert listed.json()[0]["settings"]["connection_settings"]["connector_token"] == ""
         assert listed.json()[0]["settings"]["connection_settings"]["connector_token_set"] is True
 
@@ -2086,13 +2103,14 @@ def test_viewer_never_receives_connector_token(tmp_path: Path):
         detail = client.get(
             f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}", headers=headers
         )
-        assert "connector-secret" not in detail.text
+        assert "connector-secret-0123456789abcdef0123456789" not in detail.text
         reveal = client.get(
             f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}/connector-credentials",
             headers=headers,
         )
         assert reveal.status_code == 200
-        assert reveal.json()["connector_token"] == "connector-secret"
+        assert reveal.json()["connector_token"] == ""
+        assert reveal.json()["connector_token_set"] is True
         forbidden = client.get(
             f"/api/v1/organizations/{org_id}/client-profiles/{profile_id}/connector-credentials",
             headers=viewer_headers,

@@ -41,7 +41,7 @@ for (const theme of ["light", "dark"]) {
               connection_settings: {
                 connector_enabled: true,
                 workspace_id: `qa-${org}`,
-                connector_token: "qa-only-not-a-real-secret",
+                connector_token: "qa-only-not-a-real-secret-0123456789abcdef",
                 tally_url: "http://localhost:9000",
               },
             },
@@ -50,7 +50,7 @@ for (const theme of ["light", "dark"]) {
       );
       expect(profileResponse.status()).toBe(201);
       const profile = await profileResponse.json();
-      const connectorHeaders = { Authorization: "Bearer qa-only-not-a-real-secret" };
+      const connectorHeaders = { Authorization: "Bearer qa-only-not-a-real-secret-0123456789abcdef" };
       const sync = await request.post(`${qaApi}/api/v1/connectors/tally/masters/begin`, {
         headers: connectorHeaders, data: { workspace_id: `qa-${org}` },
       });
@@ -68,7 +68,6 @@ for (const theme of ["light", "dark"]) {
         data: {
           organization_id: org,
           source_file: "QA-104.pdf",
-          source_path: "/isolated-qa/QA-104.pdf",
           parser: "QA",
           invoice_number: "INV-104",
           invoice_date: "2026-09-21",

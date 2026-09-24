@@ -48,7 +48,11 @@ async function apiRequest(
 ) {
   const headers = new Headers(init.headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -89,6 +93,9 @@ export async function authenticatedApiRequest(
       ? null
       : await upstream.arrayBuffer();
   const response = new NextResponse(body, { status: upstream.status });
+  response.headers.set("Cache-Control", "no-store");
+  const retryAfter = upstream.headers.get("Retry-After");
+  if (retryAfter) response.headers.set("Retry-After", retryAfter);
   const contentType = upstream.headers.get("Content-Type");
   if (contentType && body !== null) {
     response.headers.set("Content-Type", contentType);

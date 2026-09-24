@@ -20,7 +20,10 @@ export function LoginForm() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(() => {
     if (typeof window === "undefined") return "";
-    const reason = new URLSearchParams(window.location.search).get("reason");
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("password_changed") === "1")
+      return "Password updated. Sign in again with your new password.";
+    const reason = params.get("reason");
     return reason === "inactive"
       ? "You were signed out after inactivity on this device."
       : "";

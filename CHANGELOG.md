@@ -4,6 +4,21 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Hosted security hardening
+
+- Remove password-reset/invitation token echoes in every environment; enforce
+  startup controls for pilot, staging, production and unknown hosted modes.
+- Reject imported server paths; serve only retained file records inside managed
+  storage and prevent legacy records from deleting host files.
+- Add shared, atomic authentication budgets, constant-cost unknown-user password
+  checks, single-use concurrent resets and session revocation on password change.
+- Migrate connector tokens to one-way hashes without changing installed tokens;
+  generate new tokens server-side and provide copy-before-save setup.
+- Protect destination changes (including omitted settings), add security headers,
+  bound upload reads, pin PDF libraries and escape XML attribute quotes.
+- Expire existing recovery links and web sessions once during deployment.
+  See docs/HOSTED-SECURITY-2026-09.md for rollout and remaining operational work.
+
 ### UI hardening — responsive Calm Finance workspace
 
 - Repair narrow-phone sign-in, long-name page headers, viewport-sticky navigation,

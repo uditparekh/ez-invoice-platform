@@ -79,14 +79,24 @@ class LocalDocumentStorage:
             return Path(path).name
 
     def read(self, target: Any) -> bytes:
-        path = Path(getattr(target, "local_path", "") or str(target))
+        path = self.resolve_path(target)
         return path.read_bytes()
 
+    def resolve_path(self, target: Any) -> Path:
+        """Only server-managed files beneath this storage root, including symlinks."""
+        path = Path(getattr(target, "local_path", "") or str(target)).resolve()
+        root = self.root.resolve()
+        if path == root or not path.is_relative_to(root):
+            raise ValueError("Document is outside managed storage.")
+        organization_id = getattr(target, "organization_id", None)
+        if organization_id and not path.is_relative_to(root / organization_id):
+            raise ValueError("Document belongs to a different workspace.")
+        return path
+
     def delete(self, target: Any) -> None:
-        path_value = getattr(target, "local_path", "") or str(target)
         try:
-            Path(path_value).unlink(missing_ok=True)
-        except OSError:
+            self.resolve_path(target).unlink(missing_ok=True)
+        except (OSError, ValueError):
             pass
 
 

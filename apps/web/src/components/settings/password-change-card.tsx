@@ -51,6 +51,8 @@ export function PasswordChangeCard() {
       setNewPassword("");
       setConfirmPassword("");
       setMessage("Password updated.");
+      // All sessions were revoked. A full navigation also drops session caches.
+      window.location.assign("/login?password_changed=1");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Password could not be updated.",

@@ -11,6 +11,9 @@ export async function POST(request: Request) {
   });
   const payload = await upstream.json();
   const response = NextResponse.json(payload, { status: upstream.status });
+  response.headers.set("Cache-Control", "no-store");
+  const retryAfter = upstream.headers.get("Retry-After");
+  if (retryAfter) response.headers.set("Retry-After", retryAfter);
 
   if (upstream.ok) setAuthCookies(response, payload as AuthTokens);
   return response;
