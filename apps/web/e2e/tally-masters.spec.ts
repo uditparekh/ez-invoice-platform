@@ -40,7 +40,7 @@ for (const theme of ["light", "dark"]) {
               connection_settings: {
                 connector_enabled: true,
                 workspace_id: workspace,
-                connector_token: "qa-master-token",
+                connector_token: "qa-master-token-0123456789abcdef0123456789",
                 tally_url: "http://localhost:9000",
               },
             },
@@ -49,7 +49,7 @@ for (const theme of ["light", "dark"]) {
       );
       expect(created.status()).toBe(201);
       const profile = await created.json();
-      const connectorHeaders = { Authorization: "Bearer qa-master-token" };
+      const connectorHeaders = { Authorization: "Bearer qa-master-token-0123456789abcdef0123456789" };
       const begin = await request.post(
         "/api/v1/connectors/tally/masters/begin",
         { headers: connectorHeaders, data: { workspace_id: workspace } },
