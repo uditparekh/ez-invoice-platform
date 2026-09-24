@@ -215,3 +215,45 @@ def test_security_migration_expires_existing_links_and_sessions_only_once(tmp_pa
         fresh = client.post("/api/v1/auth/login", json={"email": "owner@example.com", "password": "correct-horse-battery-staple"}).json()
         InvoiceRepository(repo.database_path, repo.database_url)
         assert client.get("/api/v1/auth/me", headers=authorization(fresh)).status_code == 200
+
+
+def test_accountant_cannot_change_or_omit_connector_destinations(tmp_path):
+    with make_client(tmp_path) as client:
+        owner = bootstrap(client)
+        org, headers = organization_id(owner), authorization(owner)
+        repo = client.app.state.repository
+        user = repo.create_user("editor@example.com", hash_password("editor-password-long"), "Editor")
+        repo.create_membership(user.id, org, OrganizationRole.ACCOUNTANT)
+        editor = client.post("/api/v1/auth/login", json={"email": user.email, "password": "editor-password-long"}).json()
+        body = _tally_profile_body("Protected destination", True)
+        body["settings"]["connection_settings"]["connector_url"] = "http://127.0.0.1:8765"
+        url = f"/api/v1/organizations/{org}/client-profiles"
+        profile = client.post(url, headers=headers, json=body).json()
+        assert client.post(f"/api/v1/organizations/{org}/connector-token", headers=authorization(editor)).status_code == 403
+        for remove in (False, True):
+            settings = json.loads(json.dumps(profile["settings"]))
+            if remove:
+                settings["connection_settings"].pop("connector_url")
+            else:
+                settings["connection_settings"]["connector_url"] = "https://attacker.invalid"
+            response = client.patch(f"{url}/{profile['id']}", headers=authorization(editor), json={"settings": settings})
+            assert response.status_code == 403
+        # Ordinary accounting edits still preserve the protected settings/hash.
+        response = client.patch(f"{url}/{profile['id']}", headers=authorization(editor),
+                                json={"description": "Permitted edit", "settings": profile["settings"]})
+        assert response.status_code == 200
+
+
+def test_legacy_push_adapter_never_transmits_a_credential_hash(tmp_path, monkeypatch):
+    from siftentry_app.backend.adapters import TallyAdapter
+    from tests.test_api import _connector_profile_and_invoice
+    with make_client(tmp_path) as client:
+        owner = bootstrap(client)
+        profile, invoice, _ = _connector_profile_and_invoice(client, owner, organization_id(owner))
+        def forbidden(*args, **kwargs):
+            raise AssertionError("Legacy outbound transport must not run")
+        monkeypatch.setattr("siftentry_app.tally_integration.send_to_tally", forbidden)
+        repo = client.app.state.repository
+        result = TallyAdapter().post(repo.get_invoice(invoice), dry_run=True, client_profile=repo.get_client_profile(profile))
+        assert result.success is False
+        assert "Windows connector" in result.message

@@ -476,25 +476,27 @@ function ConnectorCredentialsReveal({
 }) {
   const [token, setToken] = useState<string>("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function reveal() {
     setBusy(true);
     setError("");
+    setInfo("");
     try {
       const response = await fetch(
         `/api/organizations/${organizationId}/client-profiles/${profileId}/connector-credentials`,
       );
       if (response.status === 403) {
         throw new Error(
-          "Only owners and admins can reveal the connector token.",
+          "Only owners and admins can manage connector credentials.",
         );
       }
       if (!response.ok) throw new Error("Could not load the connector token.");
       const payload = (await response.json()) as { connector_token?: string };
       setToken(payload.connector_token || "");
       if (!payload.connector_token)
-        setError(
+        setInfo(
           "Saved tokens cannot be revealed. To install on a new PC, generate and copy a replacement in Client profiles → Connection, save it, and update the Windows connector. Existing installations can keep their current token.",
         );
     } catch (revealError) {
@@ -535,7 +537,12 @@ function ConnectorCredentialsReveal({
       {error && (
         <span className="text-xs font-medium text-danger">{error}</span>
       )}
-      {!token && !error && (
+      {info && (
+        <p role="status" className="w-full text-sm text-ink-secondary">
+          {info}
+        </p>
+      )}
+      {!token && !error && !info && (
         <span className="text-xs font-semibold text-ink-muted">
           Owners and admins only. Tokens are shown only when generated.
         </span>
