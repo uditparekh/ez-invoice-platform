@@ -58,7 +58,7 @@ def test_preview_is_read_only_and_claim_executes_exact_saved_xml(tmp_path):
         plan = preview(client, invoice, headers)["plan"]
         assert repo.get_invoice(invoice).model_dump() == before
         assert not plan["blocking_issues"]
-        assert "connector-secret" not in str(plan)
+        assert "connector-secret-0123456789abcdef0123456789" not in str(plan)
         assert [entry["side"] for entry in plan["ledgers"]] == [
             "credit",
             "debit",
@@ -334,7 +334,7 @@ def test_viewer_can_preview_without_secrets_but_cannot_approve(tmp_path):
         ).json()
         viewer = authorization(tokens)
         plan = preview(client, invoice, viewer)["plan"]
-        assert "connector-secret" not in str(plan)
+        assert "connector-secret-0123456789abcdef0123456789" not in str(plan)
         assert approve(client, invoice, viewer, plan).status_code == 403
 
 

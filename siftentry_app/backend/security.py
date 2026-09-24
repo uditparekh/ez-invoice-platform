@@ -17,6 +17,8 @@ from .settings import ApiSettings
 
 
 PASSWORD_HASH = PasswordHash.recommended()
+# Computed once, never for each unknown-user request; equal-cost verification.
+DUMMY_PASSWORD_HASH = PASSWORD_HASH.hash(secrets.token_urlsafe(32))
 JWT_ALGORITHM = "HS256"
 
 

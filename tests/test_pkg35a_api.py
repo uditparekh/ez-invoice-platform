@@ -29,7 +29,7 @@ def test_legacy_non_ascii_stored_token_returns_401_not_500(tmp_path):
         for path in ["diagnostics", "heartbeat", "jobs/claim", "jobs/results"]:
             response = client.post("/api/v1/connectors/tally/" + path,
                 json={"workspace_id": "neel-prod", "results": []},
-                headers={"Authorization": "Bearer connector-secret"})
+                headers={"Authorization": "Bearer connector-secret-0123456789abcdef0123456789"})
             assert response.status_code == 401
             assert "legacy" not in response.text
 
@@ -49,10 +49,10 @@ def test_empty_workspace_diagnostics_and_poll_are_successful(tmp_path):
         body = _tally_profile_body("Tally", True)
         created = client.post(f"/api/v1/organizations/{org}/client-profiles", json=body, headers=authorization(owner))
         assert created.status_code == 201
-        headers = {"Authorization": "Bearer connector-secret"}
+        headers = {"Authorization": "Bearer connector-secret-0123456789abcdef0123456789"}
         result = client.post("/api/v1/connectors/tally/diagnostics", json={"workspace_id": "neel-prod"}, headers=headers)
         assert result.status_code == 200 and result.json()["success"]
-        assert "connector-secret" not in result.text
+        assert "connector-secret-0123456789abcdef0123456789" not in result.text
         assert client.app.state.repository.get_connector_heartbeat(created.json()["id"]) is None
         result = client.post("/api/v1/connectors/tally/jobs/claim", json={"workspace_id": "neel-prod"}, headers=headers)
         assert result.status_code == 200 and result.json()["jobs"] == []
@@ -65,7 +65,7 @@ def test_diagnostics_does_not_claim_approved_invoice(tmp_path):
         assert client.post(f"/api/v1/invoices/{invoice}/validate", headers=headers).status_code == 200
         assert approve_with_preview(client, invoice, headers).status_code == 200
         result = client.post("/api/v1/connectors/tally/diagnostics", json={"workspace_id": "neel-prod"},
-                             headers={"Authorization": "Bearer connector-secret"})
+                             headers={"Authorization": "Bearer connector-secret-0123456789abcdef0123456789"})
         assert result.status_code == 200
         repo = client.app.state.repository
         assert repo.get_invoice(invoice).status == "approved"

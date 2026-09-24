@@ -494,7 +494,9 @@ function ConnectorCredentialsReveal({
       const payload = (await response.json()) as { connector_token?: string };
       setToken(payload.connector_token || "");
       if (!payload.connector_token)
-        setError("No token is saved on this profile yet.");
+        setError(
+          "Saved tokens cannot be revealed. To install on a new PC, generate and copy a replacement in Client profiles → Connection, save it, and update the Windows connector. Existing installations can keep their current token.",
+        );
     } catch (revealError) {
       setError((revealError as Error).message);
     } finally {
@@ -527,7 +529,7 @@ function ConnectorCredentialsReveal({
           onClick={() => void reveal()}
           disabled={busy}
         >
-          {busy ? "Loading…" : "Reveal connector token"}
+          {busy ? "Loading…" : "Connector credential setup"}
         </Button>
       )}
       {error && (
@@ -535,7 +537,7 @@ function ConnectorCredentialsReveal({
       )}
       {!token && !error && (
         <span className="text-xs font-semibold text-ink-muted">
-          Owners and admins only. Needed once, when installing the connector.
+          Owners and admins only. Tokens are shown only when generated.
         </span>
       )}
     </div>

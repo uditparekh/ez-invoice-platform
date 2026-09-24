@@ -2406,31 +2406,10 @@ function renderConnectionFields(
                   ? "Saved — leave blank to keep it"
                   : "Generate a secure token"
               }
-              hint="Tokens are hidden. Save a generated token, then reveal it on Integrations → Tally to copy it to Windows. Never include tokens in support screenshots."
+              hint="Copy the generated token before saving, then paste it into Windows. Saved tokens cannot be revealed. Leave blank to keep the current token. Never include tokens in support screenshots."
             />
           </FormGrid>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              if (
-                connectionBool(settings, "connector_token_set") &&
-                !window.confirm(
-                  "Replace the saved connector token? Stop the connector first. After saving, it will need the new token.",
-                )
-              )
-                return;
-              const bytes = crypto.getRandomValues(new Uint8Array(32));
-              onChange(
-                "connector_token",
-                Array.from(bytes, (byte) =>
-                  byte.toString(16).padStart(2, "0"),
-                ).join(""),
-              );
-            }}
-          >
-            Generate secure token
-          </Button>
+          <SecureConnectorToken settings={settings} onChange={onChange} />
           <p className="text-xs text-ink-secondary">
             Generation changes this form only. Save to apply it.
           </p>
@@ -2556,6 +2535,84 @@ function renderConnectionFields(
         placeholder="Client import template"
       />
     </FormGrid>
+  );
+}
+
+function SecureConnectorToken({
+  settings,
+  onChange,
+}: {
+  settings: Record<string, unknown>;
+  onChange: (key: string, value: string | boolean) => void;
+}) {
+  const { activeOrganizationId } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  async function generate() {
+    if (!activeOrganizationId) return;
+    if (
+      connectionBool(settings, "connector_token_set") &&
+      !window.confirm(
+        "Replace the saved connector token? Stop the connector first. After saving, it will need the new token.",
+      )
+    )
+      return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(
+        `/api/organizations/${activeOrganizationId}/connector-token`,
+        { method: "POST" },
+      );
+      if (!response.ok)
+        throw new Error("Could not generate a token. Please try again.");
+      const payload = (await response.json()) as { connector_token: string };
+      onChange("connector_token", payload.connector_token);
+      setMessage(
+        "Copy this token before saving. It cannot be recovered later.",
+      );
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={busy}
+        onClick={() => void generate()}
+      >
+        {busy ? "Generating…" : "Generate secure token"}
+      </Button>
+      {connectionText(settings, "connector_token") && (
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(
+                connectionText(settings, "connector_token"),
+              );
+              setMessage(
+                "Copied. Save the profile, then paste the token into Windows.",
+              );
+            } catch {
+              setMessage(
+                "Clipboard unavailable. Select the token field and copy it manually.",
+              );
+            }
+          }}
+        >
+          Copy new token
+        </Button>
+      )}
+      <p role="status" className="w-full text-xs text-ink-secondary">
+        {message}
+      </p>
+    </div>
   );
 }
 

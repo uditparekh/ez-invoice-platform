@@ -12,6 +12,7 @@ from .tally_masters import MasterRepository
 from .posting_reconciliation import ReconciliationRepository
 from .extraction_benchmarks import ExtractionBenchmarkRepository
 from .approval_plans import ApprovalConflict, profile_fingerprint
+from .connector_secrets import protected_settings
 import threading
 import uuid
 from dataclasses import dataclass
@@ -146,6 +147,16 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
                 connection.execute("SELECT pg_advisory_xact_lock(356035)")
             connection.executescript(
                 """
+                CREATE TABLE IF NOT EXISTS auth_rate_buckets (
+                    bucket_key TEXT PRIMARY KEY,
+                    attempts INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_auth_rate_expiry ON auth_rate_buckets(expires_at);
+                CREATE TABLE IF NOT EXISTS security_migrations (
+                    name TEXT PRIMARY KEY,
+                    applied_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS tally_master_sync (
                     profile_id TEXT PRIMARY KEY,
                     ticket TEXT NOT NULL,
@@ -465,6 +476,26 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
                     """
                 )
             self.initialize_extraction_benchmarks(connection)
+            applied_at = utc_now().isoformat()
+            applied = connection.execute(
+                "INSERT INTO security_migrations (name, applied_at) VALUES (?, ?) ON CONFLICT(name) DO NOTHING RETURNING name",
+                ("20260924_revoke_exposed_auth_links", applied_at),
+            ).fetchone()
+            if applied:
+                # Existing links may have been returned by the vulnerable API.
+                # Revoke web sessions too; rotating JWT alone would leave opaque
+                # refresh tokens usable. This happens once, never on every boot.
+                connection.execute("UPDATE password_reset_tokens SET used_at = ? WHERE used_at IS NULL", (applied_at,))
+                connection.execute("UPDATE organization_invitations SET expires_at = ? WHERE accepted_at IS NULL", (applied_at,))
+                connection.execute("UPDATE auth_sessions SET revoked_at = ? WHERE revoked_at IS NULL", (applied_at,))
+            # Idempotent and serialized with schema initialization. Does not
+            # rotate installed credentials or invalidate approved accounting plans.
+            for row in connection.execute("SELECT id, settings_json FROM client_profiles").fetchall():
+                original = _loads(row["settings_json"], {})
+                protected = protected_settings(original)
+                if protected != original:
+                    connection.execute("UPDATE client_profiles SET settings_json = ? WHERE id = ?",
+                                       (_json(protected), row["id"]))
             self._migrate_posting_attempts(connection)
             # Columns must exist before creating this index on older databases.
             connection.execute("""
@@ -585,6 +616,22 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
                 "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
                 (password_hash, now, user_id),
             )
+            connection.execute("UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL", (now, user_id))
+
+    def consume_password_reset(self, reset_id: str, user_id: str, password_hash: str) -> bool:
+        """Single winner, password change and session revocation in one transaction."""
+        now = utc_now().isoformat()
+        with self._connect() as connection:
+            won = connection.execute(
+                "UPDATE password_reset_tokens SET used_at = ? WHERE id = ? AND user_id = ? AND used_at IS NULL AND expires_at > ?",
+                (now, reset_id, user_id, now),
+            ).rowcount
+            if not won:
+                return False
+            connection.execute("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", (password_hash, now, user_id))
+            connection.execute("UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL", (now, user_id))
+            connection.execute("UPDATE password_reset_tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL", (now, user_id))
+            return True
 
     def mark_user_login(self, user_id: str) -> None:
         now = utc_now().isoformat()
@@ -1047,7 +1094,7 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
                     accounting_system,
                     profile.description,
                     int(profile.is_default),
-                    _json(profile.settings),
+                    _json(protected_settings(profile.settings.model_dump(mode="json"))),
                     profile.created_at.isoformat(),
                     profile.updated_at.isoformat(),
                 ),
@@ -1168,7 +1215,7 @@ class InvoiceRepository(ApprovalRepository, ReportingRepository, MasterRepositor
                     accounting_system,
                     updated.description,
                     int(updated.is_default),
-                    _json(updated.settings),
+                    _json(protected_settings(updated.settings.model_dump(mode="json"))),
                     updated.updated_at.isoformat(),
                     profile_id,
                 ),

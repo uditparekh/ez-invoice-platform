@@ -84,10 +84,10 @@ def test_accountant_cannot_replace_connector_identity(tmp_path):
         assert client.get(url + "/connector-credentials", headers=headers).status_code == 403
         recommended = client.post(url + "/recommend-settings", headers=headers)
         assert recommended.status_code == 200
-        assert "connector-secret" not in recommended.text
+        assert "connector-secret-0123456789abcdef0123456789" not in recommended.text
         sample = client.post(url + "/training-samples", headers=headers,
             files={"file": ("sample.pdf", make_text_pdf("Invoice 123"), "application/pdf")})
-        assert sample.status_code == 200 and "connector-secret" not in sample.text
+        assert sample.status_code == 200 and "connector-secret-0123456789abcdef0123456789" not in sample.text
 
 
 def test_live_tally_api_also_requires_approval(tmp_path):

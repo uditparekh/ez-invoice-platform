@@ -217,7 +217,7 @@ class ApiSettings:
     def validate_startup(self) -> None:
         """Fail fast when a production deployment is missing required controls."""
 
-        if not self.is_production:
+        if self.environment in {"development", "test"}:
             return
         problems = self.production_readiness_problems()
         if problems:

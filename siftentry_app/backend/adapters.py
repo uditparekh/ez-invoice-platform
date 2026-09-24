@@ -242,6 +242,11 @@ class TallyAdapter:
         dry_run: bool = False,
         client_profile: Optional[ClientProfile] = None,
     ) -> ConnectorResult:
+        # Hosted profiles use the pull connector and approved execution plans.
+        # Never send stored credential hashes to the legacy push bridge.
+        from .connector_secrets import is_token_hash
+        if client_profile and is_token_hash(str((client_profile.settings.connection_settings or {}).get("connector_token") or "")):
+            return ConnectorResult(False, "Use the Windows connector to execute this approved posting plan.")
         issues = _basic_issues(invoice)
         if issues:
             return ConnectorResult(False, issues[0].message, issues=issues)

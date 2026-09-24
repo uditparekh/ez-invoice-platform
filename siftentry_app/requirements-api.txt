@@ -8,7 +8,7 @@ httpx>=0.28,<1
 pwdlib[argon2]>=0.3,<1
 PyJWT>=2.10,<3
 # PDF text + word-coordinate extraction (parser_service, evidence bboxes)
-pymupdf
-pypdf
+pymupdf==1.27.2.3
+pypdf==6.10.2
 # PostgreSQL driver (production database)
 psycopg[binary]>=3.1,<4

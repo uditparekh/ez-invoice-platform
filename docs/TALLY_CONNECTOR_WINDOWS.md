@@ -34,7 +34,7 @@ Then fill in:
 
 - SiftEntry URL: your deployed SiftEntry app URL
 - Workspace ID: the workspace ID shown in the SiftEntry client profile
-- Connector token: the token shown in the SiftEntry client profile
+- Connector token: in Client profiles → Connection, generate a secure token and copy it **before saving**. Save the profile, then paste it into Windows. Saved tokens cannot be revealed. Existing installations keep working with their current token; generating a replacement does not apply it until the profile is saved.
 - Tally URL: usually `http://localhost:9000`
 - Poll seconds: `15`
 - Claim limit: `5`
@@ -104,7 +104,7 @@ Fill in:
 
 - SiftEntry URL: your deployed app URL, for example `https://app.siftentry.com`
 - Workspace ID: the workspace ID shown in the SiftEntry client profile
-- Connector token: the token shown in the SiftEntry client profile
+- Connector token: generate and copy it in Client profiles → Connection before saving. Saved tokens are not recoverable. Stop the connector before replacing a saved token, then update Windows with the replacement.
 - Tally URL: usually `http://localhost:9000`
 - Poll seconds: `15`
 - Claim limit: `5`
