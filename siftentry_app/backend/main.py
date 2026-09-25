@@ -250,14 +250,27 @@ def _guard_single_connector_profile(
             )
 
 
+CONNECTOR_CREDENTIAL_KEYS = ("connector_token", "connector_token_set")
+
+
+def _without_connector_credentials(settings: ClientProfileSettings) -> ClientProfileSettings:
+    """Bundles carry configuration, never credential material (not even digests)."""
+    connection = {
+        key: value
+        for key, value in (settings.connection_settings or {}).items()
+        if key not in CONNECTOR_CREDENTIAL_KEYS
+    }
+    return settings.model_copy(update={"connection_settings": connection})
+
+
 def _profile_export_payload(profile: ClientProfile) -> ClientProfileCreate:
-    """Strip identity/timestamps: a profile as a portable creation payload."""
+    """Strip identity, timestamps and credentials: a portable creation payload."""
     return ClientProfileCreate(
         name=profile.name,
         accounting_system=profile.accounting_system,
         description=profile.description,
         is_default=profile.is_default,
-        settings=profile.settings,
+        settings=_without_connector_credentials(profile.settings),
     )
 
 
@@ -345,6 +358,8 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                 and bool(settings.smtp_username)
                 and bool(settings.smtp_password),
                 "ai_extraction": ai_status,
+                "client_address_trust": settings.client_address_trust,
+                "auth_limits_per_verified_address": settings.has_verified_client_addresses,
             },
             "problems": problems,
         }
@@ -1968,12 +1983,24 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
         }
         created = 0
         updated = 0
+        connectors_preserved = 0
+        connectors_pending_setup = 0
         for payload in body.client_profiles:
             key = payload.name.strip().lower()
             if not key:
                 continue
+            # Bundles never carry credentials in; anything they contain is dropped.
+            settings = _without_connector_credentials(payload.settings)
             match = existing.get(key)
             if match:
+                # Restoring a backup must never disconnect a running connector:
+                # the existing profile keeps its stored credential.
+                stored = str((match.settings.connection_settings or {}).get("connector_token") or "")
+                if stored:
+                    connection = dict(settings.connection_settings)
+                    connection["connector_token"] = stored
+                    settings = settings.model_copy(update={"connection_settings": connection})
+                    connectors_preserved += 1
                 repo.update_client_profile(
                     match.id,
                     ClientProfilePatch(
@@ -1981,16 +2008,35 @@ def create_app(settings: Optional[ApiSettings] = None) -> FastAPI:
                         accounting_system=payload.accounting_system,
                         description=payload.description,
                         is_default=payload.is_default,
-                        settings=payload.settings,
+                        settings=settings,
                     ),
                     actor_id=current_user.id,
                 )
                 updated += 1
             else:
+                # A new workspace needs fresh connector setup: no credential, and
+                # nothing enabled until an Owner/Admin generates a token.
+                connection = dict(settings.connection_settings)
+                if connection.get("connector_enabled"):
+                    connection["connector_enabled"] = False
+                    connectors_pending_setup += 1
+                settings = settings.model_copy(update={"connection_settings": connection})
                 repo.create_client_profile(
-                    organization_id, payload, actor_id=current_user.id
+                    organization_id,
+                    payload.model_copy(update={"settings": settings}),
+                    actor_id=current_user.id,
                 )
                 created += 1
+        if connectors_preserved:
+            notes.append(
+                f"{connectors_preserved} existing connector credential(s) preserved; "
+                "bundles never carry credentials."
+            )
+        if connectors_pending_setup:
+            notes.append(
+                f"{connectors_pending_setup} imported profile(s) need fresh connector setup: "
+                "generate a token in Client profiles → Connection before enabling the connector."
+            )
         if body.learning_signals:
             notes.append(
                 f"{len(body.learning_signals)} historical learning signals received "

@@ -20,6 +20,7 @@ def _production_settings(tmp_path: Path, **overrides) -> ApiSettings:
         "smtp_host": "smtp.example.com",
         "smtp_username": "apikey",
         "smtp_password": "secret",
+        "gateway_shared_secret": "g" * 48,
     }
     data.update(overrides)
     return ApiSettings(**data)

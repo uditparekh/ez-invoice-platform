@@ -33,6 +33,7 @@ EZ_API_ALLOW_DEV_BOOTSTRAP=false
 EZ_API_CORS_ORIGINS=https://app.siftentry.com
 EZ_APP_BASE_URL=https://app.siftentry.com
 EZ_API_PUBLIC_BASE_URL=https://siftentry-api-production.up.railway.app
+EZ_API_GATEWAY_SHARED_SECRET=replace-with-32-plus-random-characters   # also EZ_WEB_GATEWAY_SHARED_SECRET on Vercel
 EZ_EMAIL_PROVIDER=smtp
 EZ_EMAIL_FROM="SiftEntry <no-reply@siftentry.com>"
 EZ_EMAIL_REPLY_TO=support@siftentry.com

@@ -4,6 +4,30 @@ All notable platform changes will be recorded here.
 
 ## [Unreleased]
 
+### Isolated authentication limits and credential-free bundles
+
+- Preserve signed-in sessions when refresh is temporarily rate-limited or the
+  upstream service is unavailable; return retryable errors instead of logging
+  users out. Invalid refresh credentials still clear the session.
+- Key every authentication budget by action so demo traffic has its own buckets
+  and a global ceiling, and can never exhaust login or refresh capacity.
+- Trust client addresses explicitly: a gateway-signed address from the web tier
+  (`EZ_API_GATEWAY_SHARED_SECRET` / `EZ_WEB_GATEWAY_SHARED_SECRET`) or a forwarded
+  header from a listed trusted proxy receives a per-address budget; everything
+  else shares its ingress hop's budget, so spoofed headers never bypass limits.
+- Require verified client addresses in hosted modes; report the trust source in
+  `/health/deployment`.
+- Bound and validate gateway signatures before parsing; malformed public headers
+  fall back to ordinary ingress limits rather than crashing authentication.
+- Verify the gateway's original IP text before normalizing rate-limit identity,
+  preserving IPv6 authentication and preventing equivalent address spellings
+  from receiving extra budgets.
+- Reject invalid or unrestricted trusted-proxy configuration at hosted startup;
+  malformed forwarded hops fail closed. Web signing accepts only valid IPs.
+- Remove connector credential digests from learning exports. Importing a bundle
+  preserves an existing profile's stored credential and never plants one;
+  profiles restored into a new workspace require fresh connector setup.
+
 ### Hosted security hardening
 
 - Remove password-reset/invitation token echoes in every environment; enforce

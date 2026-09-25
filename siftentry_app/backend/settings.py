@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from .client_ip import parse_trusted_proxy_networks
+
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_JWT_SECRET = "siftentry-local-development-secret-change-me"
@@ -86,6 +88,8 @@ class ApiSettings:
     ai_policy: str = "review_only"
     default_pdf_retention_policy: str = "review_window"
     default_pdf_retention_days: int = 3
+    gateway_shared_secret: str = ""
+    trusted_proxy_ips: tuple[str, ...] = ()
 
     @classmethod
     def from_environment(cls) -> "ApiSettings":
@@ -198,6 +202,8 @@ class ApiSettings:
             default_pdf_retention_days=int(
                 os.environ.get("SIFTENTRY_PDF_RETENTION_DAYS", "3")
             ),
+            gateway_shared_secret=os.environ.get("EZ_API_GATEWAY_SHARED_SECRET", "").strip(),
+            trusted_proxy_ips=_split_csv(os.environ.get("EZ_API_TRUSTED_PROXY_IPS", "")),
         )
         settings.validate_startup()
         return settings
@@ -274,4 +280,32 @@ class ApiSettings:
             )
         if self.ai_provider == "webhook" and not self.ai_extractor_url:
             problems.append("set SIFTENTRY_AI_EXTRACTOR_URL or use SIFTENTRY_AI_PROVIDER=profile_context")
+        try:
+            parse_trusted_proxy_networks(self.trusted_proxy_ips)
+        except ValueError as exc:
+            problems.append(str(exc))
+        if not self.has_verified_client_addresses:
+            problems.append(
+                "set EZ_API_GATEWAY_SHARED_SECRET to a 32+ character secret shared with the "
+                "web tier (or EZ_API_TRUSTED_PROXY_IPS for a known ingress) so authentication "
+                "limits apply per verified client address"
+            )
         return problems
+
+    @property
+    def has_verified_client_addresses(self) -> bool:
+        try:
+            proxies = parse_trusted_proxy_networks(self.trusted_proxy_ips)
+        except ValueError:
+            return False
+        return len(self.gateway_shared_secret) >= 32 or bool(proxies)
+
+    @property
+    def client_address_trust(self) -> str:
+        if not self.has_verified_client_addresses:
+            return "peer_only"
+        if len(self.gateway_shared_secret) >= 32:
+            return "gateway"
+        if self.trusted_proxy_ips:
+            return "trusted_proxy"
+        return "peer_only"
