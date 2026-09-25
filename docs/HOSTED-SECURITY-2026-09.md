@@ -89,6 +89,22 @@ refresh 120/1200, reset-request 10/300, reset-confirm 20/300, invite-accept
 20/300, change-password 20/300, connector-token 20/300, demo 30/120 plus a
 global demo ceiling of 300. Per-identity limits are unchanged.
 
+Audit follow-up: malformed, non-ASCII or oversized signatures fall back to
+unverified ingress limits without raising a server error. Verification uses the
+exact IP text signed by the gateway, then normalizes it for budget identity,
+including equivalent IPv6 spellings and IPv4-mapped IPv6 addresses. Trusted-proxy
+entries must be explicit IP addresses or canonical network CIDRs; invalid entries,
+host-bit CIDRs and unrestricted `/0` ranges fail hosted startup. For the standard
+Vercel-to-Railway deployment, use the shared secret and leave trusted proxies unset.
+A self-hosted Next.js ingress must overwrite `x-real-ip` from the actual connection;
+enabling signing on a bare public `next start` is not a safe proxy configuration.
+
+The authenticated web gateway preserves session cookies on refresh rate limits,
+network failures and upstream service errors, returning 429/503 with Retry-After.
+Only a definitive invalid-session response clears them. Regression coverage lives
+in `tests/test_auth_isolation.py` and `apps/web/tests/server-api.test.mjs`; CI runs
+both the backend matrix and `pnpm test:server` before the browser suite.
+
 Regression evidence: `tests/test_auth_isolation.py` proves demo abuse cannot
 block login or refresh, spoofed headers share one budget, signed and
 trusted-proxy addresses get their own, hosted modes fail closed, exports carry

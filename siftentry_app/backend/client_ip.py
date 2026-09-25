@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import ipaddress
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional
@@ -31,6 +32,8 @@ from typing import Any, Iterable, Mapping, Optional
 CLIENT_IP_HEADER = "x-siftentry-client-ip"
 CLIENT_SIGNATURE_HEADER = "x-siftentry-client-signature"
 SIGNATURE_MAX_AGE_SECONDS = 300
+_SIGNATURE = re.compile(r"([1-9][0-9]{0,9})\.([0-9a-fA-F]{64})", re.ASCII)
+MAX_IP_LENGTH = 45
 
 
 @dataclass(frozen=True)
@@ -50,23 +53,37 @@ def sign_client_ip(secret: str, ip: str, timestamp: Optional[int] = None) -> str
 
 
 def _parse_ip(value: Any) -> Optional[str]:
+    text = str(value or "").strip()
+    # Scope identifiers belong to local interfaces, not public client identity.
+    if not text or len(text) > MAX_IP_LENGTH or not text.isascii() or "%" in text:
+        return None
     try:
-        return str(ipaddress.ip_address(str(value or "").strip()))
+        address = ipaddress.ip_address(text)
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+            return str(address.ipv4_mapped)
+        return str(address)
     except ValueError:
         return None
 
 
-def _networks(values: Iterable[str]) -> list:
+def parse_trusted_proxy_networks(values: Iterable[str]) -> tuple:
+    """Reject invalid/overbroad trust configuration instead of skipping it."""
     networks = []
     for value in values or ():
         try:
-            networks.append(ipaddress.ip_network(str(value).strip(), strict=False))
-        except ValueError:
-            continue
-    return networks
+            network = ipaddress.ip_network(str(value).strip(), strict=True)
+            if network.prefixlen == 0:
+                raise ValueError("unrestricted proxy trust")
+            networks.append(network)
+        except ValueError as exc:
+            raise ValueError(
+                "EZ_API_TRUSTED_PROXY_IPS must contain valid, explicit IP addresses "
+                "or network CIDRs; wildcard ranges and host bits are not allowed"
+            ) from exc
+    return tuple(networks)
 
 
-def _in_networks(ip: str, networks: list) -> bool:
+def _in_networks(ip: str, networks: Iterable) -> bool:
     try:
         address = ipaddress.ip_address(ip)
     except ValueError:
@@ -77,14 +94,21 @@ def _in_networks(ip: str, networks: list) -> bool:
 def _gateway_address(headers: Mapping[str, str], secret: str, now: float) -> Optional[str]:
     if len(secret) < 32:
         return None
-    ip = _parse_ip(headers.get(CLIENT_IP_HEADER, ""))
+    raw_ip = str(headers.get(CLIENT_IP_HEADER, "") or "").strip()
+    ip = _parse_ip(raw_ip)
     signature = str(headers.get(CLIENT_SIGNATURE_HEADER, "") or "").strip()
-    seconds, _, digest = signature.partition(".")
-    if not ip or not seconds.isdigit() or not digest:
+    # Bound and validate untrusted input before int() or compare_digest().
+    if not ip or len(signature) > 75:
         return None
+    match = _SIGNATURE.fullmatch(signature)
+    if not match:
+        return None
+    seconds, digest = match.groups()
     if abs(now - int(seconds)) > SIGNATURE_MAX_AGE_SECONDS:
         return None
-    expected = sign_client_ip(secret, ip, int(seconds)).partition(".")[2]
+    # Authenticate the exact text signed by the gateway. Only the rate-limit
+    # identity is normalized, so equivalent IPv6 spellings share one bucket.
+    expected = sign_client_ip(secret, raw_ip, int(seconds)).partition(".")[2]
     if not hmac.compare_digest(expected, digest.lower()):
         return None
     return ip
@@ -100,11 +124,19 @@ def resolve_client_address(
     attested = _gateway_address(headers, secret, current)
     if attested:
         return ClientAddress(attested, True, "gateway")
-    proxies = _networks(getattr(settings, "trusted_proxy_ips", ()) or ())
+    try:
+        proxies = parse_trusted_proxy_networks(getattr(settings, "trusted_proxy_ips", ()) or ())
+    except ValueError:
+        # Hosted startup rejects this configuration. Remain fail-closed for
+        # directly constructed settings in tests/development too.
+        return ClientAddress(peer, False, "peer")
     if proxies and _in_networks(peer, proxies):
         forwarded = str(headers.get("x-forwarded-for", "") or "").split(",")
         for candidate in reversed(forwarded):
             ip = _parse_ip(candidate)
-            if ip and not _in_networks(ip, proxies):
+            if not ip:
+                # Never skip a malformed hop and trust an earlier supplied IP.
+                return ClientAddress(peer, False, "peer")
+            if not _in_networks(ip, proxies):
                 return ClientAddress(ip, True, "trusted_proxy")
     return ClientAddress(peer, False, "peer")

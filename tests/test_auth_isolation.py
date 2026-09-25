@@ -9,6 +9,7 @@ Contracts under test:
   an existing connector, while a new workspace requires fresh connector setup.
 """
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -127,12 +128,63 @@ def test_gateway_signature_is_ignored_without_a_configured_secret(tmp_path, monk
         assert statuses == [401, 401, 429]
 
 
+def test_malformed_attestations_never_crash_login_or_escape_limits(tmp_path, monkeypatch):
+    monkeypatch.setitem(auth_limits.ADDRESS_LIMITS, "login", (5, 3))
+    seconds = str(int(time.time())).encode("ascii")
+    signatures = [seconds + b".\xff", b"9" * 4500 + b".bad", seconds + b".bad", b"invalid"]
+    with make_client(tmp_path, gateway_shared_secret=GATEWAY_SECRET) as client:
+        statuses = [
+            _login(client, index, [
+                (CLIENT_IP_HEADER.encode(), b"203.0.113.1"),
+                (CLIENT_SIGNATURE_HEADER.encode(), signature),
+            ]).status_code
+            for index, signature in enumerate(signatures)
+        ]
+        assert statuses == [401, 401, 401, 429]
+
+
+@pytest.mark.parametrize("ip, expected", [
+    ("2001:db8::1", "2001:db8::1"),
+    ("2001:0db8:0:0:0:0:0:1", "2001:db8::1"),
+    ("2001:DB8::1", "2001:db8::1"),
+    ("::ffff:203.0.113.1", "203.0.113.1"),
+])
+def test_gateway_verifies_original_ip_text_then_normalizes_identity(ip, expected):
+    settings = SimpleNamespace(gateway_shared_secret=GATEWAY_SECRET, trusted_proxy_ips=())
+    request = SimpleNamespace(client=SimpleNamespace(host="10.0.0.5"), headers=_signed(ip))
+    address = resolve_client_address(request, settings)
+    assert (address.ip, address.verified, address.source) == (expected, True, "gateway")
+
+
+def test_equivalent_ipv6_addresses_cannot_multiply_login_budgets(tmp_path, monkeypatch):
+    monkeypatch.setitem(auth_limits.ADDRESS_LIMITS, "login", (2, 20))
+    with make_client(tmp_path, gateway_shared_secret=GATEWAY_SECRET) as client:
+        statuses = [
+            _login(client, index, _signed(ip)).status_code
+            for index, ip in enumerate(["2001:db8::1", "2001:0db8:0:0:0:0:0:1", "2001:DB8::1"])
+        ]
+        assert statuses == [401, 401, 429]
+
+
+@pytest.mark.parametrize("ip, age", [
+    ("203.0.113.1", -301), ("203.0.113.1", 301),
+    ("fe80::1%eth0", 0), ("not-an-ip", 0),
+])
+def test_invalid_or_expired_gateway_identity_falls_back_to_peer(ip, age):
+    now = 1_800_000_000
+    settings = SimpleNamespace(gateway_shared_secret=GATEWAY_SECRET, trusted_proxy_ips=())
+    request = SimpleNamespace(client=SimpleNamespace(host="10.0.0.5"), headers=_signed(ip, timestamp=now + age))
+    address = resolve_client_address(request, settings, now=now)
+    assert (address.ip, address.verified, address.source) == ("10.0.0.5", False, "peer")
+
+
 @pytest.mark.parametrize(
     "peer, forwarded, expected",
     [
         ("10.0.0.5", "203.0.113.7, 10.0.0.9", ("203.0.113.7", True, "trusted_proxy")),
         ("10.0.0.5", "198.51.100.1, 203.0.113.7", ("203.0.113.7", True, "trusted_proxy")),
         ("10.0.0.5", "not-an-ip", ("10.0.0.5", False, "peer")),
+        ("10.0.0.5", "203.0.113.7, not-an-ip", ("10.0.0.5", False, "peer")),
         ("192.0.2.44", "203.0.113.7", ("192.0.2.44", False, "peer")),  # peer is not a trusted proxy
     ],
 )
@@ -178,6 +230,30 @@ def test_deployment_health_reports_client_address_trust(tmp_path):
     with make_client(tmp_path / "peer") as client:
         checks = client.get("/health/deployment").json()["checks"]
         assert checks["client_address_trust"] == "peer_only"
+
+
+@pytest.mark.parametrize("proxies", [
+    ("invalid-proxy",), ("10.0.0.0/8", "invalid-proxy"),
+    ("0.0.0.0/0",), ("::/0",), ("10.0.0.5/8",),
+])
+@pytest.mark.parametrize("secret", ["", GATEWAY_SECRET])
+def test_invalid_proxy_configuration_cannot_pass_hosted_readiness(tmp_path, proxies, secret):
+    settings = _production_settings(tmp_path, gateway_shared_secret=secret, trusted_proxy_ips=proxies)
+    assert settings.has_verified_client_addresses is False
+    assert settings.client_address_trust == "peer_only"
+    with pytest.raises(RuntimeError, match="TRUSTED_PROXY_IPS"):
+        settings.validate_startup()
+
+
+@pytest.mark.parametrize("proxy", ["10.0.0.5", "10.0.0.0/8", "2001:db8::/32"])
+def test_valid_proxy_configuration_passes_hosted_startup(tmp_path, proxy):
+    settings = _production_settings(
+        tmp_path, gateway_shared_secret="", trusted_proxy_ips=(proxy,),
+        storage_backend="supabase", supabase_url="https://example.supabase.co",
+        supabase_service_role_key="test-only", supabase_storage_bucket="test-only",
+    )
+    settings.validate_startup()
+    assert settings.client_address_trust == "trusted_proxy"
 
 
 def _diagnostics(client, token: str):

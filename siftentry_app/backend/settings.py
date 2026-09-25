@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from .client_ip import parse_trusted_proxy_networks
+
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_JWT_SECRET = "siftentry-local-development-secret-change-me"
@@ -278,6 +280,10 @@ class ApiSettings:
             )
         if self.ai_provider == "webhook" and not self.ai_extractor_url:
             problems.append("set SIFTENTRY_AI_EXTRACTOR_URL or use SIFTENTRY_AI_PROVIDER=profile_context")
+        try:
+            parse_trusted_proxy_networks(self.trusted_proxy_ips)
+        except ValueError as exc:
+            problems.append(str(exc))
         if not self.has_verified_client_addresses:
             problems.append(
                 "set EZ_API_GATEWAY_SHARED_SECRET to a 32+ character secret shared with the "
@@ -288,10 +294,16 @@ class ApiSettings:
 
     @property
     def has_verified_client_addresses(self) -> bool:
-        return len(self.gateway_shared_secret) >= 32 or bool(self.trusted_proxy_ips)
+        try:
+            proxies = parse_trusted_proxy_networks(self.trusted_proxy_ips)
+        except ValueError:
+            return False
+        return len(self.gateway_shared_secret) >= 32 or bool(proxies)
 
     @property
     def client_address_trust(self) -> str:
+        if not self.has_verified_client_addresses:
+            return "peer_only"
         if len(self.gateway_shared_secret) >= 32:
             return "gateway"
         if self.trusted_proxy_ips:
